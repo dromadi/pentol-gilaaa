@@ -10,6 +10,8 @@ const format = new Intl.NumberFormat('id-ID');
 const login = $('login');
 const form = $('batch-form');
 const filter = $('batch-filter');
+const stockBatch = $('stock-batch');
+const stockSearch = $('stock-search');
 let session = null;
 let rows = [];
 let editing = null;
@@ -41,7 +43,9 @@ async function request(path, { method = 'GET', body, token = session, prefer } =
 function resetEditor() {
   editing = null;
   form.reset();
-  $('cancel').hidden = true;
+  form.hidden = true;
+  $('new-entry').setAttribute('aria-expanded', 'false');
+  $('editor-title').textContent = 'Tambah varian ke batch';
   $('save').textContent = 'Tambah varian ke batch';
 }
 
@@ -55,6 +59,8 @@ function endSession(message) {
   $('analytics-rows').replaceChildren();
   $('metrics').replaceChildren();
   filter.replaceChildren(new Option('Semua batch', ''));
+  stockBatch.replaceChildren(new Option('Semua batch', ''));
+  stockSearch.value = '';
   resetEditor();
   $('signin').hidden = false;
   status(message);
@@ -108,27 +114,47 @@ function edit(row) {
   for (const name of ['batch_code','sku','received_on','received','reserved','delivered']) {
     form.elements[name].value = row[name] ?? '';
   }
-  $('cancel').hidden = false;
+  showEditor();
+  $('editor-title').textContent = 'Edit stok batch';
   $('save').textContent = 'Simpan perubahan';
+}
+
+function showEditor() {
+  form.hidden = false;
+  $('new-entry').setAttribute('aria-expanded', 'true');
   form.elements.batch_code.focus();
 }
 
-function renderRows() {
+function renderStock() {
   const target = $('stock-rows');
-  target.replaceChildren(...rows.map(row => {
+  const query = stockSearch.value.trim().toLocaleLowerCase('id');
+  const visible = rows.filter(row => (!stockBatch.value || stockBatch.value === row.batch_code)
+    && products.get(row.sku).toLocaleLowerCase('id').includes(query));
+  $('stock-summary').textContent = visible.length + ' baris stok';
+  const labels = ['Batch', 'Varian', 'Diterima', 'Terpesan', 'Diantar', 'Sisa jual', 'Belum terpenuhi'];
+  target.replaceChildren(...visible.map(row => {
     const tr = tableRow([row.batch_code, products.get(row.sku), ...quantities(row)]);
+    Array.from(tr.cells).forEach((cell, i) => { cell.dataset.label = labels[i]; });
     const button = document.createElement('button');
+    button.className = 'secondary';
     button.textContent = 'Edit';
     button.type = 'button';
     button.setAttribute('aria-label', 'Edit ' + row.batch_code + ' ' + products.get(row.sku));
-    button.addEventListener('click', () => edit(row));
+    button.addEventListener('click', () => { if (!busy) edit(row); });
     tr.insertCell().append(button);
     return tr;
   }));
-  emptyRow(target, 8, 'Belum ada data batch.');
-  const previous = filter.value;
-  filter.replaceChildren(new Option('Semua batch', ''), ...Array.from(new Set(rows.map(row => row.batch_code)), code => new Option(code, code)));
-  if (Array.from(filter.options).some(option => option.value === previous)) filter.value = previous;
+  emptyRow(target, 8, rows.length ? 'Tidak ada stok yang cocok dengan filter.' : 'Belum ada data batch. Tambahkan varian untuk mulai mencatat.');
+}
+
+function renderRows() {
+  const batches = Array.from(new Set(rows.map(row => row.batch_code)));
+  for (const select of [filter, stockBatch]) {
+    const previous = select.value;
+    select.replaceChildren(new Option('Semua batch', ''), ...batches.map(code => new Option(code, code)));
+    if (batches.includes(previous)) select.value = previous;
+  }
+  renderStock();
   renderAnalytics();
 }
 
@@ -215,7 +241,19 @@ form.addEventListener('submit', event => {
 });
 
 for (const [sku, label] of products) form.elements.sku.add(new Option(label, sku));
-$('cancel').addEventListener('click', resetEditor);
+$('new-entry').addEventListener('click', () => {
+  if (busy) return;
+  resetEditor();
+  if (stockBatch.value) form.elements.batch_code.value = stockBatch.value;
+  showEditor();
+});
+$('cancel').addEventListener('click', () => {
+  if (busy) return;
+  resetEditor();
+  $('new-entry').focus();
+});
+stockBatch.addEventListener('change', renderStock);
+stockSearch.addEventListener('input', renderStock);
 $('logout').addEventListener('click', () => {
   if (!busy) endSession('Anda sudah keluar.');
 });
