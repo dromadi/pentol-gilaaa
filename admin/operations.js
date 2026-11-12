@@ -1,0 +1,534 @@
+export function initOperations({ $, request, status, products, prices, today, format,
+  tableRow, emptyRow, quantities, getRows, getSession, openOrder, refresh }) {
+  const root = '/rest/v1/';
+  const ordersSelect = '*,pentol_order_items(*),pentol_payments(*)';
+  const dialog = $('ops-dialog');
+  const fields = $('ops-fields');
+  const dialogForm = $('ops-form');
+  let submit;
+  let dialogRun = 0;
+  const sizes = {UR:'9 pcs',PK:'30 pcs',TP:'30 pcs',JM:'9 pcs',MZ:'9 pcs',RJ:'9 pcs',TD:'9 pcs',PG:'9 pcs',SG:'±100 g'};
+  const money = value => 'Rp' + format.format(Math.round(value));
+  const total = order => Number(order.shipping_charge) + order.pentol_order_items.reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
+  const paid = order => order.paid ? total(order) : order.pentol_payments.reduce((sum, p) => sum + Number(p.amount), 0);
+  const balance = order => Math.max(0, total(order) - paid(order));
+  const paymentLabel = order => order.cancelled ? 'Batal' : order.paid ? 'Lunas'
+    : paid(order) ? 'Sebagian · sisa ' + money(balance(order)) : 'Belum dibayar';
+  const deliveryLabel = order => order.cancelled ? 'Batal' : order.delivered ? 'Sudah diantar'
+    : order.pentol_order_items.some(item => item.shipped) ? 'Diantar sebagian' : 'Belum diantar';
+  const stock = id => getRows().find(row => row.id === id);
+  const label = item => {
+    const row = stock(item.stock_id);
+    return row ? products.get(row.sku) + ' · ' + row.batch_code : 'Varian batch';
+  };
+
+  function el(tag, value, className) {
+    const node = document.createElement(tag);
+    if (value !== undefined) node.textContent = value;
+    if (className) node.className = className;
+    return node;
+  }
+
+  function button(text, action) {
+    const node = el('button', text, 'secondary');
+    node.type = 'button';
+    node.addEventListener('click', action);
+    return node;
+  }
+
+  function control(text, name, options = {}) {
+    const wrap = el('label', text);
+    const input = el(options.values ? 'select' : 'input');
+    input.name = name;
+    if (options.values) {
+      for (const [id, caption] of options.values) input.add(new Option(caption, id));
+    } else input.type = options.type || 'text';
+    Object.assign(input, options.props || {});
+    input.value = options.value ?? '';
+    input.required = options.required ?? true;
+    wrap.append(input);
+    return wrap;
+  }
+
+  function block(nodes, className = 'fields') {
+    const node = el('div', undefined, className);
+    node.append(...nodes);
+    return node;
+  }
+
+  function table(headers, data, empty) {
+    const wrap = el('div', undefined, 'table');
+    const grid = el('table');
+    const header = grid.createTHead().insertRow();
+    header.append(...headers.map(text => el('th', text)));
+    const body = grid.createTBody();
+    body.append(...data.map(tableRow));
+    emptyRow(body, headers.length, empty);
+    wrap.append(grid);
+    return wrap;
+  }
+
+  async function list(path, filters = '') {
+    const result = [];
+    for (let offset = 0; ; offset += 200) {
+      const page = await request(root + path + filters + '&limit=200&offset=' + offset);
+      result.push(...page);
+      if (page.length < 200) return result;
+    }
+  }
+
+  function errorMessage(error) {
+    const known = /^(Pesanan |Isi 1|Periksa varian|Gabungkan varian|Varian batch |Pilih jumlah|Jumlah |Stok fisik|Nominal |Pilih 1|Varian tidak)/;
+    return known.test(error.message) ? error.message : 'Perubahan belum terkonfirmasi. Muat ulang daftar sebelum mencoba lagi.';
+  }
+
+  function mutate(action, target, version, payload) {
+    return request(root + 'rpc/pentol_order_action', {method:'POST', body:{action,target,version:version ?? null,payload}});
+  }
+
+  function admin(action, payload) {
+    return request(root + 'rpc/pentol_admin_action', {method:'POST', body:{action,payload}});
+  }
+
+  function showDialog(title, nodes, onSubmit) {
+    if (dialog.open) return;
+    $('ops-title').textContent = title;
+    $('ops-error').textContent = '';
+    fields.replaceChildren(...nodes);
+    submit = onSubmit;
+    dialog.showModal();
+  }
+
+  $('ops-close').addEventListener('click', () => dialog.close());
+  dialog.addEventListener('close', () => {
+    dialogRun++;
+    dialogForm.querySelector('button').disabled = false;
+    fields.replaceChildren();
+  });
+  dialogForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    const token = ++dialogRun;
+    const save = dialogForm.querySelector('button[type=submit], button:not([type])');
+    save.disabled = true;
+    $('ops-error').textContent = '';
+    try {
+      const after = await submit(new FormData(dialogForm));
+      if (dialogRun === token) dialog.close();
+      if (after && getSession()) await after();
+    } catch (error) {
+      if (dialogRun === token) $('ops-error').textContent = errorMessage(error);
+    } finally { save.disabled = false; }
+  });
+
+  function orderDialog(action, order, title, nodes, payload) {
+    showDialog(title, nodes, async data => {
+      await mutate(action, order.id, order.revision, payload(data));
+      return async () => {
+        await refresh('Pesanan diperbarui.');
+        if (!$('packing').hidden) open('packing');
+        if (!$('finance').hidden) open('finance');
+      };
+    });
+  }
+
+  function orderButtons(order, target) {
+    if (order.cancelled) return;
+    const actions = el('div', undefined, 'ops-actions');
+    actions.append(button('Invoice', () => showInvoice(order)));
+    if (!order.paid && balance(order)) {
+      actions.append(button('Catat bayar', () => {
+        const paymentId = crypto.randomUUID();
+        orderDialog('pay', order, 'Catat pembayaran · ' + order.customer, [block([
+          control('Tanggal bayar', 'date', {type:'date', value:today()}),
+          control('Nominal diterima (Rp)', 'amount', {type:'number', value:balance(order), props:{min:1,max:balance(order)}})
+        ]), ...order.pentol_payments.map(p => el('p', p.paid_on + ' · ' + money(p.amount)))],
+        data => ({payment_id:paymentId,date:data.get('date'),amount:Number(data.get('amount'))}));
+      }));
+    }
+    if (!order.delivered) {
+      actions.append(button('Jadwal antar', () => orderDialog('schedule', order, 'Jadwal antar · ' + order.customer,
+        [control('Tanggal antar', 'date', {type:'date', value:order.delivery_on || today(), required:false})],
+        data => ({delivery_on:data.get('date') || null}))));
+      const pending = order.pentol_order_items.filter(i => i.shipped < i.quantity);
+      actions.append(button('Catat pengantaran', () => orderDialog('ship', order, 'Jumlah yang sudah diantar · ' + order.customer,
+        [block(pending.map(i => control(label(i), i.stock_id,
+          {type:'number',value:i.quantity-i.shipped,props:{min:0,max:i.quantity-i.shipped}})))],
+        data => ({items:pending.map(i => ({stock_id:i.stock_id,quantity:Number(data.get(i.stock_id))})).filter(i => i.quantity)}))));
+    }
+    if (!order.paid && !paid(order) && !order.pentol_order_items.some(i => i.shipped)) {
+      actions.append(button('Edit', () => {
+        $('admin-menu').querySelector('[data-view=orders]').click();
+        openOrder(order);
+      }));
+      actions.append(button('Batalkan', () => orderDialog('cancel', order, 'Batalkan pesanan · ' + order.customer,
+        [el('p', 'Stok yang dipesan akan dilepas. Riwayat pesanan tetap tampil dengan status Batal.')], () => ({}))));
+    }
+    target.append(actions);
+  }
+
+  function makeInvoice(order) {
+    const lines = [
+      'PENTOL GILAAA SURABAYA',
+      'Invoice #' + String(order.invoice_no).padStart(5, '0'),
+      'Tanggal pesanan: ' + order.order_date,
+      'Pelanggan: ' + order.customer, '',
+      ...order.pentol_order_items.flatMap(item => [
+        label(item),
+        item.quantity + ' pack × ' + money(item.unit_price) + ' = ' + money(item.quantity * item.unit_price)
+      ]),
+      '',
+      'Ongkir: ' + money(order.shipping_charge),
+      'Total: ' + money(total(order)),
+      'Pembayaran diterima: ' + money(paid(order)),
+      'Sisa tagihan: ' + money(balance(order))
+    ];
+    return lines;
+  }
+
+  function printInvoice(order, lines) {
+    const page = window.open('', '_blank');
+    if (!page) return status('Izinkan jendela baru untuk mencetak invoice.', true);
+    page.opener = null;
+    page.document.title = 'Invoice-' + order.invoice_no;
+    const article = page.document.createElement('article');
+    article.style.cssText = 'font:16px/1.45 system-ui; padding:24px; max-width:680px; margin:auto';
+    lines.forEach((line, i) => {
+      const row = page.document.createElement(i === 0 ? 'h1' : 'p');
+      row.textContent = line || ' ';
+      row.style.margin = '0 0 6px';
+      article.append(row);
+    });
+    page.document.body.append(article);
+    page.focus();
+    page.print();
+  }
+
+  function png(lines, filename, width = 900, minHeight = 0) {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return status('Ekspor gambar tidak tersedia di browser ini.', true);
+    canvas.width = width;
+    const font = '28px system-ui';
+    ctx.font = font;
+    const wrapped = lines.flatMap(line => {
+      if (ctx.measureText(line).width <= width - 100) return [line];
+      const chunks = [''];
+      for (const char of line) {
+        const last = chunks.length - 1;
+        if (ctx.measureText(chunks[last] + char).width > width - 100) chunks.push(char);
+        else chunks[last] += char;
+      }
+      return chunks;
+    });
+    canvas.height = Math.max(minHeight, 120 + wrapped.length * 48);
+    ctx.fillStyle = '#fff7e9';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#a62017';
+    ctx.fillRect(0, 0, canvas.width, 16);
+    ctx.fillStyle = '#321b16';
+    wrapped.forEach((line, i) => {
+      ctx.font = i === 0 ? 'bold 34px system-ui' : font;
+      ctx.fillText(line, 48, 72 + i * 48, width - 96);
+    });
+    const link = el('a');
+    link.href = canvas.toDataURL('image/png');
+    link.download = filename + '.png';
+    link.click();
+  }
+
+  function showInvoice(order) {
+    const lines = makeInvoice(order);
+    showDialog('Invoice', [el('p', lines.join('\n'), 'ops-copy'),
+      block([
+        button('Cetak / Simpan PDF', () => printInvoice(order, lines)),
+        button('Unduh PNG', () => png(lines, 'Invoice-' + order.invoice_no))
+      ], 'ops-actions')], async () => {});
+    const save = dialogForm.querySelector('button:not([type])');
+    save.hidden = true;
+    dialog.addEventListener('close', () => { save.hidden = false; }, {once:true});
+  }
+
+  async function loadPrices() {
+    const data = await request(root + 'pentol_products?select=sku,price');
+    for (const row of data) prices[row.sku] = row.price;
+  }
+
+  async function inbox() {
+    const session = getSession();
+    const target = $('inbox-list');
+    try {
+      const entries = await list('pentol_inbox?select=*', '&status=eq.pending&order=created_at.desc,id');
+      if (!session || getSession() !== session) return;
+      $('inbox-count').textContent = '(' + entries.length + ')';
+      target.replaceChildren(...entries.map(entry => {
+        const card = el('article', undefined, 'ops-card');
+        card.append(el('strong', entry.customer),
+          el('p', [entry.phone,entry.area,entry.note].filter(Boolean).join(' · ')),
+          el('p', entry.items.map(i => products.get(i.sku) + ' × ' + i.quantity).join(', ')),
+          block([button('Proses pesanan', () => openOrder(null, entry)), button('Arsipkan', () => {
+            showDialog('Arsipkan permintaan · ' + entry.customer, [el('p', 'Permintaan ini akan keluar dari daftar masuk.')],
+              async () => { await admin('dismiss',{id:entry.id}); return inbox; });
+          })], 'ops-actions'));
+        return card;
+      }));
+      if (!entries.length) target.append(el('p', 'Belum ada permintaan baru.'));
+    } catch {
+      if (session && getSession() === session) target.replaceChildren(el('p', 'Daftar permintaan belum bisa dimuat.'));
+    }
+  }
+
+  async function packing(target) {
+    const old = target.querySelector('[name=pack_date]')?.value || today();
+    const oldFilter = target.querySelector('[name=pack_filter]')?.value || 'packing';
+    const day = control('Tanggal jadwal antar', 'pack_date', {type:'date', value:old});
+    const filter = control('Tampilkan', 'pack_filter', {value:oldFilter, values:[
+      ['packing','Siap dikemas'],['pending','Semua belum diantar'],['unpaid','Sudah diantar, belum lunas']
+    ]});
+    const output = el('div');
+    target.replaceChildren(block([day,filter], 'ops-filters'), output);
+    async function render() {
+      const date = day.lastChild.value || today();
+      const mode = filter.lastChild.value;
+      output.textContent = 'Memuat pesanan…';
+      const orders = await list('pentol_orders?select=' + ordersSelect, '&cancelled=eq.false&order=order_date,created_at,id'
+        + (mode === 'unpaid' ? '&paid=eq.false&delivered=eq.true'
+          : mode === 'pending' ? '&delivered=eq.false'
+            : '&delivered=eq.false&or=(delivery_on.eq.' + date + ',and(delivery_on.is.null,order_date.eq.' + date + '))'));
+      if ((day.lastChild.value || today()) !== date || filter.lastChild.value !== mode) return;
+      output.replaceChildren();
+      const totals = new Map();
+      for (const order of orders) {
+        const card = el('article', undefined, 'ops-card');
+        const items = order.pentol_order_items.filter(i => mode === 'unpaid' || i.shipped < i.quantity);
+        card.append(el('strong', order.customer), el('p', items.map(i =>
+          label(i) + ' × ' + (mode === 'unpaid' ? i.quantity : i.quantity-i.shipped)).join(', ')),
+          el('p', (order.delivery_on || 'Jadwal belum diisi') + ' · ' + paymentLabel(order)));
+        const details = [order.contact,order.delivery_location,order.delivery_note].filter(Boolean);
+        if (details.length) card.append(el('p',details.join(' · ')));
+        for (const item of items) {
+          if (mode === 'unpaid') continue;
+          const name = label(item);
+          totals.set(name,(totals.get(name) || 0) + item.quantity-item.shipped);
+        }
+        orderButtons(order, card);
+        output.append(card);
+      }
+      if (totals.size) output.prepend(table(['Varian / batch','Pack dikemas'],[...totals],''));
+      if (mode === 'unpaid') output.prepend(el('p', 'Sisa tagihan: ' + money(orders.reduce((sum,o) => sum+balance(o),0))));
+      if (!orders.length) output.append(el('p', 'Tidak ada pesanan untuk pilihan ini.'));
+    }
+    const reload = () => render().catch(() => { output.textContent = 'Daftar packing belum bisa dimuat.'; });
+    day.lastChild.addEventListener('change', reload);
+    filter.lastChild.addEventListener('change', reload);
+    await reload();
+  }
+
+  async function purchases() {
+    return list('pentol_purchases?select=*,pentol_purchase_items(*)', '&order=batch_code');
+  }
+
+  function purchaseDialog(purchase) {
+    const p = purchase || {pentol_purchase_items:[]};
+    const header = block([
+      control('Kode batch','batch_code',{value:p.batch_code,props:{maxLength:40,readOnly:Boolean(purchase)}}),
+      control('Supplier','supplier',{value:p.supplier || 'Pentol Gilaaa Surabaya',props:{maxLength:120}}),
+      control('Nomor tagihan / PO','reference',{value:p.reference,required:false,props:{maxLength:80}}),
+      control('Tanggal pesan','ordered_on',{type:'date',value:p.ordered_on,required:false}),
+      control('Estimasi tiba','expected_on',{type:'date',value:p.expected_on,required:false}),
+      ...[['Ongkir (Rp)','shipping'],['Styrofoam (Rp)','packaging'],['Biaya batch lain (Rp)','other_cost']].map(([name,key]) =>
+        control(name,key,{type:'number',value:p[key] ?? 0,props:{min:0,max:100000000}}))
+    ]);
+    const details = [...products].map(([sku,name]) => {
+      const item = p.pentol_purchase_items.find(x => x.sku === sku);
+      return block([
+        control(name + ' (pack)', 'qty_' + sku, {type:'number',value:item?.quantity || 0,props:{min:0,max:1000000}}),
+        control('Harga beli / pack (Rp)', 'cost_' + sku, {type:'number',value:item?.unit_cost || 0,props:{min:0,max:10000000}})
+      ]);
+    });
+    showDialog(purchase ? 'Edit restok' : 'Catat restok supplier', [header,...details], async data => {
+      const payload = Object.fromEntries(data);
+      for (const key of ['ordered_on','expected_on']) payload[key] ||= null;
+      payload.items = [...products.keys()].map(sku => ({sku,quantity:Number(data.get('qty_'+sku)),
+        unit_cost:Number(data.get('cost_'+sku))})).filter(i => i.quantity);
+      await admin('purchase',payload);
+      return async () => { await refresh('Restok tersimpan.'); open('purchasing'); };
+    });
+  }
+
+  async function purchasing(target) {
+    const data = await purchases();
+    target.replaceChildren(button('+ Catat restok', () => purchaseDialog(null)));
+    for (const p of data) {
+      const card = el('article', undefined, 'ops-card');
+      const totalCost = p.shipping+p.packaging+p.other_cost
+        + p.pentol_purchase_items.reduce((sum,i) => sum+i.quantity*i.unit_cost,0);
+      card.append(el('strong', p.batch_code + ' · ' + p.supplier),
+        el('p', [p.reference,p.ordered_on,p.expected_on && 'Estimasi tiba ' + p.expected_on].filter(Boolean).join(' · ')),
+        el('p','Total biaya batch: ' + money(totalCost)),
+        table(['Varian','Dipesan ke supplier','Diterima','Booking pelanggan','Sisa setelah tiba'],
+          p.pentol_purchase_items.map(i => {
+            const s = getRows().find(r => r.batch_code === p.batch_code && r.sku === i.sku);
+            return [products.get(i.sku), i.quantity, s?.received || 0,s?.reserved || 0,
+              Math.max(0,Math.max(i.quantity,s?.received || 0)-(s?.reserved || 0)-(s?.delivered || 0))];
+          }), 'Belum ada varian.'),
+        block([button('Edit restok', () => purchaseDialog(p)),
+          button('Salin pesan supplier', async () => {
+            const lines = ['Halo Kak, mohon cek restok berikut untuk ' + p.batch_code + ':',
+              ...p.pentol_purchase_items.map(i => products.get(i.sku) + ' × ' + i.quantity + ' pack'),
+              'Mohon konfirmasi harga, ongkir, styrofoam, dan estimasi tiba. Terima kasih.'];
+            try { await navigator.clipboard.writeText(lines.join('\n')); status('Pesan supplier disalin.'); }
+            catch { status('Pesan supplier belum bisa disalin.',true); }
+          }),
+          button('Catat penerimaan di stok', () => {
+            $('admin-menu').querySelector('[data-view=stock]').click();
+            $('stock-batch').value = p.batch_code;
+            $('stock-batch').dispatchEvent(new Event('change'));
+          })], 'ops-actions'));
+      target.append(card);
+    }
+  }
+
+  function costs(data) {
+    const result = new Map();
+    for (const p of data) {
+      const count = p.pentol_purchase_items.reduce((sum,i) => sum+i.quantity,0);
+      if (!count) continue;
+      for (const i of p.pentol_purchase_items) {
+        result.set(p.batch_code+'|'+i.sku,i.unit_cost+(p.shipping+p.packaging+p.other_cost)/count);
+      }
+    }
+    return result;
+  }
+
+  async function finance(target) {
+    const first = control('Dari','first',{type:'date',value:target.querySelector('[name=first]')?.value || today().slice(0,8)+'01'});
+    const last = control('Sampai','last',{type:'date',value:target.querySelector('[name=last]')?.value || today()});
+    const out = el('div');
+    target.replaceChildren(block([first,last], 'ops-filters'), out,
+      el('h3','Harga jual default'),
+      ...[...products].map(([sku,name]) => block([
+        el('span',name + ' · ' + money(prices[sku])),
+        button('Ubah harga', () => showDialog('Harga jual · ' + name, [
+          control('Harga per pack (Rp)','price',{type:'number',value:prices[sku],props:{min:0,max:10000000}})
+        ], async data => {
+          await admin('price',{sku,price:Number(data.get('price'))});
+          return async () => { await loadPrices(); open('finance'); };
+        }))
+      ], 'ops-actions')));
+    let generation = 0;
+    async function render() {
+      const current = ++generation;
+      const a = first.lastChild.value;
+      const b = last.lastChild.value;
+      if (!a || !b || a>b) { out.textContent='Pilih rentang tanggal yang valid.'; return; }
+      out.textContent='Memuat laporan…';
+      const [data,orders] = await Promise.all([
+        purchases(),
+        list('pentol_orders?select='+ordersSelect,'&cancelled=eq.false&order_date=gte.'+a+'&order_date=lte.'+b+'&order=order_date,id')
+      ]);
+      if (generation !== current) return;
+      const hpp = costs(data);
+      let billed=0, cash=0, revenue=0, cost=0, shipping=0, missing=0, unsold=0, stockUnknown=0;
+      const byProduct = new Map();
+      for (const o of orders) {
+        billed += total(o);
+        cash += paid(o);
+        if (o.delivered) { revenue += o.shipping_charge; shipping += o.shipping_cost; }
+        for (const i of o.pentol_order_items) {
+          const s = stock(i.stock_id);
+          const sku = s?.sku;
+          const unit = s ? hpp.get(s.batch_code+'|'+sku) : undefined;
+          revenue += i.shipped*i.unit_price;
+          if (unit === undefined) missing += i.shipped;
+          else cost += i.shipped*unit;
+          const metrics = byProduct.get(sku) || [0,0];
+          metrics[0] += i.quantity;
+          metrics[1] += i.shipped;
+          byProduct.set(sku,metrics);
+        }
+      }
+      for (const s of getRows()) {
+        const unit = hpp.get(s.batch_code+'|'+s.sku);
+        if (unit === undefined) stockUnknown += quantities(s)[3];
+        else unsold += quantities(s)[3]*unit;
+      }
+      const gross = revenue-cost;
+      const net = gross-shipping;
+      out.replaceChildren(table(['Metrik','Nilai'],[
+        ['Tagihan pesanan',money(billed)],['Pembayaran pesanan (status / nominal)',money(cash)],
+        ['Penjualan yang sudah diantar',money(revenue)],['HPP pack yang diantar',money(cost)],
+        ['Laba bruto',missing ? 'HPP belum lengkap' : money(gross)],
+        ['Laba setelah biaya antar',missing ? 'HPP belum lengkap' : money(net)],
+        ['Margin setelah biaya antar',!missing && revenue ? (net/revenue*100).toFixed(1)+'%' : '—'],
+        ['Nilai stok siap jual (saat ini)',money(unsold)+(stockUnknown ? ' · HPP '+stockUnknown+' pack belum ada' : '')]
+      ],''), el('p','Rekap memakai tanggal pesanan. HPP mengalokasikan biaya batch merata per pack yang dipesan dari supplier.'),
+      table(['Varian','Terpesan','Diantar'],[...byProduct].sort((a,b)=>b[1][0]-a[1][0])
+        .map(([sku,x])=>[products.get(sku)||'Varian batch',...x]),'Belum ada penjualan.'),
+      table(['Batch','Varian','HPP / pack'],[...hpp].map(([key,value])=>{
+        const [batch,sku]=key.split('|');
+        return [batch,products.get(sku),money(value)];
+      }),'Belum ada data HPP.'));
+    }
+    const reload = () => render().catch(() => { out.textContent='Laporan belum bisa dimuat.'; });
+    first.lastChild.addEventListener('change',reload);
+    last.lastChild.addEventListener('change',reload);
+    await reload();
+  }
+
+  function promotions(target) {
+    const sums = new Map();
+    for (const row of getRows()) sums.set(row.sku,(sums.get(row.sku)||0)+quantities(row)[3]);
+    const formatPicker=control('Format','promo_format',{value:'group',values:[
+      ['group','Grup WhatsApp'],['story','Status WhatsApp'],['instagram','Instagram']
+    ]});
+    const options=[...products].map(([sku,name]) => {
+      const wrap=control(name,sku,{type:'checkbox',required:false});
+      wrap.lastChild.checked=true;
+      return wrap;
+    });
+    const preview=el('p',undefined,'ops-copy');
+    const buttons=block([], 'ops-actions');
+    let lines=[];
+    function render() {
+      const mode=formatPicker.lastChild.value;
+      const selected=options.filter(o=>o.lastChild.checked).map(o=>o.lastChild.name);
+      const items=(mode==='story'?selected.slice(0,3):selected).map(sku=>{
+        const qty=sums.get(sku)||0;
+        return products.get(sku)+' · '+sizes[sku]+' · '+money(prices[sku])+' · '+(qty ? 'sisa '+qty+' pack' : 'SOLD OUT');
+      });
+      lines=['PENTOL GILAAA SURABAYA','',...items,'','Pesan lewat WhatsApp 0898-1718-578'];
+      preview.textContent=lines.join('\n');
+    }
+    buttons.append(button('Salin caption',async()=>{
+      try { await navigator.clipboard.writeText(lines.join('\n')); status('Caption disalin.'); }
+      catch { status('Pilih dan salin teks caption secara manual.',true); }
+    }),button('Unduh PNG',()=>{
+      const mode=formatPicker.lastChild.value;
+      png(lines,'Pentol-Gilaaa-'+mode,1080,mode==='story'?1920:mode==='instagram'?1350:0);
+    }));
+    [formatPicker,...options].forEach(o=>o.lastChild.addEventListener('change',render));
+    options.forEach(o=>o.className='order-paid');
+    target.replaceChildren(formatPicker,el('p','Pilih varian untuk brosur. Status WhatsApp memuat tiga pilihan pertama.'),
+      block(options),preview,buttons);
+    render();
+  }
+
+  const views={packing,purchasing,finance,promotions};
+  async function open(view) {
+    if (!views[view]) return;
+    const token=getSession();
+    if (!token) return;
+    const target=$(view+'-body');
+    try { await views[view](target); }
+    catch { if (getSession()===token) target.textContent='Data belum bisa dimuat. Buka kembali menu untuk mencoba lagi.'; }
+    finally { if (getSession()!==token) target.replaceChildren(); }
+  }
+  function clear() {
+    if (dialog.open) dialog.close();
+    for (const view of Object.keys(views)) $(view+'-body').replaceChildren();
+    $('inbox-list').replaceChildren();
+    $('inbox-count').textContent='';
+  }
+
+  return { total, paymentLabel, deliveryLabel, orderButtons, mutate, errorMessage, loadPrices, inbox, open, clear };
+}
