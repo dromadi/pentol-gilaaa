@@ -23,7 +23,7 @@
 </form>
 </section>
 <div id="dashboard" hidden>
-<nav aria-label="Menu admin"><button data-view="stock" aria-pressed="true">Stok per Batch</button><button data-view="analytics" aria-pressed="false">Analitik</button></nav>
+<nav aria-label="Menu admin"><button data-view="stock" aria-pressed="true">Stok per Batch</button><button data-view="orders" aria-pressed="false">Pemesanan Harian</button><button data-view="analytics" aria-pressed="false">Analitik</button></nav>
 <section id="stock" class="panel">
 <div class="section-head"><div><h2>Stok per Batch</h2><p>Catat barang masuk dan alokasi pesanan per varian.</p></div><button type="button" id="new-entry" aria-controls="batch-form" aria-expanded="false">+ Tambah stok batch</button></div>
 <form id="batch-form" class="editor" hidden>
@@ -46,6 +46,24 @@
 <p id="stock-summary" class="result-count" aria-live="polite"></p>
 <div class="table stock-table" tabindex="0" role="region" aria-label="Daftar stok per batch">
 <table><thead><tr><th>Batch</th><th>Varian</th><th>Diterima</th><th>Terpesan</th><th>Diantar</th><th>Sisa jual</th><th>Belum terpenuhi</th><th>Aksi</th></tr></thead><tbody id="stock-rows"></tbody></table>
+</div>
+</section>
+<section id="orders" class="panel" hidden>
+<div class="section-head"><h2>Pemesanan Harian</h2><button type="button" id="new-order" aria-controls="order-form" aria-expanded="false">+ Catat pesanan</button></div>
+<form id="order-form" class="editor" hidden>
+<div class="fields">
+<label>Tanggal pesanan <input name="order_date" type="date" required></label>
+<label>Nama pelanggan <input name="customer" maxlength="120" required></label>
+</div>
+<div id="order-items"></div>
+<p><button type="button" id="add-item" class="secondary">+ Tambah varian</button></p>
+<label class="order-paid"><input type="checkbox" name="paid"> Sudah dibayar</label>
+<p><button id="save-order">Simpan pesanan</button> <button type="button" id="cancel-order">Batal</button></p>
+</form>
+<div class="stock-controls"><label>Tanggal <input type="date" id="order-date" required></label></div>
+<p id="orders-summary" class="result-count" aria-live="polite"></p>
+<div class="table" tabindex="0" role="region" aria-label="Daftar pesanan harian">
+<table><thead><tr><th>Pelanggan</th><th>Pesanan</th><th>Tagihan</th><th>Pembayaran</th><th>Pengantaran</th><th>Aksi</th></tr></thead><tbody id="order-rows"></tbody></table>
 </div>
 </section>
 <section id="analytics" class="panel" hidden>

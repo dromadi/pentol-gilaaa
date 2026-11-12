@@ -12,6 +12,14 @@ const form = $('batch-form');
 const filter = $('batch-filter');
 const stockBatch = $('stock-batch');
 const stockSearch = $('stock-search');
+const orderForm = $('order-form');
+const orderDate = $('order-date');
+const orderItems = $('order-items');
+const prices = { UR:36000, PK:39000, TP:29000, JM:36000, MZ:36000, RJ:36000, TD:35000, PG:41000, SG:15000 };
+let draftId;
+let orderLoad = 0;
+const today = () => new Intl.DateTimeFormat('sv-SE', { timeZone:'Asia/Jakarta' }).format(new Date());
+orderDate.value = today();
 let session = null;
 let rows = [];
 let editing = null;
@@ -33,7 +41,8 @@ async function request(path, { method = 'GET', body, token = session, prefer } =
   if (prefer) headers.Prefer = prefer;
   const response = await fetch(base + path, { method, headers, body: body && JSON.stringify(body) });
   if (!response.ok) {
-    const error = new Error('Permintaan gagal.');
+    const detail = await response.json().catch(() => null);
+    const error = new Error(detail?.message || 'Permintaan gagal.');
     error.status = response.status;
     throw error;
   }
@@ -53,6 +62,10 @@ function endSession(message) {
   clearTimeout(expiry);
   session = null;
   rows = [];
+  orderLoad++;
+  resetOrderForm();
+  $('order-rows').replaceChildren();
+  $('orders-summary').textContent = '';
   $('dashboard').hidden = true;
   $('logout').hidden = true;
   $('stock-rows').replaceChildren();
@@ -156,6 +169,7 @@ function renderRows() {
   }
   renderStock();
   renderAnalytics();
+  for (const select of orderItems.querySelectorAll('select')) populateOrderStock(select);
 }
 
 async function loadRows() {
@@ -196,6 +210,7 @@ login.addEventListener('submit', event => {
       $('dashboard').hidden = false;
       $('logout').hidden = false;
       status('');
+      if (!$('orders').hidden) loadOrders();
     } catch (error) {
       session = null;
       status(error.status === 400 || error.status === 401 ? 'Periksa kembali email dan kata sandi.' : 'Akses admin belum bisa dimuat. Coba lagi.', true);
@@ -264,6 +279,162 @@ document.querySelectorAll('[data-view]').forEach(button => button.addEventListen
     tab.setAttribute('aria-pressed', String(selected));
     $(tab.dataset.view).hidden = !selected;
   });
+  if (button.dataset.view === 'orders') loadOrders();
 }));
 if (configured) $('signin').hidden = false;
 else status('Login admin menunggu konfigurasi database.');
+
+function resetOrderForm() {
+  draftId = null;
+  orderForm.reset();
+  orderItems.replaceChildren();
+  orderForm.hidden = true;
+  $('new-order').setAttribute('aria-expanded', 'false');
+}
+
+function populateOrderStock(select) {
+  const previous = select.value;
+  select.replaceChildren(new Option('Pilih varian dan batch', ''), ...rows.map(row =>
+    new Option(products.get(row.sku) + ' · ' + row.batch_code + ' · sisa ' + quantities(row)[3], row.id)));
+  if (rows.some(row => row.id === previous)) select.value = previous;
+}
+
+function addOrderItem() {
+  if (orderItems.childElementCount >= 30) return;
+  const line = document.createElement('div');
+  line.className = 'fields order-item';
+  line.innerHTML = `
+    <label>Varian dan batch <select name="stock_id" required></select></label>
+    <label>Jumlah (pack) <input name="quantity" type="number" min="1" max="1000000" value="1" required></label>
+    <label>Harga per pack (Rp) <input name="unit_price" type="number" min="0" max="10000000" required></label>
+    <button type="button" class="secondary">Hapus varian</button>`;
+  const select = line.querySelector('select');
+  populateOrderStock(select);
+  select.addEventListener('change', () => {
+    const row = rows.find(item => item.id === select.value);
+    line.querySelector('[name="unit_price"]').value = row ? prices[row.sku] : '';
+  });
+  line.querySelector('button').addEventListener('click', () => {
+    if (!busy && orderItems.childElementCount > 1) line.remove();
+  });
+  orderItems.append(line);
+}
+
+async function loadOrders() {
+  const generation = ++orderLoad;
+  const target = $('order-rows');
+  const summary = $('orders-summary');
+  target.replaceChildren();
+  if (!orderDate.value) {
+    summary.textContent = 'Pilih tanggal untuk melihat pesanan.';
+    return;
+  }
+  summary.textContent = 'Memuat pesanan…';
+  try {
+    const orders = [];
+    for (let offset = 0; ; offset += 200) {
+      const page = await request('/rest/v1/pentol_orders?select=id,customer,paid,delivered,pentol_order_items(quantity,unit_price,stock_id)&order=created_at,id&limit=200&offset='
+        + offset + '&order_date=eq.' + encodeURIComponent(orderDate.value));
+      if (generation !== orderLoad || !session) return;
+      orders.push(...page);
+      if (page.length < 200) break;
+    }
+    const stockById = new Map(rows.map(row => [row.id, row]));
+    target.replaceChildren(...orders.map(order => {
+      const items = order.pentol_order_items;
+      const descriptions = items.map(item => {
+        const row = stockById.get(item.stock_id);
+        return (row ? products.get(row.sku) + ' · ' + row.batch_code : 'Varian batch') + ' × ' + format.format(item.quantity);
+      });
+      const total = items.reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
+      const tr = tableRow([order.customer, descriptions.join('\n'), 'Rp' + format.format(total),
+        order.paid ? 'Lunas' : 'Belum dibayar', order.delivered ? 'Sudah diantar' : 'Belum diantar']);
+      const actions = tr.insertCell();
+      if (!order.paid) actions.append(orderAction('Tandai lunas', order.id, true, false));
+      if (!order.delivered) actions.append(orderAction('Tandai diantar', order.id, false, true));
+      return tr;
+    }));
+    emptyRow(target, 6, 'Belum ada pesanan tercatat pada tanggal ini.');
+    summary.textContent = orders.length + ' pesanan';
+  } catch (error) {
+    if (generation !== orderLoad || !session) return;
+    summary.textContent = error.status === 404
+      ? 'Database pesanan belum diaktifkan.'
+      : 'Daftar pesanan gagal dimuat. Pilih ulang tanggal untuk mencoba lagi.';
+  }
+}
+
+function orderAction(label, id, paid, delivered) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'secondary';
+  button.textContent = label;
+  button.addEventListener('click', () => run(button, async () => {
+    try {
+      await request('/rest/v1/rpc/pentol_update_order', { method:'POST',
+        body:{ order_id:id, mark_paid:paid, mark_delivered:delivered } });
+    } catch (error) {
+      status(error.message === 'Stok fisik belum cukup untuk pengantaran.' ? error.message
+        : 'Perubahan belum terkonfirmasi. Periksa kembali daftar pesanan.', true);
+      await loadOrders();
+      return;
+    }
+    await refreshAfterOrder('Status pesanan tersimpan.');
+  }));
+  return button;
+}
+
+async function refreshAfterOrder(message) {
+  try {
+    await loadRows();
+    await loadOrders();
+    status(message);
+  } catch {
+    status('Perubahan tersimpan. Masuk kembali untuk memuat stok terbaru.', true);
+  }
+}
+
+$('new-order').addEventListener('click', () => {
+  if (busy || !orderForm.hidden) return;
+  if (!rows.length) return status('Tambahkan varian ke batch sebelum mencatat pesanan.', true);
+  draftId = crypto.randomUUID();
+  orderForm.elements.order_date.value = orderDate.value || today();
+  addOrderItem();
+  orderForm.hidden = false;
+  $('new-order').setAttribute('aria-expanded', 'true');
+  orderForm.elements.customer.focus();
+});
+$('add-item').addEventListener('click', () => { if (!busy) addOrderItem(); });
+$('cancel-order').addEventListener('click', () => {
+  if (busy) return;
+  resetOrderForm();
+  $('new-order').focus();
+});
+orderDate.addEventListener('change', loadOrders);
+
+orderForm.addEventListener('submit', event => {
+  event.preventDefault();
+  run($('save-order'), async () => {
+    const customer = orderForm.elements.customer.value.trim();
+    if (!customer) return status('Isi nama pelanggan.', true);
+    const items = Array.from(orderItems.children, line => ({
+      stock_id:line.querySelector('select').value,
+      quantity:Number(line.querySelector('[name="quantity"]').value),
+      unit_price:Number(line.querySelector('[name="unit_price"]').value)
+    }));
+    if (new Set(items.map(item => item.stock_id)).size !== items.length) {
+      return status('Gabungkan jumlah untuk varian yang sama pada batch yang sama.', true);
+    }
+    const date = orderForm.elements.order_date.value;
+    try {
+      await request('/rest/v1/rpc/pentol_create_order', { method:'POST',
+        body:{ order_id:draftId, order_day:date, customer_name:customer, is_paid:orderForm.elements.paid.checked, items } });
+    } catch (error) {
+      return status(error.status === 404 ? 'Database pesanan belum diaktifkan.'
+        : 'Penyimpanan belum terkonfirmasi. Periksa daftar atau coba lagi dari form yang sama.', true);
+    }
+    resetOrderForm();
+    orderDate.value = date;
+    await refreshAfterOrder('Pesanan tersimpan dan stok batch diperbarui.');
+  });
+});
