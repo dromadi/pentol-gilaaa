@@ -25,6 +25,9 @@ dialog{width:min(500px,calc(100% - 24px));max-height:90dvh;border:1px solid var(
 
 .filters{align-items:center}.available{display:inline-flex;align-items:center;min-height:44px;gap:7px;margin-left:auto;color:var(--ink);font-size:.87rem;font-weight:700;cursor:pointer}.available input{width:17px;height:17px;accent-color:var(--red)}.available input:focus-visible{outline:3px solid #197870;outline-offset:3px}.footer-row{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px 18px}.footer-row a{display:inline-flex;align-items:center;min-height:44px;text-underline-offset:4px}.cart-note a{color:var(--wine);white-space:nowrap}.card .detail{color:var(--muted)}
 @media(max-width:580px){.grid{grid-template-columns:1fr;gap:7px}.card{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:2px 8px;border-top:1px solid var(--line);border-left:3px solid #edb755}.card h3{grid-column:1;font-size:1rem}.card .detail{grid-column:1;margin:0}.card .bottom{grid-column:2;grid-row:1/span 2;display:grid;justify-items:end;gap:4px;margin:0;padding:0}.card .bottom button{min-height:44px;padding:5px 9px;font-size:.84rem}.card .price{font-size:.97rem}.available{margin-left:0}}
+
+#cart{width:min(680px,calc(100% - 24px))}.checkout-section{margin-top:18px;padding:14px 16px;border:1px solid var(--line);border-radius:13px;background:#fffaf1}.checkout-section h3{margin:0 0 13px;padding-bottom:8px;border-bottom:2px solid #dda642;color:var(--wine);font:800 28px/1.1 "Barlow Condensed","Arial Narrow",sans-serif}.checkout-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.checkout-fields .full{grid-column:1/-1}.checkout-fields label{display:grid;gap:4px;font-size:.9rem;font-weight:700}.checkout-fields input,.checkout-fields select,.checkout-fields textarea{width:100%;min-height:44px;padding:8px 10px;border:1px solid #c8a78f;border-radius:8px;color:var(--ink);background:white;font:inherit;font-weight:400}.checkout-fields :is(input,select,textarea):focus-visible{outline:3px solid #197870;outline-offset:2px}.checkout-note{margin:10px 0;padding:9px 10px;border-radius:7px;border-left:4px solid #dda642;background:#f9eee1;font-size:.86rem}.checkout-fields .checkout-note{margin:0}.cart-actions{margin-top:12px}#feedback:empty{display:none}
+@media(max-width:500px){#cart{padding:12px}.checkout-section{padding:12px}.checkout-fields{grid-template-columns:1fr}.cart-actions>button{width:100%}}
 </style>
 </head>
 <body>
@@ -35,7 +38,34 @@ dialog{width:min(500px,calc(100% - 24px));max-height:90dvh;border:1px solid var(
 </main>
 <footer><div class="wrap footer-row"><span>Pentol Gilaaa Surabaya · Jakarta Selatan</span><a href="https://wa.me/628981718578">WhatsApp 0898-1718-578</a><a href="./admin/">Admin</a></div></footer>
 <div class="dock" id="dock" hidden><div class="wrap"><strong id="dock-total" aria-live="polite"></strong><button class="gold" type="button" data-cart>Lihat pesanan →</button></div></div>
-<dialog id="cart" aria-labelledby="cart-title"><div class="cart-head"><h2 id="cart-title">Pesananmu</h2><form method="dialog"><button class="ghost" aria-label="Tutup keranjang">×</button></form></div><div id="cart-items"></div><div class="cart-total"><strong>Subtotal</strong><strong id="subtotal"></strong></div><p class="cart-note">Konfirmasi stok dan pengiriman lewat WhatsApp <a href="https://wa.me/628981718578">0898-1718-578</a>.</p><div class="cart-actions"><a class="btn red" id="whatsapp" hidden>Pesan via WhatsApp</a><button class="ghost" id="copy" type="button" disabled>Salin pesanan</button></div><p id="feedback" role="status"></p></dialog>
+<dialog id="cart" aria-labelledby="cart-title">
+  <div class="cart-head"><h2 id="cart-title">Pesananmu</h2><form method="dialog"><button class="ghost" aria-label="Tutup keranjang">×</button></form></div>
+  <form id="order-form">
+    <section class="checkout-section" aria-labelledby="buyer-title">
+      <h3 id="buyer-title">Data Pemesan</h3>
+      <div class="checkout-fields">
+        <label>Nama lengkap <input name="buyer" autocomplete="name" maxlength="80" required></label>
+        <label>Nomor WhatsApp <input name="phone" type="tel" autocomplete="tel" inputmode="tel" placeholder="08…" maxlength="24" required></label>
+        <label class="full">Metode terima
+          <select name="method"><option>Ambil sendiri</option><option>Diantar</option></select>
+        </label>
+        <p class="checkout-note full"><strong>Jadwal antar atau ambil</strong> dikonfirmasi lewat WhatsApp setelah stok dicek.</p>
+        <label class="full"><span id="location-label">Lokasi kantor / alamat (opsional)</span>
+          <input name="location" placeholder="Nama kantor, lantai, atau alamat" maxlength="200">
+        </label>
+        <label class="full">Catatan (opsional) <textarea name="notes" placeholder="Contoh: titip di resepsionis" rows="2" maxlength="250"></textarea></label>
+      </div>
+    </section>
+    <section class="checkout-section" aria-labelledby="summary-title">
+      <h3 id="summary-title">Ringkasan Pesanan</h3>
+      <div id="cart-items"></div>
+      <div class="cart-total"><strong>Subtotal produk</strong><strong id="subtotal" aria-live="polite"></strong></div>
+      <p class="checkout-note"><strong>Pembayaran</strong> via transfer setelah pesanan diterima. Nominal akhir dan rekening dikirim lewat WhatsApp. Ongkir dikonfirmasi terpisah.</p>
+      <div class="cart-actions"><button class="red" id="whatsapp" type="submit" disabled>Kirim Pesanan via WhatsApp</button><button class="ghost" id="copy" type="button" disabled>Salin pesanan</button></div>
+      <p id="feedback" role="status"></p>
+    </section>
+  </form>
+</dialog>
 <style>[hidden]{display:none!important}</style>
 <script>
 const products = [{"id": "UR", "name": "Pentol Urat", "size": "9 pcs / pack", "price": 36000, "category": "Pentol", "soldOut": false}, {"id": "PK", "name": "Pentol Kecil", "size": "30 pcs / pack", "price": 39000, "category": "Pentol", "soldOut": true}, {"id": "TP", "name": "Tahu Pentol", "size": "30 pcs / pack", "price": 29000, "category": "Tahu", "soldOut": false}, {"id": "JM", "name": "Pentol Jamur", "size": "9 pcs / pack", "price": 36000, "category": "Pentol", "soldOut": false}, {"id": "MZ", "name": "Pentol Mozzarella", "size": "9 pcs / pack", "price": 36000, "category": "Pentol", "soldOut": true}, {"id": "RJ", "name": "Pentol Ranjau", "size": "9 pcs / pack", "price": 36000, "category": "Pentol", "soldOut": false}, {"id": "TD", "name": "Tahu Pedas", "size": "9 pcs / pack", "price": 35000, "category": "Tahu", "soldOut": false}, {"id": "PG", "name": "Pentol Goreng", "size": "9 pcs / pack", "price": 41000, "category": "Pentol", "soldOut": false}, {"id": "SG", "name": "Sambal Gila Tambahan", "size": "±100 g / pack", "price": 15000, "category": "Sambal", "soldOut": false}];
@@ -62,7 +92,8 @@ const feedback = document.querySelector('#feedback');
 const search = document.querySelector('#menu-search');
 const availableOnly = document.querySelector('#available-only');
 let activeCategory = 'Semua';
-let orderText = '';
+const orderForm = document.querySelector('#order-form');
+let orderLines = [];
 
 function renderMenu() {
   const query = search.value.trim().toLocaleLowerCase('id');
@@ -101,9 +132,8 @@ function renderCart() {
   document.querySelector('#cart-items').innerHTML = selected.length ? selected.map(item =>
     `<div class="cart-row"><div><strong>${item.name}</strong><br>${money(item.price)}</div><div class="qty"><button type="button" class="ghost" data-change="-1" data-id="${item.id}" aria-label="Kurangi ${item.name}">−</button><span>${quantities.get(item.id)}</span><button type="button" class="ghost" data-change="1" data-id="${item.id}" aria-label="Tambah ${item.name}">+</button></div></div>`
   ).join('') : '<p>Keranjang masih kosong.</p>';
-  orderText = ['Halo, saya mau pesan Pentol Gilaaa Surabaya.', '', ...selected.map(item => `• ${item.name} × ${quantities.get(item.id)} pack`), '', `Subtotal ${money(total)}`, 'Boleh cek stok dan opsi pengirimannya?'].join('\n');
-  whatsapp.href = 'https://wa.me/628981718578?text=' + encodeURIComponent(orderText);
-  whatsapp.hidden = count === 0;
+  orderLines = selected.map(item => `• ${item.name} × ${quantities.get(item.id)} pack`);
+  whatsapp.disabled = count === 0;
   copy.disabled = count === 0;
   feedback.textContent = '';
 }
@@ -133,12 +163,59 @@ cart.addEventListener('click', event => {
   renderCart();
   (cart.querySelector(`[data-id="${id}"][data-change="${change}"]`) || cart.querySelector('form button')).focus();
 });
+function syncDeliveryFields() {
+  const needsAddress = orderForm.elements.method.value === 'Diantar';
+  orderForm.elements.location.required = needsAddress;
+  document.querySelector('#location-label').textContent = needsAddress
+    ? 'Lokasi kantor / alamat pengantaran' : 'Lokasi kantor / alamat (opsional)';
+}
+
+function checkoutMessage() {
+  const fields = orderForm.elements;
+  const buyer = fields.buyer.value.trim();
+  const phone = fields.phone.value.trim();
+  const location = fields.location.value.trim();
+  const notes = fields.notes.value.trim();
+  const digits = phone.replace(/\D/g, '');
+  fields.buyer.setCustomValidity(buyer ? '' : 'Isi nama lengkap.');
+  fields.phone.setCustomValidity(/^\+?[\d ()-]+$/.test(phone) && digits.length >= 8 && digits.length <= 15
+    ? '' : 'Masukkan nomor WhatsApp yang valid, misalnya 081234567890.');
+  fields.location.setCustomValidity(fields.location.required && !location ? 'Isi alamat pengantaran.' : '');
+  if (!orderLines.length || !orderForm.reportValidity()) return '';
+  const details = [
+    'Halo, saya mau pesan Pentol Gilaaa Surabaya.',
+    '',
+    'Nama: ' + buyer,
+    'WhatsApp: ' + phone,
+    'Metode terima: ' + fields.method.value
+  ];
+  if (location) details.push('Lokasi/alamat: ' + location);
+  if (notes) details.push('Catatan: ' + notes);
+  return [...details, '', ...orderLines, '', 'Subtotal produk: ' + document.querySelector('#subtotal').textContent,
+    'Mohon konfirmasi stok, jadwal, dan total pembayaran.'].join('\n');
+}
+
+orderForm.addEventListener('input', event => {
+  if (event.target.matches('input')) event.target.setCustomValidity('');
+});
+orderForm.elements.method.addEventListener('change', () => {
+  orderForm.elements.location.setCustomValidity('');
+  syncDeliveryFields();
+});
+syncDeliveryFields();
+orderForm.addEventListener('submit', event => {
+  event.preventDefault();
+  const message = checkoutMessage();
+  if (message) window.location.assign('https://wa.me/628981718578?text=' + encodeURIComponent(message));
+});
 copy.addEventListener('click', async () => {
+  const message = checkoutMessage();
+  if (!message) return;
   try {
-    await navigator.clipboard.writeText(orderText);
+    await navigator.clipboard.writeText(message);
     feedback.textContent = 'Pesanan disalin.';
   } catch {
-    feedback.textContent = 'Penyalinan gagal. Gunakan tombol Pesan via WhatsApp.';
+    feedback.textContent = 'Penyalinan gagal. Gunakan tombol Kirim Pesanan via WhatsApp.';
   }
 });
 renderMenu();
