@@ -31,7 +31,7 @@ dialog{width:min(500px,calc(100% - 24px));max-height:90dvh;border:1px solid var(
 </main>
 <footer><div class="wrap">Pentol Gilaaa Surabaya · Jakarta Selatan · <a href="./admin/">Admin</a></div></footer>
 <div class="dock" id="dock" hidden><div class="wrap"><strong id="dock-total" aria-live="polite"></strong><button class="gold" type="button" data-cart>Lihat pesanan →</button></div></div>
-<dialog id="cart" aria-labelledby="cart-title"><div class="cart-head"><h2 id="cart-title">Pesananmu</h2><form method="dialog"><button class="ghost" aria-label="Tutup keranjang">×</button></form></div><div id="cart-items"></div><div class="cart-total"><strong>Subtotal</strong><strong id="subtotal"></strong></div><p class="cart-note">Pilih kontak penjual di WhatsApp untuk konfirmasi stok dan pengiriman.</p><div class="cart-actions"><a class="btn red" id="whatsapp" target="_blank" rel="noopener noreferrer" hidden>Buka WhatsApp</a><button class="ghost" id="copy" type="button" disabled>Salin pesanan</button></div><p id="feedback" role="status"></p></dialog>
+<dialog id="cart" aria-labelledby="cart-title"><div class="cart-head"><h2 id="cart-title">Pesananmu</h2><form method="dialog"><button class="ghost" aria-label="Tutup keranjang">×</button></form></div><div id="cart-items"></div><div class="cart-total"><strong>Subtotal</strong><strong id="subtotal"></strong></div><p class="cart-note">Lanjutkan ke WhatsApp penjual untuk konfirmasi stok dan pengiriman.</p><div class="cart-actions"><a class="btn red" id="whatsapp" target="_blank" rel="noopener noreferrer" hidden>Pesan via WhatsApp</a><button class="ghost" id="copy" type="button" disabled>Salin pesanan</button></div><p id="feedback" role="status"></p></dialog>
 <style>[hidden]{display:none!important}</style>
 <script>
 const products = [{"id": "UR", "name": "Pentol Urat", "size": "9 pcs / pack", "price": 36000, "category": "Pentol", "soldOut": false}, {"id": "PK", "name": "Pentol Kecil", "size": "30 pcs / pack", "price": 39000, "category": "Pentol", "soldOut": true}, {"id": "TP", "name": "Tahu Pentol", "size": "30 pcs / pack", "price": 29000, "category": "Tahu", "soldOut": false}, {"id": "JM", "name": "Pentol Jamur", "size": "9 pcs / pack", "price": 36000, "category": "Pentol", "soldOut": false}, {"id": "MZ", "name": "Pentol Mozzarella", "size": "9 pcs / pack", "price": 36000, "category": "Pentol", "soldOut": true}, {"id": "RJ", "name": "Pentol Ranjau", "size": "9 pcs / pack", "price": 36000, "category": "Pentol", "soldOut": false}, {"id": "TD", "name": "Tahu Pedas", "size": "9 pcs / pack", "price": 35000, "category": "Tahu", "soldOut": false}, {"id": "PG", "name": "Pentol Goreng", "size": "9 pcs / pack", "price": 41000, "category": "Pentol", "soldOut": false}, {"id": "SG", "name": "Sambal Gila Tambahan", "size": "±100 g / pack", "price": 15000, "category": "Sambal", "soldOut": false}];
@@ -79,7 +79,7 @@ function renderCart() {
     `<div class="cart-row"><div><strong>${item.name}</strong><br>${money(item.price)}</div><div class="qty"><button type="button" class="ghost" data-change="-1" data-id="${item.id}" aria-label="Kurangi ${item.name}">−</button><span>${quantities.get(item.id)}</span><button type="button" class="ghost" data-change="1" data-id="${item.id}" aria-label="Tambah ${item.name}">+</button></div></div>`
   ).join('') : '<p>Keranjang masih kosong.</p>';
   orderText = ['Halo, saya mau pesan Pentol Gilaaa Surabaya.', '', ...selected.map(item => `• ${item.name} × ${quantities.get(item.id)} pack`), '', `Subtotal ${money(total)}`, 'Boleh cek stok dan opsi pengirimannya?'].join('\n');
-  whatsapp.href = 'https://wa.me/?text=' + encodeURIComponent(orderText);
+  whatsapp.href = 'https://wa.me/628981718578?text=' + encodeURIComponent(orderText);
   whatsapp.hidden = count === 0;
   copy.disabled = count === 0;
   feedback.textContent = '';
@@ -114,7 +114,7 @@ copy.addEventListener('click', async () => {
     await navigator.clipboard.writeText(orderText);
     feedback.textContent = 'Pesanan disalin.';
   } catch {
-    feedback.textContent = 'Penyalinan gagal. Gunakan tombol Buka WhatsApp.';
+    feedback.textContent = 'Penyalinan gagal. Gunakan tombol Pesan via WhatsApp.';
   }
 });
 renderMenu();
