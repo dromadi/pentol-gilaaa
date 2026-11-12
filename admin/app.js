@@ -15,6 +15,9 @@ const stockSearch = $('stock-search');
 const orderForm = $('order-form');
 const orderDate = $('order-date');
 const orderPeriod = $('order-period');
+const menuToggle = $('menu-toggle');
+const menu = $('admin-menu');
+const menuButtons = menu.querySelectorAll('[data-view]');
 const displayDate = new Intl.DateTimeFormat('id-ID', {
   day:'numeric', month:'short', year:'numeric', timeZone:'UTC'
 });
@@ -70,6 +73,7 @@ function endSession(message) {
   resetOrderForm();
   $('order-rows').replaceChildren();
   $('orders-summary').textContent = '';
+  setMenuExpanded(false);
   $('dashboard').hidden = true;
   $('logout').hidden = true;
   $('stock-rows').replaceChildren();
@@ -277,12 +281,30 @@ $('logout').addEventListener('click', () => {
   if (!busy) endSession('Anda sudah keluar.');
 });
 filter.addEventListener('change', renderAnalytics);
-document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => {
-  document.querySelectorAll('[data-view]').forEach(tab => {
+function setMenuExpanded(expanded) {
+  menuToggle.setAttribute('aria-expanded', String(expanded));
+}
+
+menuToggle.addEventListener('click', () => {
+  setMenuExpanded(menuToggle.getAttribute('aria-expanded') !== 'true');
+});
+menu.parentElement.addEventListener('keydown', event => {
+  if (event.key !== 'Escape' || !menuToggle.getClientRects().length
+      || menuToggle.getAttribute('aria-expanded') !== 'true') return;
+  setMenuExpanded(false);
+  menuToggle.focus();
+});
+
+menuButtons.forEach(button => button.addEventListener('click', () => {
+  menuButtons.forEach(tab => {
     const selected = tab === button;
     tab.setAttribute('aria-pressed', String(selected));
     $(tab.dataset.view).hidden = !selected;
   });
+  if (menuToggle.getClientRects().length) {
+    setMenuExpanded(false);
+    $(button.dataset.view).querySelector('h2').focus();
+  }
   if (button.dataset.view === 'orders') loadOrders();
 }));
 if (configured) $('signin').hidden = false;

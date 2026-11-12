@@ -32,3 +32,34 @@ h3{margin-top:0}.panel{box-shadow:0 10px 28px #57280c0b}.section-head{display:fl
 #order-rows .order-description { white-space: pre-line; }
 #order-rows button { margin: .2rem; }
 .week-navigation:not([hidden]) { display: flex; flex-wrap: wrap; gap: .4rem; }
+
+.admin-main { width: min(1360px, calc(100% - 32px)); }
+#dashboard { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 20px; align-items: start; }
+.admin-content { min-width: 0; }
+.admin-sidebar {
+  position: sticky;
+  top: 16px;
+  padding: 10px;
+  background: #fffdf7;
+  border: 1px solid #ead9c7;
+  border-radius: 14px;
+  box-shadow: 0 10px 28px #57280c0b;
+}
+#admin-menu { display: grid; gap: 5px; margin: 0; }
+#admin-menu button { width: 100%; text-align: left; }
+#admin-menu button[aria-pressed="false"] { background: transparent; border-color: transparent; color: #5d3228; }
+#admin-menu button[aria-pressed="false"]:hover { background: #fff1da; }
+#menu-toggle { display: none; }
+.menu-icon {
+  width: 17px;
+  height: 13px;
+  border-block: 2px solid currentColor;
+  background: linear-gradient(currentColor, currentColor) center / 100% 2px no-repeat;
+}
+@media (max-width: 900px) {
+  #dashboard { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .admin-sidebar { position: static; padding: 8px; }
+  #menu-toggle { display: flex; align-items: center; gap: 9px; width: 100%; }
+  #menu-toggle[aria-expanded="false"] + #admin-menu { display: none; }
+  #admin-menu { margin-top: 8px; }
+}

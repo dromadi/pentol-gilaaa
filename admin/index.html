@@ -5,12 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>Admin · Pentol Gilaaa Surabaya</title>
-<link rel="stylesheet" href="style.css?v=weekly-orders">
-<script type="module" src="app.js?v=weekly-orders"></script>
+<link rel="stylesheet" href="style.css?v=admin-sidebar">
+<script type="module" src="app.js?v=admin-sidebar"></script>
 </head>
 <body>
 <header><div class="wrap bar"><a class="brand" href="../">Pentol Gilaaa <b>Surabaya</b></a><div class="header-actions"><a href="../">Lihat katalog ↗</a><button id="logout" hidden>Keluar</button></div></div></header>
-<main class="wrap">
+<main class="wrap admin-main">
 <h1>Admin Pentol Gilaaa</h1>
 <p id="status" role="status" aria-live="polite"></p>
 <noscript>Aktifkan JavaScript untuk membuka area admin.</noscript>
@@ -23,9 +23,19 @@
 </form>
 </section>
 <div id="dashboard" hidden>
-<nav aria-label="Menu admin"><button data-view="stock" aria-pressed="true">Stok per Batch</button><button data-view="orders" aria-pressed="false">Pemesanan Harian</button><button data-view="analytics" aria-pressed="false">Analitik</button></nav>
+<aside class="admin-sidebar">
+<button id="menu-toggle" class="secondary" type="button" aria-controls="admin-menu" aria-expanded="false">
+<span class="menu-icon" aria-hidden="true"></span> Menu admin
+</button>
+<nav id="admin-menu" aria-label="Menu admin">
+<button type="button" data-view="stock" aria-controls="stock" aria-pressed="true">Stok per Batch</button>
+<button type="button" data-view="orders" aria-controls="orders" aria-pressed="false">Pemesanan Harian</button>
+<button type="button" data-view="analytics" aria-controls="analytics" aria-pressed="false">Analitik</button>
+</nav>
+</aside>
+<div class="admin-content">
 <section id="stock" class="panel">
-<div class="section-head"><div><h2>Stok per Batch</h2><p>Catat barang masuk dan alokasi pesanan per varian.</p></div><button type="button" id="new-entry" aria-controls="batch-form" aria-expanded="false">+ Tambah stok batch</button></div>
+<div class="section-head"><div><h2 tabindex="-1">Stok per Batch</h2><p>Catat barang masuk dan alokasi pesanan per varian.</p></div><button type="button" id="new-entry" aria-controls="batch-form" aria-expanded="false">+ Tambah stok batch</button></div>
 <form id="batch-form" class="editor" hidden>
 <h3 id="editor-title">Tambah varian ke batch</h3>
 <p>Untuk pesanan sebelum barang tiba, isi jumlah terpesan. Tambahkan tanggal dan jumlah diterima saat barang datang.</p>
@@ -49,7 +59,7 @@
 </div>
 </section>
 <section id="orders" class="panel" hidden>
-<div class="section-head"><h2>Pemesanan Harian</h2><button type="button" id="new-order" aria-controls="order-form" aria-expanded="false">+ Catat pesanan</button></div>
+<div class="section-head"><h2 tabindex="-1">Pemesanan Harian</h2><button type="button" id="new-order" aria-controls="order-form" aria-expanded="false">+ Catat pesanan</button></div>
 <form id="order-form" class="editor" hidden>
 <div class="fields">
 <label>Tanggal pesanan <input name="order_date" type="date" required></label>
@@ -74,7 +84,7 @@
 </div>
 </section>
 <section id="analytics" class="panel" hidden>
-<div class="section-head"><div><h2>Analitik Stok</h2><p>Rekap jumlah pack dari pencatatan batch.</p></div>
+<div class="section-head"><div><h2 tabindex="-1">Analitik Stok</h2><p>Rekap jumlah pack dari pencatatan batch.</p></div>
 <label>Batch <select id="batch-filter"><option value="">Semua batch</option></select></label></div>
 <div id="metrics" class="metrics"></div>
 <h3>Rekap per varian</h3>
@@ -82,6 +92,7 @@
 <table><thead><tr><th>Varian</th><th>Diterima</th><th>Terpesan</th><th>Diantar</th><th>Sisa jual</th><th>Belum terpenuhi</th></tr></thead><tbody id="analytics-rows"></tbody></table>
 </div>
 </section>
+</div>
 </div>
 </main>
 </body>
