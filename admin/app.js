@@ -1,5 +1,5 @@
 import { supabaseUrl, supabasePublishableKey } from './config.js';
-import { initOperations } from './operations.js?v=operations-1';
+import { initOperations } from './operations.js?v=operations-2';
 
 const products = new Map([
   ['UR','Pentol Urat'], ['PK','Pentol Kecil'], ['TP','Tahu Pentol'],
@@ -459,6 +459,7 @@ function openOrder(order = null, inboxEntry = null) {
   e.order_date.value = order?.order_date || (inboxEntry ? today() : orderDate.value || today());
   e.customer.value = order?.customer || inboxEntry?.customer || '';
   e.delivery_on.value = order?.delivery_on || '';
+  $('existing-booking-option').hidden = Boolean(order || inboxEntry);
   e.contact.value = order?.contact || inboxEntry?.phone || '';
   e.delivery_location.value = order?.delivery_location || inboxEntry?.area || '';
   e.delivery_note.value = order?.delivery_note || inboxEntry?.note || '';
@@ -508,7 +509,8 @@ orderForm.addEventListener('submit', event => {
         date, customer, delivery_on:e.delivery_on.value || null,
         shipping_charge:Number(e.shipping_charge.value), shipping_cost:Number(e.shipping_cost.value),
         contact:e.contact.value.trim(), delivery_location:e.delivery_location.value.trim(),
-        delivery_note:e.delivery_note.value.trim(), inbox_id:draftInbox?.id, items
+        delivery_note:e.delivery_note.value.trim(), inbox_id:draftInbox?.id,
+        use_existing_booking:e.use_existing_booking.checked, items
       });
     } catch (error) {
       return status(error.status === 404 ? 'Database pesanan belum diaktifkan.'

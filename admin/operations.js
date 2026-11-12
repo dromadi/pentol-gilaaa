@@ -78,7 +78,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
   }
 
   function errorMessage(error) {
-    const known = /^(Pesanan |Isi 1|Periksa varian|Gabungkan varian|Varian batch |Pilih jumlah|Jumlah |Stok fisik|Nominal |Pilih 1|Varian tidak)/;
+    const known = /^(Booking lama |Pesanan |Isi 1|Periksa varian|Gabungkan varian|Varian batch |Pilih jumlah|Jumlah |Stok fisik|Nominal |Pilih 1|Varian tidak)/;
     return known.test(error.message) ? error.message : 'Perubahan belum terkonfirmasi. Muat ulang daftar sebelum mencoba lagi.';
   }
 
@@ -290,11 +290,15 @@ export function initOperations({ $, request, status, products, prices, today, fo
       const date = day.lastChild.value || today();
       const mode = filter.lastChild.value;
       output.textContent = 'Memuat pesanan…';
-      const orders = await list('pentol_orders?select=' + ordersSelect, '&cancelled=eq.false&order=order_date,created_at,id'
+      const listed = await list('pentol_orders?select=' + ordersSelect, '&cancelled=eq.false&order=order_date,created_at,id'
         + (mode === 'unpaid' ? '&paid=eq.false&delivered=eq.true'
           : mode === 'pending' ? '&delivered=eq.false'
             : '&delivered=eq.false&or=(delivery_on.eq.' + date + ',and(delivery_on.is.null,order_date.eq.' + date + '))'));
       if ((day.lastChild.value || today()) !== date || filter.lastChild.value !== mode) return;
+      const orders = mode === 'packing' ? listed.filter(order => order.pentol_order_items.every(item => {
+        const row = stock(item.stock_id);
+        return item.shipped === item.quantity || (row && row.received-row.delivered >= row.reserved);
+      })) : listed;
       output.replaceChildren();
       const totals = new Map();
       for (const order of orders) {

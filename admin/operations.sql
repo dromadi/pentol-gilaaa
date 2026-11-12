@@ -167,8 +167,20 @@ begin
         delivery_on=(payload->>'delivery_on')::date,shipping_charge=coalesce((payload->>'shipping_charge')::integer,0),
         shipping_cost=coalesce((payload->>'shipping_cost')::integer,0) where id=target;
       for item in select * from jsonb_to_recordset(new_items) as x(stock_id uuid,quantity integer,unit_price integer) order by stock_id loop
-        update public.pentol_batch_stock set reserved=reserved+item.quantity,revision=revision+1 where id=item.stock_id;
-        if not found then raise exception 'Varian batch tidak ditemukan.'; end if;
+        if action='create' and coalesce((payload->>'use_existing_booking')::boolean,false) then
+          if not exists(
+            select 1 from public.pentol_batch_stock s where s.id=item.stock_id
+              and s.reserved >= item.quantity + coalesce((
+                select sum(i.quantity-i.shipped) from public.pentol_order_items i
+                join public.pentol_orders r on r.id=i.order_id
+                where i.stock_id=s.id and not r.cancelled
+              ),0)
+          ) then raise exception 'Booking lama yang belum terhubung tidak cukup untuk varian ini.'; end if;
+          update public.pentol_batch_stock set revision=revision+1 where id=item.stock_id;
+        else
+          update public.pentol_batch_stock set reserved=reserved+item.quantity,revision=revision+1 where id=item.stock_id;
+          if not found then raise exception 'Varian batch tidak ditemukan.'; end if;
+        end if;
         insert into public.pentol_order_items(order_id,stock_id,quantity,unit_price) values(target,item.stock_id,item.quantity,item.unit_price);
       end loop;
     end if;
