@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>Admin · Pentol Gilaaa Surabaya</title>
-<link rel="stylesheet" href="style.css">
-<script type="module" src="app.js"></script>
+<link rel="stylesheet" href="style.css?v=weekly-orders">
+<script type="module" src="app.js?v=weekly-orders"></script>
 </head>
 <body>
 <header><div class="wrap bar"><a class="brand" href="../">Pentol Gilaaa <b>Surabaya</b></a><div class="header-actions"><a href="../">Lihat katalog ↗</a><button id="logout" hidden>Keluar</button></div></div></header>
@@ -60,10 +60,17 @@
 <label class="order-paid"><input type="checkbox" name="paid"> Sudah dibayar</label>
 <p><button id="save-order">Simpan pesanan</button> <button type="button" id="cancel-order">Batal</button></p>
 </form>
-<div class="stock-controls"><label>Tanggal <input type="date" id="order-date" required></label></div>
+<div class="stock-controls">
+<label>Tampilan <select id="order-period"><option value="day">Harian</option><option value="week">Mingguan</option></select></label>
+<label><span id="order-date-label">Tanggal</span> <input type="date" id="order-date" required></label>
+<div id="week-navigation" class="week-navigation" hidden>
+<button type="button" class="secondary" id="previous-week">‹ Minggu lalu</button>
+<button type="button" class="secondary" id="next-week">Minggu berikutnya ›</button>
+</div>
+</div>
 <p id="orders-summary" class="result-count" aria-live="polite"></p>
-<div class="table" tabindex="0" role="region" aria-label="Daftar pesanan harian">
-<table><thead><tr><th>Pelanggan</th><th>Pesanan</th><th>Tagihan</th><th>Pembayaran</th><th>Pengantaran</th><th>Aksi</th></tr></thead><tbody id="order-rows"></tbody></table>
+<div class="table" tabindex="0" role="region" aria-label="Daftar pesanan">
+<table><thead><tr><th id="order-date-column" hidden>Tanggal</th><th>Pelanggan</th><th>Pesanan</th><th>Tagihan</th><th>Pembayaran</th><th>Pengantaran</th><th>Aksi</th></tr></thead><tbody id="order-rows"></tbody></table>
 </div>
 </section>
 <section id="analytics" class="panel" hidden>

@@ -14,6 +14,10 @@ const stockBatch = $('stock-batch');
 const stockSearch = $('stock-search');
 const orderForm = $('order-form');
 const orderDate = $('order-date');
+const orderPeriod = $('order-period');
+const displayDate = new Intl.DateTimeFormat('id-ID', {
+  day:'numeric', month:'short', year:'numeric', timeZone:'UTC'
+});
 const orderItems = $('order-items');
 const prices = { UR:36000, PK:39000, TP:29000, JM:36000, MZ:36000, RJ:36000, TD:35000, PG:41000, SG:15000 };
 let draftId;
@@ -320,8 +324,28 @@ function addOrderItem() {
   orderItems.append(line);
 }
 
+function orderRange(day, weekly) {
+  if (!weekly) return { first:day, last:day };
+  const date = new Date(day + 'T00:00:00Z');
+  date.setUTCDate(date.getUTCDate() - (date.getUTCDay() + 6) % 7);
+  const first = date.toISOString().slice(0, 10);
+  date.setUTCDate(date.getUTCDate() + 6);
+  return { first, last:date.toISOString().slice(0, 10) };
+}
+
+function moveOrderWeek(days) {
+  const date = new Date((orderDate.value || today()) + 'T00:00:00Z');
+  date.setUTCDate(date.getUTCDate() + days);
+  orderDate.value = date.toISOString().slice(0, 10);
+  loadOrders();
+}
+
 async function loadOrders() {
   const generation = ++orderLoad;
+  const weekly = orderPeriod.value === 'week';
+  $('order-date-column').hidden = !weekly;
+  $('week-navigation').hidden = !weekly;
+  $('order-date-label').textContent = weekly ? 'Tanggal dalam minggu' : 'Tanggal';
   const target = $('order-rows');
   const summary = $('orders-summary');
   target.replaceChildren();
@@ -329,17 +353,22 @@ async function loadOrders() {
     summary.textContent = 'Pilih tanggal untuk melihat pesanan.';
     return;
   }
-  summary.textContent = 'Memuat pesanan…';
+  const { first, last } = orderRange(orderDate.value, weekly);
+  const rangeFilter = '&order_date=gte.' + first + '&order_date=lte.' + last;
+  const period = weekly ? displayDate.formatRange(new Date(first), new Date(last)) + ' · ' : '';
+  summary.textContent = period + 'Memuat pesanan…';
   try {
     const orders = [];
     for (let offset = 0; ; offset += 200) {
-      const page = await request('/rest/v1/pentol_orders?select=id,customer,paid,delivered,pentol_order_items(quantity,unit_price,stock_id)&order=created_at,id&limit=200&offset='
-        + offset + '&order_date=eq.' + encodeURIComponent(orderDate.value));
+      const page = await request('/rest/v1/pentol_orders?select=id,order_date,customer,paid,delivered,pentol_order_items(quantity,unit_price,stock_id)&order=order_date,created_at,id&limit=200&offset='
+        + offset + rangeFilter);
       if (generation !== orderLoad || !session) return;
       orders.push(...page);
       if (page.length < 200) break;
     }
     const stockById = new Map(rows.map(row => [row.id, row]));
+    let packs = 0;
+    let charges = 0;
     target.replaceChildren(...orders.map(order => {
       const items = order.pentol_order_items;
       const descriptions = items.map(item => {
@@ -347,15 +376,22 @@ async function loadOrders() {
         return (row ? products.get(row.sku) + ' · ' + row.batch_code : 'Varian batch') + ' × ' + format.format(item.quantity);
       });
       const total = items.reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
-      const tr = tableRow([order.customer, descriptions.join('\n'), 'Rp' + format.format(total),
+      charges += total;
+      packs += items.reduce((sum, item) => sum + item.quantity, 0);
+      const dates = weekly ? [displayDate.format(new Date(order.order_date))] : [];
+      const tr = tableRow([...dates, order.customer, descriptions.join('\n'), 'Rp' + format.format(total),
         order.paid ? 'Lunas' : 'Belum dibayar', order.delivered ? 'Sudah diantar' : 'Belum diantar']);
+      tr.cells[weekly ? 2 : 1].className = 'order-description';
       const actions = tr.insertCell();
       if (!order.paid) actions.append(orderAction('Tandai lunas', order.id, true, false));
       if (!order.delivered) actions.append(orderAction('Tandai diantar', order.id, false, true));
       return tr;
     }));
-    emptyRow(target, 6, 'Belum ada pesanan tercatat pada tanggal ini.');
-    summary.textContent = orders.length + ' pesanan';
+    emptyRow(target, weekly ? 7 : 6, weekly
+      ? 'Belum ada pesanan tercatat pada minggu ini.'
+      : 'Belum ada pesanan tercatat pada tanggal ini.');
+    summary.textContent = period + format.format(orders.length) + ' pesanan · '
+      + format.format(packs) + ' pack · Tagihan Rp' + format.format(charges);
   } catch (error) {
     if (generation !== orderLoad || !session) return;
     summary.textContent = error.status === 404
@@ -411,6 +447,9 @@ $('cancel-order').addEventListener('click', () => {
   $('new-order').focus();
 });
 orderDate.addEventListener('change', loadOrders);
+orderPeriod.addEventListener('change', loadOrders);
+$('previous-week').addEventListener('click', () => moveOrderWeek(-7));
+$('next-week').addEventListener('click', () => moveOrderWeek(7));
 
 orderForm.addEventListener('submit', event => {
   event.preventDefault();
