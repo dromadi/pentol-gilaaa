@@ -5,41 +5,45 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>Admin · Pentol Gilaaa Surabaya</title>
-<link rel="stylesheet" href="style.css?v=operations-2">
-<script type="module" src="app.js?v=operations-2"></script>
+<link rel="stylesheet" href="style.css?v=design-1">
+<script type="module" src="app.js?v=design-1"></script>
 </head>
 <body>
-<header><div class="wrap bar"><a class="brand" href="../">Pentol Gilaaa <b>Surabaya</b></a><div class="header-actions"><a href="../">Lihat katalog ↗</a><button id="logout" hidden>Keluar</button></div></div></header>
+<header class="app-header"><div class="bar">
+<a class="brand" href="../"><span class="brand-mark" aria-hidden="true">pg.</span><span>Pentol Gilaaa<small>Surabaya</small></span></a>
+<div class="header-actions"><span id="business-date"></span><a href="../" target="_blank" rel="noopener">Lihat katalog ↗</a><button id="logout" class="text-button" hidden>Keluar</button></div>
+</div></header>
 <main class="wrap admin-main">
-<h1>Admin Pentol Gilaaa</h1>
+<h1 class="sr-only">Admin Pentol Gilaaa</h1>
 <p id="status" role="status" aria-live="polite"></p>
 <noscript>Aktifkan JavaScript untuk membuka area admin.</noscript>
 <section id="signin" class="panel login" hidden>
-<h2>Masuk</h2>
+<div class="login-intro"><span class="brand-mark" aria-hidden="true">pg.</span><p>ADMIN TOKO</p><h2>Selamat datang<br>kembali.</h2><p>Kelola pesanan, stok, dan pembukuan dalam satu tempat.</p></div>
+<h3>Masuk ke toko</h3>
 <form id="login">
 <label>Email <input type="email" name="email" autocomplete="username" required></label>
 <label>Kata sandi <input type="password" name="password" autocomplete="current-password" required></label>
-<button>Masuk</button>
+<button>Masuk ke admin <span aria-hidden="true">→</span></button>
 </form>
 </section>
 <div id="dashboard" hidden>
-<aside class="admin-sidebar">
+<aside class="admin-sidebar"><p class="sidebar-caption">KELOLA TOKO</p>
 <button id="menu-toggle" class="secondary" type="button" aria-controls="admin-menu" aria-expanded="false">
-<span class="menu-icon" aria-hidden="true"></span> Menu admin
+<span class="menu-icon" aria-hidden="true"></span> <span id="mobile-view-label">Stok per Batch</span> <span class="menu-chevron" aria-hidden="true">⌄</span>
 </button>
 <nav id="admin-menu" aria-label="Menu admin">
-<button type="button" data-view="stock" aria-controls="stock" aria-pressed="true">Stok per Batch</button>
-<button type="button" data-view="orders" aria-controls="orders" aria-pressed="false">Pemesanan Harian</button>
-<button type="button" data-view="packing" aria-controls="packing" aria-pressed="false">Packing &amp; Tagihan</button>
-<button type="button" data-view="purchasing" aria-controls="purchasing" aria-pressed="false">Restok &amp; Supplier</button>
-<button type="button" data-view="finance" aria-controls="finance" aria-pressed="false">Harga &amp; Laba</button>
-<button type="button" data-view="promotions" aria-controls="promotions" aria-pressed="false">Promosi</button>
-<button type="button" data-view="analytics" aria-controls="analytics" aria-pressed="false">Analitik</button>
+<button type="button" data-view="stock" aria-controls="stock" aria-pressed="true"><span class="nav-icon" aria-hidden="true">▦</span><span>Stok per Batch</span></button>
+<button type="button" data-view="orders" aria-controls="orders" aria-pressed="false"><span class="nav-icon" aria-hidden="true">▤</span><span>Pesanan</span></button>
+<button type="button" data-view="packing" aria-controls="packing" aria-pressed="false"><span class="nav-icon" aria-hidden="true">□</span><span>Packing &amp; Tagihan</span></button>
+<button type="button" data-view="purchasing" aria-controls="purchasing" aria-pressed="false"><span class="nav-icon" aria-hidden="true">↙</span><span>Restok &amp; Supplier</span></button>
+<p class="sidebar-caption">LAPORAN &amp; PROMOSI</p><button type="button" data-view="finance" aria-controls="finance" aria-pressed="false"><span class="nav-icon" aria-hidden="true">↗</span><span>Harga &amp; Laba</span></button>
+<button type="button" data-view="promotions" aria-controls="promotions" aria-pressed="false"><span class="nav-icon" aria-hidden="true">✳</span><span>Promosi</span></button>
+<button type="button" data-view="analytics" aria-controls="analytics" aria-pressed="false"><span class="nav-icon" aria-hidden="true">◴</span><span>Analitik Stok</span></button>
 </nav>
 </aside>
 <div class="admin-content">
 <section id="stock" class="panel">
-<div class="section-head"><div><h2 tabindex="-1">Stok per Batch</h2><p>Catat barang masuk dan alokasi pesanan per varian.</p></div><button type="button" id="new-entry" aria-controls="batch-form" aria-expanded="false">+ Tambah stok batch</button></div>
+<div class="section-head"><div><p class="eyebrow">INVENTORI</p><h2 tabindex="-1">Stok per Batch</h2><p>Catat barang masuk dan alokasi pesanan per varian.</p></div><button type="button" id="new-entry" aria-controls="batch-form" aria-expanded="false">+ Tambah stok batch</button></div>
 <form id="batch-form" class="editor" hidden>
 <h3 id="editor-title">Tambah varian ke batch</h3>
 <p>Untuk pesanan sebelum barang tiba, isi jumlah terpesan. Tambahkan tanggal dan jumlah diterima saat barang datang.</p>
@@ -53,6 +57,7 @@
 </div>
 <button id="save">Tambah varian ke batch</button> <button type="button" id="cancel">Batal</button>
 </form>
+<div id="stock-metrics" class="metrics summary-metrics" aria-label="Ringkasan stok"></div>
 <div class="stock-controls">
 <label>Batch <select id="stock-batch"><option value="">Semua batch</option></select></label>
 <label>Cari varian <input id="stock-search" type="search" placeholder="Contoh Pentol Urat"></label>
@@ -63,8 +68,9 @@
 </div>
 </section>
 <section id="orders" class="panel" hidden>
-<div class="section-head"><h2 tabindex="-1">Pemesanan Harian</h2><button type="button" id="new-order" aria-controls="order-form" aria-expanded="false">+ Catat pesanan</button></div>
+<div class="section-head"><div><p class="eyebrow">TRANSAKSI</p><h2 tabindex="-1">Pesanan</h2><p>Pantau pesanan dan tindak lanjut pelanggan.</p></div><button type="button" id="new-order" aria-controls="order-form" aria-expanded="false">+ Catat pesanan</button></div>
 <form id="order-form" class="editor" hidden>
+<h3 id="order-editor-title">Catat pesanan</h3><p>Isi pelanggan, lalu pilih varian dan batch.</p>
 <div class="fields">
 <label>Tanggal pesanan <input name="order_date" type="date" required></label>
 <label>Nama pelanggan <input name="customer" maxlength="120" required></label>
@@ -75,32 +81,36 @@
 <label>Ongkir ditagih (Rp) <input name="shipping_charge" type="number" min="0" max="10000000" value="0" required></label>
 <label>Ongkir biaya toko (Rp) <input name="shipping_cost" type="number" min="0" max="10000000" value="0" required></label>
 </div>
-<div id="order-items"></div>
+<h4>Item pesanan</h4><div id="order-items"></div><p id="order-estimate" class="order-estimate" aria-live="polite"></p>
 <p><button type="button" id="add-item" class="secondary">+ Tambah varian</button></p>
 <label class="order-paid" id="existing-booking-option"><input type="checkbox" name="use_existing_booking"> Hubungkan ke booking lama yang sudah masuk stok batch</label>
-<p><button id="save-order">Simpan pesanan</button> <button type="button" id="cancel-order">Batal</button></p>
+<p class="form-actions"><button id="save-order">Simpan pesanan</button> <button type="button" id="cancel-order">Batal</button></p>
 </form>
-<div class="stock-controls">
+<div id="order-metrics" class="metrics summary-metrics" aria-label="Ringkasan periode pesanan"></div>
+<div class="order-toolbar">
 <label>Tampilan <select id="order-period"><option value="day">Harian</option><option value="week">Mingguan</option></select></label>
 <label><span id="order-date-label">Tanggal</span> <input type="date" id="order-date" required></label>
 <div id="week-navigation" class="week-navigation" hidden>
 <button type="button" class="secondary" id="previous-week">‹ Minggu lalu</button>
 <button type="button" class="secondary" id="next-week">Minggu berikutnya ›</button>
 </div>
+<label>Cari pelanggan <input id="order-search" type="search" placeholder="Nama pelanggan…" autocomplete="off"></label>
+<label>Status <select id="order-status"><option value="all">Semua status</option><option value="unpaid">Belum lunas</option><option value="pending">Belum selesai diantar</option><option value="delivered-unpaid">Diantar, belum lunas</option><option value="cancelled">Dibatalkan</option></select></label>
+<button type="button" id="refresh-orders" class="secondary">↻ Muat ulang</button>
 </div>
 <details id="checkout-inbox"><summary>Pesanan masuk dari katalog <span id="inbox-count"></span></summary><div id="inbox-list"></div></details>
 <p id="orders-summary" class="result-count" aria-live="polite"></p>
-<div class="table" tabindex="0" role="region" aria-label="Daftar pesanan">
+<div class="table order-table" tabindex="0" role="region" aria-label="Daftar pesanan">
 <table><thead><tr><th id="order-date-column" hidden>Tanggal</th><th>Pelanggan</th><th>Pesanan</th><th>Tagihan</th><th>Pembayaran</th><th>Pengantaran</th><th>Aksi</th></tr></thead><tbody id="order-rows"></tbody></table>
 </div>
 </section>
-<section id="packing" class="panel" hidden><h2 tabindex="-1">Packing &amp; Tagihan</h2><div id="packing-body"></div></section>
-<section id="purchasing" class="panel" hidden><h2 tabindex="-1">Restok &amp; Supplier</h2><div id="purchasing-body"></div></section>
-<section id="finance" class="panel" hidden><h2 tabindex="-1">Harga &amp; Laba</h2><div id="finance-body"></div></section>
-<section id="promotions" class="panel" hidden><h2 tabindex="-1">Promosi</h2><div id="promotions-body"></div></section>
+<section id="packing" class="panel" hidden><div class="section-head"><div><h2 tabindex="-1">Packing &amp; Tagihan</h2><p>Siapkan pengantaran dan pantau tagihan pelanggan.</p></div></div><div id="packing-body"></div></section>
+<section id="purchasing" class="panel" hidden><div class="section-head"><div><h2 tabindex="-1">Restok &amp; Supplier</h2><p>Pantau pembelian, kedatangan barang, dan biaya batch.</p></div></div><div id="purchasing-body"></div></section>
+<section id="finance" class="panel" hidden><div class="section-head"><div><h2 tabindex="-1">Harga &amp; Laba</h2><p>Lihat biaya, penjualan, dan hasil usaha.</p></div></div><div id="finance-body"></div></section>
+<section id="promotions" class="panel" hidden><div class="section-head"><div><h2 tabindex="-1">Promosi</h2><p>Siapkan caption dan gambar dari harga serta stok terbaru.</p></div></div><div id="promotions-body"></div></section>
 <dialog id="ops-dialog"><form id="ops-form" class="editor"><h3 id="ops-title"></h3><div id="ops-fields"></div><p id="ops-error" role="alert"></p><button>Simpan</button> <button type="button" class="secondary" id="ops-close">Tutup</button></form></dialog>
 <section id="analytics" class="panel" hidden>
-<div class="section-head"><div><h2 tabindex="-1">Analitik Stok</h2><p>Rekap jumlah pack dari pencatatan batch.</p></div>
+<div class="section-head"><div><p class="eyebrow">LAPORAN</p><h2 tabindex="-1">Analitik Stok</h2><p>Rekap jumlah pack dari pencatatan batch.</p></div>
 <label>Batch <select id="batch-filter"><option value="">Semua batch</option></select></label></div>
 <div id="metrics" class="metrics"></div>
 <h3>Rekap per varian</h3>

@@ -1,5 +1,5 @@
 import { supabaseUrl, supabasePublishableKey } from './config.js';
-import { initOperations } from './operations.js?v=operations-2';
+import { initOperations } from './operations.js?v=design-1';
 
 const products = new Map([
   ['UR','Pentol Urat'], ['PK','Pentol Kecil'], ['TP','Tahu Pentol'],
@@ -28,8 +28,15 @@ let draftId;
 let draftOrder;
 let draftInbox;
 let orderLoad = 0;
+let loadedOrders = [];
+let loadedPeriod = { weekly:false, period:'' };
+const orderSearch = $('order-search');
+const orderStatus = $('order-status');
 const today = () => new Intl.DateTimeFormat('sv-SE', { timeZone:'Asia/Jakarta' }).format(new Date());
 orderDate.value = today();
+$('business-date').textContent = new Intl.DateTimeFormat('id-ID', {
+  weekday:'short', day:'numeric', month:'short', year:'numeric', timeZone:'Asia/Jakarta'
+}).format(new Date());
 let session = null;
 let rows = [];
 let editing = null;
@@ -77,6 +84,11 @@ function endSession(message) {
   resetOrderForm();
   $('order-rows').replaceChildren();
   $('orders-summary').textContent = '';
+  loadedOrders = [];
+  orderSearch.value = '';
+  orderStatus.value = 'all';
+  $('order-metrics').replaceChildren();
+  $('stock-metrics').replaceChildren();
   setMenuExpanded(false);
   $('dashboard').hidden = true;
   $('logout').hidden = true;
@@ -110,6 +122,17 @@ function emptyRow(target, columns, label) {
   const tr = tableRow([label]);
   tr.cells[0].colSpan = columns;
   target.append(tr);
+}
+
+function metricCards(target, values) {
+  target.replaceChildren(...values.map(([label, value]) => {
+    const card = document.createElement('div');
+    card.className = 'metric';
+    const number = document.createElement('strong');
+    number.textContent = typeof value === 'number' ? format.format(value) : value;
+    card.append(number, label);
+    return card;
+  }));
 }
 
 function renderAnalytics() {
@@ -155,7 +178,16 @@ function renderStock() {
   const query = stockSearch.value.trim().toLocaleLowerCase('id');
   const visible = rows.filter(row => (!stockBatch.value || stockBatch.value === row.batch_code)
     && products.get(row.sku).toLocaleLowerCase('id').includes(query));
-  $('stock-summary').textContent = visible.length + ' baris stok';
+  $('stock-summary').textContent = visible.length + ' varian batch ditampilkan';
+  const batchRows = rows.filter(row => !stockBatch.value || stockBatch.value === row.batch_code);
+  const counts = batchRows.reduce((sum, row) => {
+    quantities(row).forEach((value, i) => { sum[i] += value; });
+    return sum;
+  }, [0,0,0,0,0]);
+  metricCards($('stock-metrics'), [
+    ['Siap dijual · pack', counts[3]], ['Terpesan · pack', counts[1]],
+    ['Sudah diantar · pack', counts[2]], ['Belum terpenuhi · pack', counts[4]]
+  ]);
   const labels = ['Batch', 'Varian', 'Diterima', 'Terpesan', 'Diantar', 'Sisa jual', 'Belum terpenuhi'];
   target.replaceChildren(...visible.map(row => {
     const tr = tableRow([row.batch_code, products.get(row.sku), ...quantities(row)]);
@@ -166,7 +198,9 @@ function renderStock() {
     button.type = 'button';
     button.setAttribute('aria-label', 'Edit ' + row.batch_code + ' ' + products.get(row.sku));
     button.addEventListener('click', () => { if (!busy) edit(row); });
-    tr.insertCell().append(button);
+    const actionCell = tr.insertCell();
+    actionCell.dataset.label = 'Aksi';
+    actionCell.append(button);
     return tr;
   }));
   emptyRow(target, 8, rows.length ? 'Tidak ada stok yang cocok dengan filter.' : 'Belum ada data batch. Tambahkan varian untuk mulai mencatat.');
@@ -308,6 +342,8 @@ menuButtons.forEach(button => button.addEventListener('click', () => {
     tab.setAttribute('aria-pressed', String(selected));
     $(tab.dataset.view).hidden = !selected;
   });
+  $('mobile-view-label').textContent = button.querySelector('span:last-child').textContent;
+  document.title = $('mobile-view-label').textContent + ' · Admin Pentol Gilaaa';
   if (menuToggle.getClientRects().length) {
     setMenuExpanded(false);
     $(button.dataset.view).querySelector('h2').focus();
@@ -324,6 +360,7 @@ function resetOrderForm() {
   draftInbox = null;
   orderForm.reset();
   orderItems.replaceChildren();
+  $('order-estimate').textContent = '';
   orderForm.hidden = true;
   $('new-order').setAttribute('aria-expanded', 'false');
 }
@@ -354,11 +391,13 @@ function addOrderItem(item) {
   select.addEventListener('change', () => {
     const row = rows.find(item => item.id === select.value);
     line.querySelector('[name="unit_price"]').value = row ? prices[row.sku] : '';
+    updateOrderEstimate();
   });
   line.querySelector('button').addEventListener('click', () => {
-    if (!busy && orderItems.childElementCount > 1) line.remove();
+    if (!busy && orderItems.childElementCount > 1) { line.remove(); updateOrderEstimate(); }
   });
   orderItems.append(line);
+  updateOrderEstimate();
 }
 
 function orderRange(day, weekly) {
@@ -386,6 +425,8 @@ async function loadOrders() {
   const target = $('order-rows');
   const summary = $('orders-summary');
   target.replaceChildren();
+  loadedOrders = [];
+  $('order-metrics').replaceChildren();
   if (!orderDate.value) {
     summary.textContent = 'Pilih tanggal untuk melihat pesanan.';
     return;
@@ -403,39 +444,79 @@ async function loadOrders() {
       orders.push(...page);
       if (page.length < 200) break;
     }
-    const stockById = new Map(rows.map(row => [row.id, row]));
-    let packs = 0;
-    let charges = 0;
-    target.replaceChildren(...orders.map(order => {
-      const items = order.pentol_order_items;
-      const descriptions = items.map(item => {
-        const row = stockById.get(item.stock_id);
-        return (row ? products.get(row.sku) + ' · ' + row.batch_code : 'Varian batch') + ' × ' + format.format(item.quantity);
-      });
-      const total = ops.total(order);
-      if (!order.cancelled) {
-        charges += total;
-        packs += items.reduce((sum, item) => sum + item.quantity, 0);
-      }
-      const dates = weekly ? [displayDate.format(new Date(order.order_date))] : [];
-      const tr = tableRow([...dates, order.customer, descriptions.join('\n'), 'Rp' + format.format(total),
-        ops.paymentLabel(order), ops.deliveryLabel(order)]);
-      tr.cells[weekly ? 2 : 1].className = 'order-description';
-      const actions = tr.insertCell();
-      ops.orderButtons(order, actions);
-      return tr;
-    }));
-    emptyRow(target, weekly ? 7 : 6, weekly
-      ? 'Belum ada pesanan tercatat pada minggu ini.'
-      : 'Belum ada pesanan tercatat pada tanggal ini.');
-    summary.textContent = period + format.format(orders.filter(order => !order.cancelled).length) + ' pesanan aktif · '
-      + format.format(packs) + ' pack · Tagihan Rp' + format.format(charges);
+    loadedOrders = orders;
+    loadedPeriod = { weekly, period };
+    renderOrderList();
   } catch (error) {
     if (generation !== orderLoad || !session) return;
     summary.textContent = error.status === 404
       ? 'Database pesanan belum diaktifkan.'
       : 'Daftar pesanan gagal dimuat. Pilih ulang tanggal untuk mencoba lagi.';
   }
+}
+
+function renderOrderList() {
+  const { weekly, period } = loadedPeriod;
+  const stockById = new Map(rows.map(row => [row.id, row]));
+  const active = loadedOrders.filter(order => !order.cancelled);
+  const charges = active.reduce((sum, order) => sum + ops.total(order), 0);
+  const packs = active.reduce((sum, order) => sum + order.pentol_order_items.reduce((qty, item) => qty + item.quantity, 0), 0);
+  metricCards($('order-metrics'), [
+    ['Total tagihan periode', 'Rp' + format.format(charges)],
+    ['Pesanan aktif', active.length],
+    ['Belum lunas', active.filter(order => !order.paid).length],
+    ['Belum selesai diantar', active.filter(order => !order.delivered).length]
+  ]);
+  const query = orderSearch.value.trim().toLocaleLowerCase('id');
+  const selectedStatus = orderStatus.value;
+  const visible = loadedOrders.filter(order => {
+    if (!order.customer.toLocaleLowerCase('id').includes(query)) return false;
+    switch (selectedStatus) {
+      case 'unpaid': return !order.cancelled && !order.paid;
+      case 'pending': return !order.cancelled && !order.delivered;
+      case 'delivered-unpaid': return !order.cancelled && order.delivered && !order.paid;
+      case 'cancelled': return order.cancelled;
+      default: return true;
+    }
+  });
+  const target = $('order-rows');
+  target.replaceChildren(...visible.map(order => {
+    const descriptions = order.pentol_order_items.map(item => {
+      const row = stockById.get(item.stock_id);
+      return (row ? products.get(row.sku) : 'Varian batch') + ' × ' + format.format(item.quantity)
+        + (row ? ' · ' + row.batch_code : '');
+    });
+    const dates = weekly ? [displayDate.format(new Date(order.order_date))] : [];
+    const tr = tableRow([...dates, order.customer, descriptions.join('\n'), 'Rp' + format.format(ops.total(order)),
+      ops.paymentLabel(order), ops.deliveryLabel(order)]);
+    const labels = [...(weekly ? ['Tanggal'] : []), 'Pelanggan', 'Pesanan', 'Tagihan', 'Pembayaran', 'Pengantaran'];
+    Array.from(tr.cells).forEach((cell, index) => { cell.dataset.label = labels[index]; });
+    tr.cells[weekly ? 2 : 1].className = 'order-description';
+    const offset = weekly ? 1 : 0;
+    for (const [index, complete] of [[3,order.paid],[4,order.delivered]]) {
+      const cell = tr.cells[offset + index];
+      const chip = document.createElement('span');
+      chip.className = 'status-chip ' + (order.cancelled ? 'cancelled' : complete ? 'good' : 'waiting');
+      chip.textContent = cell.textContent;
+      cell.replaceChildren(chip);
+    }
+    const actions = tr.insertCell();
+    actions.dataset.label = 'Aksi';
+    ops.orderButtons(order, actions);
+    return tr;
+  }));
+  emptyRow(target, weekly ? 7 : 6, loadedOrders.length
+    ? 'Tidak ada pesanan yang cocok. Ubah pencarian atau filter status.'
+    : weekly ? 'Belum ada pesanan pada minggu ini.' : 'Belum ada pesanan pada tanggal ini.');
+  $('orders-summary').textContent = period + visible.length + ' dari ' + loadedOrders.length
+    + ' pesanan ditampilkan · ' + format.format(packs) + ' pack dalam periode ini';
+}
+
+function updateOrderEstimate() {
+  const amount = Array.from(orderItems.children).reduce((sum, line) => sum
+    + Number(line.querySelector('[name="quantity"]').value) * Number(line.querySelector('[name="unit_price"]').value), 0)
+    + Number(orderForm.elements.shipping_charge.value);
+  $('order-estimate').textContent = 'Total tagihan Rp' + format.format(amount);
 }
 
 async function refreshAfterOrder(message) {
@@ -473,6 +554,8 @@ function openOrder(order = null, inboxEntry = null) {
   });
   else addOrderItem();
   orderForm.hidden = false;
+  $('order-editor-title').textContent = order ? 'Edit pesanan · ' + order.customer : 'Catat pesanan';
+  updateOrderEstimate();
   $('new-order').setAttribute('aria-expanded', 'true');
   $('save-order').textContent = order ? 'Simpan perubahan' : 'Simpan pesanan';
   e.customer.focus();
@@ -484,6 +567,13 @@ $('cancel-order').addEventListener('click', () => {
   resetOrderForm();
   $('new-order').focus();
 });
+orderSearch.addEventListener('input', renderOrderList);
+orderStatus.addEventListener('change', renderOrderList);
+$('refresh-orders').addEventListener('click', () => run($('refresh-orders'), async () => {
+  await loadOrders();
+  await ops.inbox();
+}));
+orderForm.addEventListener('input', updateOrderEstimate);
 orderDate.addEventListener('change', loadOrders);
 orderPeriod.addEventListener('change', loadOrders);
 $('previous-week').addEventListener('click', () => moveOrderWeek(-7));

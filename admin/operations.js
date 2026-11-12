@@ -32,6 +32,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
   function button(text, action) {
     const node = el('button', text, 'secondary');
     node.type = 'button';
+    if (text === 'Batalkan') node.dataset.danger = 'true';
     node.addEventListener('click', action);
     return node;
   }
@@ -132,7 +133,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
   }
 
   function orderButtons(order, target) {
-    if (order.cancelled) return;
+    if (order.cancelled) { target.textContent = '—'; return; }
     const actions = el('div', undefined, 'ops-actions');
     actions.append(button('Invoice', () => showInvoice(order)));
     if (!order.paid && balance(order)) {
@@ -163,7 +164,13 @@ export function initOperations({ $, request, status, products, prices, today, fo
       actions.append(button('Batalkan', () => orderDialog('cancel', order, 'Batalkan pesanan · ' + order.customer,
         [el('p', 'Stok yang dipesan akan dilepas. Riwayat pesanan tetap tampil dengan status Batal.')], () => ({}))));
     }
-    target.append(actions);
+    if (target.tagName === 'TD') {
+      const menu = el('details', undefined, 'action-menu');
+      const summary = el('summary', 'Kelola');
+      summary.setAttribute('aria-label', 'Kelola pesanan ' + order.customer);
+      menu.append(summary, actions);
+      target.append(menu);
+    } else target.append(actions);
   }
 
   function makeInvoice(order) {
@@ -523,9 +530,13 @@ export function initOperations({ $, request, status, products, prices, today, fo
     const token=getSession();
     if (!token) return;
     const target=$(view+'-body');
+    target.setAttribute('aria-busy', 'true');
     try { await views[view](target); }
     catch { if (getSession()===token) target.textContent='Data belum bisa dimuat. Buka kembali menu untuk mencoba lagi.'; }
-    finally { if (getSession()!==token) target.replaceChildren(); }
+    finally {
+      target.setAttribute('aria-busy', 'false');
+      if (getSession()!==token) target.replaceChildren();
+    }
   }
   function clear() {
     if (dialog.open) dialog.close();
