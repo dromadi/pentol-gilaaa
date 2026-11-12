@@ -45,6 +45,31 @@ const configured = /^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/.test(supabaseUrl)
   && /^sb_publishable_[A-Za-z0-9_-]+$/.test(supabasePublishableKey);
 const base = supabaseUrl.replace(/\/$/, '');
 
+const sessionKey = 'pentol-admin-session:' + base;
+
+function saveSession(current) {
+  try {
+    if (!current) sessionStorage.removeItem(sessionKey);
+    else {
+      const { accessToken, refreshToken, expiresAt } = current;
+      sessionStorage.setItem(sessionKey, JSON.stringify({ accessToken, refreshToken, expiresAt }));
+    }
+  } catch {
+    // Login still works in memory when browser storage is disabled.
+  }
+}
+
+function readSession() {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(sessionKey));
+    if (typeof saved?.accessToken === 'string' && typeof saved.refreshToken === 'string'
+        && Number.isFinite(saved.expiresAt)) return { ...saved, refreshing: null };
+  } catch {
+    // Treat unavailable or invalid storage as a fresh visit.
+  }
+  return null;
+}
+
 function status(message, error = false) {
   $('status').textContent = message;
   $('status').dataset.error = String(error);
@@ -61,6 +86,7 @@ async function refreshSession(current) {
       current.accessToken = auth.access_token;
       current.refreshToken = auth.refresh_token;
       current.expiresAt = Date.now() + auth.expires_in * 1000;
+      saveSession(current);
     } catch (error) {
       if (session === current && [400, 401, 403].includes(error.status)) {
         endSession('Sesi berakhir. Silakan masuk kembali.');
@@ -113,6 +139,7 @@ function resetEditor() {
 
 function endSession(message) {
   session = null;
+  saveSession(null);
   rows = [];
   orderLoad++;
   ops.clear();
@@ -275,6 +302,18 @@ async function run(button, action) {
   finally { busy = false; button.disabled = false; }
 }
 
+async function showDashboard() {
+  await loadRows();
+  await ops.loadPrices().catch(() => {});
+  $('signin').hidden = true;
+  $('dashboard').hidden = false;
+  $('logout').hidden = false;
+  status('');
+  const active = Array.from(menuButtons).find(b => b.getAttribute('aria-pressed') === 'true');
+  if (active?.dataset.view === 'orders') { loadOrders(); ops.inbox(); }
+  else if (active) ops.open(active.dataset.view);
+}
+
 login.addEventListener('submit', event => {
   event.preventDefault();
   run(login.querySelector('button'), async () => {
@@ -290,15 +329,8 @@ login.addEventListener('submit', event => {
         expiresAt: Date.now() + auth.expires_in * 1000,
         refreshing: null
       };
-      await loadRows();
-      await ops.loadPrices().catch(() => {});
-      $('signin').hidden = true;
-      $('dashboard').hidden = false;
-      $('logout').hidden = false;
-      status('');
-      const active = Array.from(menuButtons).find(b => b.getAttribute('aria-pressed') === 'true');
-      if (active?.dataset.view === 'orders') { loadOrders(); ops.inbox(); }
-      else if (active) ops.open(active.dataset.view);
+      await showDashboard();
+      saveSession(session);
     } catch (error) {
       session = null;
       status(error.status === 400 || error.status === 401 ? 'Periksa kembali email dan kata sandi.' : 'Akses admin belum bisa dimuat. Coba lagi.', true);
@@ -389,8 +421,6 @@ menuButtons.forEach(button => button.addEventListener('click', () => {
   if (button.dataset.view === 'orders') { loadOrders(); ops.inbox(); }
   else ops.open(button.dataset.view);
 }));
-if (configured) $('signin').hidden = false;
-else status('Login admin menunggu konfigurasi database.');
 
 function resetOrderForm() {
   draftId = null;
@@ -656,3 +686,35 @@ const ops = initOperations({
   getRows:() => rows, getSession:() => session, openOrder,
   refresh:refreshAfterOrder
 });
+
+async function restoreSession() {
+  if (!configured) {
+    status('Login admin menunggu konfigurasi database.');
+    return;
+  }
+  session = readSession();
+  if (!session) {
+    $('signin').hidden = false;
+    return;
+  }
+  status('Memulihkan sesi…');
+  try {
+    const access = await request('/rest/v1/pentol_admins?select=user_id&limit=1');
+    if (!access.length) {
+      endSession('Akun ini belum terdaftar sebagai admin.');
+      return;
+    }
+    await showDashboard();
+  } catch (error) {
+    if (!session) return;
+    if ([401, 403].includes(error.status)) {
+      endSession('Sesi berakhir. Silakan masuk kembali.');
+      return;
+    }
+    session = null;
+    $('signin').hidden = false;
+    status('Sesi belum bisa dimuat. Periksa koneksi lalu muat ulang halaman.', true);
+  }
+}
+
+restoreSession();
