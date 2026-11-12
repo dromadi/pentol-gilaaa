@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Admin · Pentol Gilaaa Surabaya</title>
+<link rel="stylesheet" href="style.css">
+<script type="module" src="app.js"></script>
+</head>
+<body>
+<header><div class="wrap bar"><a href="../">Pentol Gilaaa <b>Surabaya</b></a><button id="logout" hidden>Keluar</button></div></header>
+<main class="wrap">
+<h1>Admin Pentol Gilaaa</h1>
+<p id="status" role="status" aria-live="polite"></p>
+<noscript>Aktifkan JavaScript untuk membuka area admin.</noscript>
+<section id="signin" class="panel login" hidden>
+<h2>Masuk</h2>
+<form id="login">
+<label>Email <input type="email" name="email" autocomplete="username" required></label>
+<label>Kata sandi <input type="password" name="password" autocomplete="current-password" required></label>
+<button>Masuk</button>
+</form>
+</section>
+<div id="dashboard" hidden>
+<nav aria-label="Menu admin"><button data-view="stock" aria-pressed="true">Stok per Batch</button><button data-view="analytics" aria-pressed="false">Analitik</button></nav>
+<section id="stock" class="panel">
+<h2>Stok per Batch</h2>
+<p>Pesanan belum diantar bisa dicatat sebelum barang datang. Isi tanggal terima dan jumlah diterima setelah barang tiba.</p>
+<form id="batch-form">
+<div class="fields">
+<label>Kode batch <input name="batch_code" maxlength="40" placeholder="Contoh BATCH-02" required></label>
+<label>Varian <select name="sku" required></select></label>
+<label>Tanggal diterima <input name="received_on" type="date"></label>
+<label>Diterima (pack) <input name="received" type="number" min="0" max="1000000" value="0" required></label>
+<label>Terpesan, belum diantar (pack) <input name="reserved" type="number" min="0" max="1000000" value="0" required></label>
+<label>Sudah diantar (pack) <input name="delivered" type="number" min="0" max="1000000" value="0" required></label>
+</div>
+<button id="save">Tambah varian ke batch</button> <button type="button" id="cancel" hidden>Batal edit</button>
+</form>
+<div class="table" tabindex="0" role="region" aria-label="Daftar stok per batch">
+<table><thead><tr><th>Batch</th><th>Varian</th><th>Diterima</th><th>Terpesan</th><th>Diantar</th><th>Sisa jual</th><th>Belum terpenuhi</th><th>Aksi</th></tr></thead><tbody id="stock-rows"></tbody></table>
+</div>
+</section>
+<section id="analytics" class="panel" hidden>
+<h2>Analitik Stok</h2>
+<p>Rekap pack dari pencatatan batch di area admin.</p>
+<label>Batch <select id="batch-filter"><option value="">Semua batch</option></select></label>
+<div id="metrics" class="metrics"></div>
+<h3>Rekap per varian</h3>
+<div class="table" tabindex="0" role="region" aria-label="Rekap per varian">
+<table><thead><tr><th>Varian</th><th>Diterima</th><th>Terpesan</th><th>Diantar</th><th>Sisa jual</th><th>Belum terpenuhi</th></tr></thead><tbody id="analytics-rows"></tbody></table>
+</div>
+</section>
+</div>
+</main>
+</body>
+</html>
