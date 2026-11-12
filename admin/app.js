@@ -41,7 +41,6 @@ let session = null;
 let rows = [];
 let editing = null;
 let busy = false;
-let expiry;
 const configured = /^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/.test(supabaseUrl)
   && /^sb_publishable_[A-Za-z0-9_-]+$/.test(supabasePublishableKey);
 const base = supabaseUrl.replace(/\/$/, '');
@@ -51,12 +50,49 @@ function status(message, error = false) {
   $('status').dataset.error = String(error);
 }
 
-async function request(path, { method = 'GET', body, token = session, prefer } = {}) {
+async function refreshSession(current) {
+  if (current.refreshing) return current.refreshing;
+  current.refreshing = (async () => {
+    try {
+      const auth = await request('/auth/v1/token?grant_type=refresh_token', {
+        method: 'POST', body: { refresh_token: current.refreshToken }, token: null
+      });
+      if (session !== current) throw new Error('Sesi sudah ditutup.');
+      current.accessToken = auth.access_token;
+      current.refreshToken = auth.refresh_token;
+      current.expiresAt = Date.now() + auth.expires_in * 1000;
+    } catch (error) {
+      if (session === current && [400, 401, 403].includes(error.status)) {
+        endSession('Sesi berakhir. Silakan masuk kembali.');
+      }
+      throw error;
+    } finally {
+      current.refreshing = null;
+    }
+  })();
+  return current.refreshing;
+}
+
+async function request(path, { method = 'GET', body, token, prefer } = {}) {
+  const current = token === undefined ? session : null;
   const headers = { apikey: supabasePublishableKey };
-  if (token) headers.Authorization = 'Bearer ' + token;
   if (body) headers['Content-Type'] = 'application/json';
   if (prefer) headers.Prefer = prefer;
-  const response = await fetch(base + path, { method, headers, body: body && JSON.stringify(body) });
+
+  const send = accessToken => {
+    if (accessToken) headers.Authorization = 'Bearer ' + accessToken;
+    return fetch(base + path, { method, headers, body: body && JSON.stringify(body) });
+  };
+
+  if (current && current.expiresAt - Date.now() < 60_000) await refreshSession(current);
+  if (current && session !== current) throw new Error('Sesi sudah ditutup.');
+  const accessToken = current?.accessToken ?? token;
+  let response = await send(accessToken);
+  if (response.status === 401 && current && session === current) {
+    if (current.accessToken === accessToken) await refreshSession(current);
+    if (session !== current) throw new Error('Sesi sudah ditutup.');
+    response = await send(current.accessToken);
+  }
   if (!response.ok) {
     const detail = await response.json().catch(() => null);
     const error = new Error(detail?.message || 'Permintaan gagal.');
@@ -76,7 +112,6 @@ function resetEditor() {
 }
 
 function endSession(message) {
-  clearTimeout(expiry);
   session = null;
   rows = [];
   orderLoad++;
@@ -249,10 +284,14 @@ login.addEventListener('submit', event => {
       const auth = await request('/auth/v1/token?grant_type=password', { method:'POST', body:{ email, password }, token:null });
       const access = await request('/rest/v1/pentol_admins?select=user_id&limit=1', { token:auth.access_token });
       if (!access.length) return status('Akun ini belum terdaftar sebagai admin.', true);
-      session = auth.access_token;
+      session = {
+        accessToken: auth.access_token,
+        refreshToken: auth.refresh_token,
+        expiresAt: Date.now() + auth.expires_in * 1000,
+        refreshing: null
+      };
       await loadRows();
       await ops.loadPrices().catch(() => {});
-      expiry = setTimeout(() => endSession('Sesi berakhir. Silakan masuk kembali.'), auth.expires_in * 1000);
       $('signin').hidden = true;
       $('dashboard').hidden = false;
       $('logout').hidden = false;
@@ -296,7 +335,6 @@ form.addEventListener('submit', event => {
       await loadRows();
       status('Stok batch tersimpan.');
     } catch (error) {
-      if (error.status === 401 || error.status === 403) return endSession('Akses berakhir. Silakan masuk kembali.');
       status(saved ? 'Stok tersimpan, tetapi daftar gagal dimuat. Masuk kembali untuk melihat data terbaru.'
         : error.status === 409 ? 'Varian ini sudah ada di batch tersebut. Gunakan Edit.'
         : 'Penyimpanan belum terkonfirmasi. Masuk kembali untuk memeriksa data sebelum mencoba lagi.', true);
