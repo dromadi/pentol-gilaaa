@@ -289,7 +289,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
     const oldFilter = target.querySelector('[name=pack_filter]')?.value || 'packing';
     const day = control('Tanggal jadwal antar', 'pack_date', {type:'date', value:old});
     const filter = control('Tampilkan', 'pack_filter', {value:oldFilter, values:[
-      ['packing','Siap dikemas'],['pending','Semua belum diantar'],['unpaid','Sudah diantar, belum lunas']
+      ['packing','Jadwal hari ini'],['unscheduled','Belum dijadwalkan'],['pending','Semua belum diantar'],['unpaid','Sudah diantar, belum lunas']
     ]});
     const output = el('div');
     target.replaceChildren(block([day,filter], 'ops-filters'), output);
@@ -300,12 +300,10 @@ export function initOperations({ $, request, status, products, prices, today, fo
       const listed = await list('pentol_orders?select=' + ordersSelect, '&cancelled=eq.false&order=order_date,created_at,id'
         + (mode === 'unpaid' ? '&paid=eq.false&delivered=eq.true'
           : mode === 'pending' ? '&delivered=eq.false'
-            : '&delivered=eq.false&or=(delivery_on.eq.' + date + ',and(delivery_on.is.null,order_date.eq.' + date + '))'));
+            : mode === 'unscheduled' ? '&delivered=eq.false&delivery_on=is.null'
+            : '&delivered=eq.false&delivery_on=eq.' + date));
       if ((day.lastChild.value || today()) !== date || filter.lastChild.value !== mode) return;
-      const orders = mode === 'packing' ? listed.filter(order => order.pentol_order_items.every(item => {
-        const row = stock(item.stock_id);
-        return item.shipped === item.quantity || (row && row.received-row.delivered >= row.reserved);
-      })) : listed;
+      const orders = listed;
       output.replaceChildren();
       const totals = new Map();
       for (const order of orders) {
@@ -316,7 +314,16 @@ export function initOperations({ $, request, status, products, prices, today, fo
           el('p', (order.delivery_on || 'Jadwal belum diisi') + ' · ' + paymentLabel(order)));
         const details = [order.contact,order.delivery_location,order.delivery_note].filter(Boolean);
         if (details.length) card.append(el('p',details.join(' · ')));
-        for (const item of items) {
+        const readyItems = items.filter(item => {
+          const row = stock(item.stock_id);
+          return row && row.received - row.delivered >= row.reserved;
+        });
+        if (mode !== 'unpaid') {
+          card.append(el('p', readyItems.length === items.length ? 'Siap dikemas'
+            : (readyItems.length ? 'Siap sebagian' : 'Tertahan')
+              + ' · Cek alokasi batch: ' + items.filter(item => !readyItems.includes(item)).map(label).join(', ')));
+        }
+        for (const item of readyItems) {
           if (mode === 'unpaid') continue;
           const name = label(item);
           totals.set(name,(totals.get(name) || 0) + item.quantity-item.shipped);
@@ -433,17 +440,18 @@ export function initOperations({ $, request, status, products, prices, today, fo
       const b = last.lastChild.value;
       if (!a || !b || a>b) { out.textContent='Pilih rentang tanggal yang valid.'; return; }
       out.textContent='Memuat laporan…';
-      const [data,orders] = await Promise.all([
+      const [data,orders,payments] = await Promise.all([
         purchases(),
-        list('pentol_orders?select='+ordersSelect,'&cancelled=eq.false&order_date=gte.'+a+'&order_date=lte.'+b+'&order=order_date,id')
+        list('pentol_orders?select='+ordersSelect,'&cancelled=eq.false&order_date=gte.'+a+'&order_date=lte.'+b+'&order=order_date,id'),
+        list('pentol_payments?select=id,amount','&paid_on=gte.'+a+'&paid_on=lte.'+b+'&order=paid_on,id')
       ]);
       if (generation !== current) return;
       const hpp = costs(data);
-      let billed=0, cash=0, revenue=0, cost=0, shipping=0, missing=0, unsold=0, stockUnknown=0;
+      const cash = payments.reduce((sum, payment) => sum + payment.amount, 0);
+      let billed=0, revenue=0, cost=0, shipping=0, missing=0, unsold=0, stockUnknown=0;
       const byProduct = new Map();
       for (const o of orders) {
         billed += total(o);
-        cash += paid(o);
         if (o.delivered) { revenue += o.shipping_charge; shipping += o.shipping_cost; }
         for (const i of o.pentol_order_items) {
           const s = stock(i.stock_id);
@@ -466,13 +474,13 @@ export function initOperations({ $, request, status, products, prices, today, fo
       const gross = revenue-cost;
       const net = gross-shipping;
       out.replaceChildren(table(['Metrik','Nilai'],[
-        ['Tagihan pesanan',money(billed)],['Pembayaran pesanan (status / nominal)',money(cash)],
+        ['Tagihan pesanan',money(billed)],['Kas diterima (tanggal bayar tercatat)',money(cash)],
         ['Penjualan yang sudah diantar',money(revenue)],['HPP pack yang diantar',money(cost)],
         ['Laba bruto',missing ? 'HPP belum lengkap' : money(gross)],
         ['Laba setelah biaya antar',missing ? 'HPP belum lengkap' : money(net)],
         ['Margin setelah biaya antar',!missing && revenue ? (net/revenue*100).toFixed(1)+'%' : '—'],
         ['Nilai stok siap jual (saat ini)',money(unsold)+(stockUnknown ? ' · HPP '+stockUnknown+' pack belum ada' : '')]
-      ],''), el('p','Rekap memakai tanggal pesanan. HPP mengalokasikan biaya batch merata per pack yang dipesan dari supplier.'),
+      ],''), el('p','Tagihan dan penjualan diantar mengikuti tanggal pesanan. Kas mengikuti tanggal pembayaran tercatat; status lunas lama tanpa tanggal pembayaran tidak dihitung sebagai kas. HPP mengalokasikan biaya batch merata per pack yang dipesan dari supplier.'),
       table(['Varian','Terpesan','Diantar'],[...byProduct].sort((a,b)=>b[1][0]-a[1][0])
         .map(([sku,x])=>[products.get(sku)||'Varian batch',...x]),'Belum ada penjualan.'),
       table(['Batch','Varian','HPP / pack'],[...hpp].map(([key,value])=>{
