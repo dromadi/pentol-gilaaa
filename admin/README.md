@@ -1,10 +1,14 @@
 # Admin Pentol Gilaaa
 
-Katalog pelanggan memakai GitHub Pages. Area admin memakai Supabase Auth dan Postgres.
+Katalog pelanggan (`/index.html`) memakai GitHub Pages. Area admin (`/admin/`) memakai Supabase Auth dan Postgres.
 
-## Aktivasi
+## Aktivasi project Supabase baru
 
-1. Buat project Supabase untuk toko. Di **SQL Editor**, jalankan `schema.sql` sekali.
+1. Buat project Supabase. Di **SQL Editor**, jalankan file berikut **berurutan, masing-masing sekali**:
+   1. `schema.sql` – admin & stok batch
+   2. `orders.sql` – pesanan
+   3. `operations.sql` – pembayaran, restok, harga, inbox checkout (berisi data contoh BATCH-01/02)
+   4. `security-2026-11.sql` – perbaikan audit: batas checkout, katalog v2 dengan batas stok (boleh dijalankan ulang)
 2. Nonaktifkan pendaftaran mandiri di pengaturan Auth. Buat pengguna di **Authentication → Users** dan salin UUID pengguna.
 3. Daftarkan UUID tersebut lewat SQL Editor.
 
@@ -14,9 +18,15 @@ Katalog pelanggan memakai GitHub Pages. Area admin memakai Supabase Auth dan Pos
    on conflict do nothing;
    ```
 
-4. Isi `config.js` dengan Project URL berbentuk `https://PROJECT.supabase.co` dan publishable key berawalan `sb_publishable_`. Jangan memasukkan kata sandi, secret key, atau service role key ke GitHub.
-5. Commit konfigurasi dan buka `/pentol-gilaaa/admin/`. Coba masuk sebagai admin dan sebagai akun biasa. Akun biasa tidak boleh melihat atau mengubah stok.
+4. Isi `config.js` dengan Project URL `https://PROJECT.supabase.co` dan publishable key `sb_publishable_…`. Jangan memasukkan kata sandi, secret key, atau service role key ke GitHub.
+5. **Jika Project URL berubah, ubah juga `connect-src` di tag Content-Security-Policy pada `admin/index.html`**, kalau tidak admin tidak bisa memuat data.
+6. Commit konfigurasi dan buka `/pentol-gilaaa/admin/`. Coba masuk sebagai admin dan sebagai akun biasa. Akun biasa tidak boleh melihat atau mengubah stok.
 
 ## Pencatatan
 
-Setiap kode batch dan varian memiliki satu baris. Diterima, terpesan, dan diantar adalah jumlah pack. Saat menyerahkan pesanan, kurangi jumlah terpesan dan naikkan jumlah diantar dalam penyimpanan yang sama. Analitik merangkum stok dan pengantaran. Pesanan, pembayaran, omzet, dan laba masih dikelola di pembukuan. Data katalog publik dan label sold out diperbarui terpisah. Data stok lama belum diimpor.
+- **Stok per batch:** satu baris per kode batch + varian. Diterima, terpesan, dan diantar dalam pack. Pesanan dan pengantaran mengubah angka terpesan/diantar otomatis lewat `pentol_order_action`; edit manual di form stok hanya untuk koreksi atau booking lama yang belum tercatat sebagai pesanan.
+- **Pesanan, pembayaran, pengantaran:** dicatat di menu Pesanan dan Packing & Tagihan. Setiap pembayaran disimpan dengan tanggalnya, dan laporan kas mengikuti tanggal itu.
+- **Restok, HPP, harga jual, laba:** di menu Restok & Supplier dan Harga & Laba.
+- **Checkout katalog:** pembeli mengirim permintaan ke inbox (`pentol_submit_checkout`). Batasnya 8 per nomor per jam, 40 total per jam, dan 150 yang menunggu. Jika batas tercapai, pembeli tetap diarahkan ke WhatsApp. Jumlah per varian tidak boleh melebihi stok bebas; katalog menampilkan "Sisa N pack" saat stok tinggal 1–9.
+
+Riwayat audit dan catatan teknis: `../docs/AUDIT-2026-11.md`.

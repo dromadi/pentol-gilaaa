@@ -6,7 +6,7 @@
 <meta name="description" content="Katalog Pentol Gilaaa Surabaya. Pilih pentol dan tahu frozen, lalu siapkan pesanan untuk WhatsApp.">
 <title>Pentol Gilaaa Surabaya · Pesan Pentol & Tahu Frozen</title>
 <meta name="theme-color" content="#57231e">
-<meta name="storefront-version" content="buyer-20261112-1">
+<meta name="storefront-version" content="buyer-20261113-1">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap');
 :root { color-scheme: light; --red:#a42d23; --wine:#57231e; --cream:#faf6ec; --gold:#f4ca65; --ink:#382a23; --muted:#75675d; --line:#e4d9c8; }
@@ -83,6 +83,9 @@ input,select,textarea { min-width:0; width:100%; min-height:46px; padding:10px 1
 .qty { display:flex; align-items:center; justify-content:space-between; gap:7px; border:1px solid var(--line); border-radius:10px; background:var(--cream); }
 .qty button { min-width:42px; min-height:44px; padding:5px; color:var(--wine); border:0; background:transparent; font-size:20px; }
 .qty span { min-width:18px; text-align:center; font-size:13px; font-weight:700; }
+.stock-left { display:block; margin-top:4px; color:var(--red); font-size:11px; font-weight:700; }
+.stock-status { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:0 0 16px; padding:10px 14px; border:1px solid #e7b9a8; border-radius:10px; background:#fbece4; color:var(--wine); font-size:12px; }
+.stock-status button { min-height:36px; padding:6px 14px; font-size:12px; }
 .unavailable { font-size:11px; color:var(--muted); padding-block:12px; }
 .no-results { grid-column:1/-1; text-align:center; padding:35px 15px; background:#fffdf8; border:1px dashed var(--line); border-radius:16px; color:var(--muted); }
 .no-results button { margin:15px auto 0; }
@@ -217,7 +220,7 @@ dialog::backdrop { background:#2516109c; backdrop-filter:blur(4px); }
   </div>
 </section>
 <div class="benefits wrap"><span><b aria-hidden="true">✓</b> Sambal sudah termasuk</span><span><b aria-hidden="true">↗</b> Pesan lewat WhatsApp</span><span><b aria-hidden="true">⌂</b> Ambil sendiri atau diantar</span></div>
-<section id="menu" class="menu wrap"><div class="menu-intro"><div><h2>Mau ngemil apa?</h2><p>Setiap pack pentol dan tahu sudah termasuk sambal.</p></div><label class="search">Cari varian <input id="menu-search" type="search" placeholder="Contoh Pentol Urat"></label></div><div class="filters" aria-label="Filter menu"><div class="filter-tabs"><button class="ghost" type="button" data-filter="Semua" aria-pressed="true">Semua</button><button class="ghost" type="button" data-filter="Pentol" aria-pressed="false">Pentol</button><button class="ghost" type="button" data-filter="Tahu" aria-pressed="false">Tahu</button><button class="ghost" type="button" data-filter="Sambal" aria-pressed="false">Sambal</button></div><label class="available"><input id="available-only" type="checkbox"> Tersedia saja</label></div><p id="menu-count" class="menu-count" aria-live="polite"></p><div class="grid" id="products"></div><noscript>Aktifkan JavaScript untuk melihat menu dan memakai keranjang.</noscript>
+<section id="menu" class="menu wrap"><div class="menu-intro"><div><h2>Mau ngemil apa?</h2><p>Setiap pack pentol dan tahu sudah termasuk sambal.</p></div><label class="search">Cari varian <input id="menu-search" type="search" placeholder="Contoh Pentol Urat"></label></div><div class="filters" aria-label="Filter menu"><div class="filter-tabs"><button class="ghost" type="button" data-filter="Semua" aria-pressed="true">Semua</button><button class="ghost" type="button" data-filter="Pentol" aria-pressed="false">Pentol</button><button class="ghost" type="button" data-filter="Tahu" aria-pressed="false">Tahu</button><button class="ghost" type="button" data-filter="Sambal" aria-pressed="false">Sambal</button></div><label class="available"><input id="available-only" type="checkbox"> Tersedia saja</label></div><p id="menu-count" class="menu-count" aria-live="polite"></p><p class="stock-status" id="stock-status" role="status" hidden><span>Stok dan harga belum berhasil diperbarui. Yang tampil mungkin bukan data terbaru.</span><button type="button" class="ghost" id="stock-retry">Coba lagi</button></p><div class="grid" id="products"></div><noscript>Aktifkan JavaScript untuk melihat menu dan memakai keranjang.</noscript>
 <div class="help"><div><h3>Butuh bantuan memilih?</h3><p>Tanyakan varian, jadwal ambil, atau pengantaran lewat WhatsApp.</p></div><a class="btn ghost" href="https://wa.me/628981718578">Tanya lewat WhatsApp ↗</a></div></section>
 </main>
 <footer><div class="wrap footer-row"><span>Pentol Gilaaa Surabaya · Jakarta Selatan</span><a href="https://wa.me/628981718578">WhatsApp 0898-1718-578</a><a href="./admin/">Admin</a></div></footer>
@@ -294,24 +297,49 @@ function catalogRpc(name, body) {
   });
 }
 
+const maxQty = item => item.maxQty ?? 100;
+let catalogFresh = false;
+
+// Returns the cart items whose price or stock changed, or null when the catalog could not be loaded.
 async function syncCatalog() {
+  let catalog;
   try {
-    const response = await catalogRpc('pentol_catalog', {});
-    if (!response.ok) return;
-    const catalog = await response.json();
-    for (const item of products) {
-      const fresh = catalog.find(row => row.sku === item.id);
-      if (!fresh) continue;
-      item.price = fresh.price;
-      item.soldOut = !fresh.available;
-      if (item.soldOut) quantities.delete(item.id);
-    }
-    renderMenu();
-    renderCart();
+    let response = await catalogRpc('pentol_catalog_v2', {});
+    // Fall back while the v2 migration has not been run yet.
+    if (response.status === 404) response = await catalogRpc('pentol_catalog', {});
+    if (!response.ok) throw new Error('catalog ' + response.status);
+    catalog = await response.json();
   } catch {
-    // Keep the locally published catalog available when the live service is unreachable.
+    // Keep the published catalog usable, but tell buyers it may be stale.
+    catalogFresh = false;
+    document.querySelector('#stock-status').hidden = false;
+    return null;
   }
+  const changed = [];
+  for (const item of products) {
+    const fresh = catalog.find(row => row.sku === item.id);
+    if (!fresh) continue;
+    const before = quantities.get(item.id);
+    if (before && fresh.price !== item.price) changed.push(item.name + ' kini ' + money(fresh.price));
+    item.price = fresh.price;
+    item.soldOut = !fresh.available;
+    item.maxQty = Number.isSafeInteger(fresh.max_qty) ? fresh.max_qty : null;
+    if (!before) continue;
+    if (item.soldOut) { quantities.delete(item.id); changed.push(item.name + ' habis'); }
+    else if (before > maxQty(item)) { quantities.set(item.id, maxQty(item)); changed.push(item.name + ' tersisa ' + maxQty(item) + ' pack'); }
+  }
+  catalogFresh = true;
+  document.querySelector('#stock-status').hidden = true;
+  renderMenu();
+  renderCart();
+  return changed;
 }
+document.querySelector('#stock-retry').addEventListener('click', async event => {
+  event.currentTarget.disabled = true;
+  const changed = await syncCatalog();
+  event.currentTarget.disabled = false;
+  if (changed?.length) document.querySelector('#cart-announcement').textContent = 'Keranjang disesuaikan: ' + changed.join(', ') + '.';
+});
 
 function renderMenu() {
   const query = search.value.trim().toLocaleLowerCase('id');
@@ -322,7 +350,7 @@ function renderMenu() {
   menu.innerHTML = visible.length ? visible.map(item => `
     <article class="card" data-product="${item.id}">
       <div class="card-top"><span class="category">${item.category}</span>${item.soldOut ? '<span class="sold">SOLD OUT</span>' : ''}</div>
-      <h3>${item.name}</h3><p class="detail">${item.size}</p>
+      <h3>${item.name}</h3><p class="detail">${item.size}${!item.soldOut && item.maxQty ? `<span class="stock-left">Sisa ${item.maxQty} pack</span>` : ''}</p>
       <div class="bottom"><div><strong class="price">${money(item.price)}</strong><span class="price-unit">per pack</span></div>
       ${item.soldOut ? '<span class="unavailable">Stok habis</span>' : `
         <div class="add-control">
@@ -349,7 +377,8 @@ function syncMenuQuantities() {
     add.hidden = count > 0;
     stepper.hidden = count === 0;
     stepper.querySelector('span').textContent = count;
-    stepper.querySelector('[data-menu-change="1"]').disabled = count >= 100;
+    const item = products.find(product => product.id === id);
+    stepper.querySelector('[data-menu-change="1"]').disabled = count >= maxQty(item);
   });
 }
 
@@ -371,7 +400,7 @@ function renderCart() {
   document.querySelector('#final-count').textContent = count + ' pack';
   document.querySelector('#continue-checkout').disabled = count === 0;
   document.querySelector('#cart-items').innerHTML = selected.length ? selected.map(item =>
-    `<div class="cart-row"><div><strong>${item.name}</strong><small>${money(item.price)} / pack</small></div><div class="qty"><button type="button" class="ghost" data-change="-1" data-id="${item.id}" aria-label="Kurangi ${item.name}">−</button><span>${quantities.get(item.id)}</span><button type="button" class="ghost" data-change="1" data-id="${item.id}" aria-label="Tambah ${item.name}">+</button></div></div>`
+    `<div class="cart-row"><div><strong>${item.name}</strong><small>${money(item.price)} / pack</small></div><div class="qty"><button type="button" class="ghost" data-change="-1" data-id="${item.id}" aria-label="Kurangi ${item.name}">−</button><span>${quantities.get(item.id)}</span><button type="button" class="ghost" data-change="1" data-id="${item.id}" aria-label="Tambah ${item.name}"${quantities.get(item.id) >= maxQty(item) ? ' disabled' : ''}>+</button></div></div>`
   ).join('') : '<div class="empty-cart"><strong>Belum ada camilan pilihanmu.</strong>Pilih varian untuk mulai memesan.<br><button type="button" class="gold" data-close-cart>Pilih varian</button></div>';
   orderLines = selected.map(item => `• ${item.name} × ${quantities.get(item.id)} pack`);
   whatsapp.disabled = submitting || count === 0;
@@ -400,7 +429,7 @@ menu.addEventListener('click', event => {
   const item = products.find(product => product.id === id);
   if (!item || item.soldOut) return;
   const change = button.hasAttribute('data-add') ? 1 : Number(button.dataset.menuChange);
-  const next = Math.max(0, Math.min(100, (quantities.get(id) || 0) + change));
+  const next = Math.max(0, Math.min(maxQty(item), (quantities.get(id) || 0) + change));
   if (next) quantities.set(id, next);
   else quantities.delete(id);
   renderCart();
@@ -446,7 +475,8 @@ cart.addEventListener('click', event => {
   if (!button || submitting) return;
   const { id, change } = button.dataset;
   const next = quantities.get(id) + Number(change);
-  if (next > 0) quantities.set(id, Math.min(100,next));
+  const item = products.find(product => product.id === id);
+  if (next > 0) quantities.set(id, Math.min(maxQty(item), next));
   else quantities.delete(id);
   renderCart();
   (cart.querySelector(`[data-id="${id}"][data-change="${change}"]`) || cart.querySelector('form button')).focus();
@@ -494,6 +524,19 @@ syncDeliveryFields();
 orderForm.addEventListener('submit', async event => {
   event.preventDefault();
   if (submitting) return;
+  if (!checkoutMessage()) return;
+  submitting = true;
+  whatsapp.disabled = true;
+  feedback.textContent = 'Memeriksa stok terbaru…';
+  const changed = await syncCatalog();
+  submitting = false;
+  whatsapp.disabled = quantities.size === 0;
+  if (changed?.length) {
+    // Prices or stock moved since the buyer filled the cart: let them review before recording.
+    setCheckoutStep(false);
+    feedback.textContent = 'Pesanan disesuaikan dengan stok terbaru: ' + changed.join(', ') + '. Periksa lagi sebelum melanjutkan.';
+    return;
+  }
   const message = checkoutMessage();
   if (!message) return;
   const fields = orderForm.elements;
@@ -512,9 +555,14 @@ orderForm.addEventListener('submit', async event => {
   whatsapp.textContent = 'Menyiapkan pesanan…';
   feedback.textContent = 'Meneruskan pesanan ke toko…';
   let queued = false;
+  let stockError = '';
   try {
     const response = await catalogRpc('pentol_submit_checkout',{...payload,request_id:pendingCheckout.id});
     queued = response.ok;
+    if (!queued) {
+      const detail = await response.json().catch(() => null);
+      if (detail?.hint === 'stock' && typeof detail.message === 'string') stockError = detail.message;
+    }
   } catch {
     // WhatsApp remains available if the queue cannot be reached.
   }
@@ -523,6 +571,21 @@ orderForm.addEventListener('submit', async event => {
   copy.disabled = false;
   document.querySelector('#back-to-cart').disabled = false;
   whatsapp.textContent = 'Lanjut ke WhatsApp ↗';
+  if (stockError) {
+    // Someone else took the last packs: refresh limits and let the buyer adjust.
+    await syncCatalog();
+    const left = Number(stockError.match(/tersisa (\d+) pack/)?.[1]);
+    const item = products.find(product => stockError.includes(product.name));
+    if (item && Number.isSafeInteger(left)) {
+      if (left > 0) { item.maxQty = left; quantities.set(item.id, Math.min(quantities.get(item.id) || 0, left)); }
+      else { item.soldOut = true; quantities.delete(item.id); }
+      renderMenu();
+      renderCart();
+    }
+    setCheckoutStep(false);
+    feedback.textContent = stockError + ' Jumlah di keranjang sudah disesuaikan, periksa lagi sebelum melanjutkan.';
+    return;
+  }
   checkoutReceipt = { queued, id: pendingCheckout.id, message };
   try { sessionStorage.setItem('pentol-checkout-receipt', JSON.stringify(checkoutReceipt)); } catch {}
   if (queued) {
