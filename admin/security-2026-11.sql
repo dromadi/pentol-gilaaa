@@ -1,4 +1,4 @@
--- Migrasi keamanan November 2026 (lihat docs/AUDIT.md).
+-- Migrasi keamanan November 2026 (lihat docs/AUDIT-2026-11.md).
 -- Aman dijalankan ulang: setiap perintah idempotent.
 -- Jalankan SETELAH schema.sql, orders.sql, dan operations.sql.
 begin;
@@ -16,11 +16,33 @@ begin
   end if;
 end $$;
 
--- 2. Checkout publik: tambah batas global agar inbox tidak bisa dibanjiri
+-- 2a. Stok bebas per varian, dipakai katalog dan checkout.
+create or replace function public.pentol_free_stock() returns table(sku text, free bigint)
+language sql stable set search_path='' as $$
+  select s.sku, sum(greatest(s.received-s.reserved-s.delivered,0))::bigint
+  from public.pentol_batch_stock s group by s.sku
+$$;
+revoke all on function public.pentol_free_stock() from public,anon,authenticated;
+
+-- 2b. Katalog v2: seperti pentol_catalog, ditambah max_qty saat stok tinggal
+--     1–9 pack (null = stok cukup; jumlah pasti tidak dibuka ke publik).
+--     pentol_catalog lama tetap ada agar halaman lama tetap jalan.
+create or replace function public.pentol_catalog_v2() returns table(sku text,price integer,available bigint,max_qty integer)
+language sql stable security definer set search_path='' as $$
+  select p.sku, p.price,
+    case when coalesce(f.free,0)>0 then 1::bigint else 0::bigint end,
+    case when coalesce(f.free,0) between 1 and 9 then f.free::integer end
+  from public.pentol_products p left join public.pentol_free_stock() f on f.sku=p.sku
+$$;
+revoke all on function public.pentol_catalog_v2() from public,anon,authenticated;
+grant execute on function public.pentol_catalog_v2() to anon,authenticated;
+
+-- 2c. Checkout publik: tolak jumlah di atas stok bebas, dan batas global agar inbox tidak bisa dibanjiri
 --    dengan nomor WhatsApp acak. Pembeli yang terkena batas tetap bisa
 --    mengirim pesanan lewat tombol WhatsApp (index.html menangani kegagalan).
 create or replace function public.pentol_submit_checkout(request_id uuid,customer_name text,contact text,area_name text,customer_note text,cart jsonb)
 returns void language plpgsql security definer set search_path='' as $$
+declare bad record;
 begin
   if request_id is null or length(trim(coalesce(customer_name,''))) not between 1 and 120
      or coalesce(contact,'') !~ '^[+0-9 ()-]{8,24}$'
@@ -36,10 +58,19 @@ begin
   if (select count(distinct sku) from jsonb_to_recordset(cart) as x(sku text))<>jsonb_array_length(cart) then
     raise exception 'Varian ganda.';
   end if;
-  contact:=regexp_replace(contact,'[^0-9]','','g');
-  if length(contact) not between 8 and 16 then raise exception 'Nomor WhatsApp tidak valid.'; end if;
   -- Permintaan ulang dengan request_id yang sama selalu boleh (idempotent).
   if exists(select 1 from public.pentol_inbox where id=request_id) then return; end if;
+  -- Jumlah tidak boleh melebihi stok bebas (diterima - terpesan - diantar).
+  select x.sku, x.quantity, p.name, coalesce(f.free,0) as free into bad
+  from jsonb_to_recordset(cart) as x(sku text,quantity integer)
+  join public.pentol_products p using(sku)
+  left join public.pentol_free_stock() f on f.sku=x.sku
+  where x.quantity>coalesce(f.free,0) order by x.sku limit 1;
+  if found then
+    raise exception 'Stok % tersisa % pack.', bad.name, bad.free using errcode='P0001', hint='stock';
+  end if;
+  contact:=regexp_replace(contact,'[^0-9]','','g');
+  if length(contact) not between 8 and 16 then raise exception 'Nomor WhatsApp tidak valid.'; end if;
   perform pg_advisory_xact_lock(hashtextextended(contact, 0));
   -- Batas per nomor: 8 per jam.
   if (select count(*) from public.pentol_inbox where phone=contact and created_at>now()-interval '1 hour')>=8 then
