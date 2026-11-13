@@ -1,5 +1,5 @@
 import { supabaseUrl, supabasePublishableKey } from './config.js';
-import { initOperations } from './operations.js?v=packing-1';
+import { initOperations } from './operations.js?v=hari-ini-1';
 
 const products = new Map([
   ['UR','Pentol Urat'], ['PK','Pentol Kecil'], ['TP','Tahu Pentol'],
@@ -406,7 +406,8 @@ menu.parentElement.addEventListener('keydown', event => {
   menuToggle.focus();
 });
 
-menuButtons.forEach(button => button.addEventListener('click', () => {
+function selectView(view, packingMode) {
+  const button = Array.from(menuButtons).find(tab => tab.dataset.view === view);
   menuButtons.forEach(tab => {
     const selected = tab === button;
     tab.setAttribute('aria-pressed', String(selected));
@@ -419,7 +420,15 @@ menuButtons.forEach(button => button.addEventListener('click', () => {
     $(button.dataset.view).querySelector('h2').focus();
   }
   if (button.dataset.view === 'orders') { loadOrders(); ops.inbox(); }
-  else ops.open(button.dataset.view);
+  else ops.open(view, packingMode);
+}
+
+menuButtons.forEach(button => button.addEventListener('click', () => selectView(button.dataset.view)));
+$('refresh-today').addEventListener('click', () => run($('refresh-today'), async () => {
+  try { await loadRows(); }
+  catch { return status('Stok belum bisa diperbarui. Coba muat ulang lagi.', true); }
+  status('');
+  await ops.open('today');
 }));
 
 function resetOrderForm() {
@@ -697,7 +706,7 @@ orderForm.addEventListener('submit', event => {
 const ops = initOperations({
   $, request, status, products, prices, today, format, tableRow, emptyRow, quantities,
   getRows:() => rows, getSession:() => session, openOrder,
-  refresh:refreshAfterOrder
+  refresh:refreshAfterOrder, selectView
 });
 
 async function restoreSession() {

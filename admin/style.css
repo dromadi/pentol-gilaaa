@@ -233,3 +233,9 @@ summary { cursor: pointer; }
   .order-table tr:has(td[data-label="Tanggal"]) td[data-label="Pelanggan"],
   .order-table tr:has(td[data-label="Tanggal"]) td[data-label="Tagihan"] { grid-row: 2; }
 }
+
+.today-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 14px; }
+.today-grid .ops-card { margin: 0; display: flex; flex-direction: column; align-items: start; gap: 9px; }
+.today-grid h3, .today-grid p, .today-grid ul { margin: 0; }
+.today-grid ul { padding-inline-start: 20px; overflow-wrap: anywhere; }
+.today-grid button { margin-top: auto; }

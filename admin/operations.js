@@ -1,5 +1,5 @@
 export function initOperations({ $, request, status, products, prices, today, format,
-  tableRow, emptyRow, quantities, getRows, getSession, openOrder, refresh }) {
+  tableRow, emptyRow, quantities, getRows, getSession, openOrder, refresh, selectView }) {
   const root = '/rest/v1/';
   const ordersSelect = '*,pentol_order_items(*),pentol_payments(*)';
   const dialog = $('ops-dialog');
@@ -284,12 +284,64 @@ export function initOperations({ $, request, status, products, prices, today, fo
     }
   }
 
-  async function packing(target) {
-    const old = target.querySelector('[name=pack_date]')?.value || today();
-    const oldFilter = target.querySelector('[name=pack_filter]')?.value || 'packing';
+  function packingReady(item) {
+    const row = stock(item.stock_id);
+    return row && row.received - row.delivered >= row.reserved;
+  }
+
+  const canPack = order => order.pentol_order_items.some(item =>
+    item.shipped < item.quantity && packingReady(item));
+
+  const unpaidFilter = '&paid=eq.false&delivered=eq.true';
+  const scheduledFilter = date => '&delivered=eq.false&delivery_on=eq.' + date;
+  const orderQuery = filters => list('pentol_orders?select=' + ordersSelect,
+    '&cancelled=eq.false&order=order_date,created_at,id' + filters);
+
+  async function overview(target) {
+    const session = getSession();
+    const date = today();
+    target.textContent = 'Memuat ringkasan…';
+    const [entries, deliveries, unpaid] = await Promise.all([
+      list('pentol_inbox?select=id,customer,created_at', '&status=eq.pending&order=created_at.desc,id'),
+      orderQuery(scheduledFilter(date)),
+      orderQuery(unpaidFilter)
+    ]);
+    if (getSession() !== session) return;
+    const ready = deliveries.filter(canPack);
+    const location = order => order.delivery_location || 'Lokasi belum diisi';
+    const sections = [
+      ['Permintaan baru', entries, entry => entry.customer, 'Buka permintaan', () => {
+        selectView('orders');
+        const inbox = $('checkout-inbox');
+        inbox.open = true;
+        inbox.querySelector('summary').focus();
+      }],
+      ['Bisa dikemas hari ini', ready, order => order.customer + ' · ' + location(order),
+        'Buka daftar packing', () => selectView('packing', 'ready')],
+      ['Jadwal antar hari ini', deliveries, order => order.customer + ' · ' + location(order),
+        'Buka jadwal antar', () => selectView('packing', 'packing')],
+      ['Sudah diantar, belum lunas', unpaid, order => order.customer + ' · ' + money(balance(order)),
+        'Buka tagihan', () => selectView('packing', 'unpaid')]
+    ];
+    target.replaceChildren(block(sections.map(([title, records, describe, action, navigate]) => {
+      const card = el('section', undefined, 'ops-card');
+      card.append(el('h3', title), el('strong', format.format(records.length) + ' pesanan'));
+      if (records === unpaid && unpaid.length) {
+        card.append(el('p', 'Total sisa tagihan ' + money(unpaid.reduce((sum, order) => sum + balance(order), 0))));
+      }
+      const preview = el('ul');
+      preview.append(...records.slice(0, 5).map(record => el('li', describe(record))));
+      card.append(records.length ? preview : el('p', 'Belum ada pesanan.'), button(action, navigate));
+      return card;
+    }), 'today-grid'));
+  }
+
+  async function packing(target, initialMode) {
+    const old = initialMode ? today() : target.querySelector('[name=pack_date]')?.value || today();
+    const oldFilter = initialMode || target.querySelector('[name=pack_filter]')?.value || 'packing';
     const day = control('Tanggal jadwal antar', 'pack_date', {type:'date', value:old});
     const filter = control('Tampilkan', 'pack_filter', {value:oldFilter, values:[
-      ['packing','Jadwal hari ini'],['unscheduled','Belum dijadwalkan'],['pending','Semua belum diantar'],['unpaid','Sudah diantar, belum lunas']
+      ['packing','Sesuai tanggal jadwal'],['ready','Siap dikemas sesuai tanggal'],['unscheduled','Belum dijadwalkan'],['pending','Semua belum diantar'],['unpaid','Sudah diantar, belum lunas']
     ]});
     const output = el('div');
     target.replaceChildren(block([day,filter], 'ops-filters'), output);
@@ -297,16 +349,23 @@ export function initOperations({ $, request, status, products, prices, today, fo
       const date = day.lastChild.value || today();
       const mode = filter.lastChild.value;
       output.textContent = 'Memuat pesanan…';
-      const listed = await list('pentol_orders?select=' + ordersSelect, '&cancelled=eq.false&order=order_date,created_at,id'
-        + (mode === 'unpaid' ? '&paid=eq.false&delivered=eq.true'
+      const listed = await orderQuery(mode === 'unpaid' ? unpaidFilter
           : mode === 'pending' ? '&delivered=eq.false'
             : mode === 'unscheduled' ? '&delivered=eq.false&delivery_on=is.null'
-            : '&delivered=eq.false&delivery_on=eq.' + date));
+            : scheduledFilter(date));
       if ((day.lastChild.value || today()) !== date || filter.lastChild.value !== mode) return;
-      const orders = listed;
+      const orders = mode === 'ready' ? listed.filter(canPack) : listed;
       output.replaceChildren();
       const totals = new Map();
+      const grouped = mode === 'packing' || mode === 'ready';
+      const location = order => order.delivery_location?.trim() || 'Lokasi belum diisi';
+      if (grouped) orders.sort((a, b) => location(a).localeCompare(location(b), 'id', {numeric:true}));
+      let lastLocation;
       for (const order of orders) {
+        if (grouped && location(order) !== lastLocation) {
+          lastLocation = location(order);
+          output.append(el('h3', lastLocation));
+        }
         const card = el('article', undefined, 'ops-card');
         const items = order.pentol_order_items.filter(i => mode === 'unpaid' || i.shipped < i.quantity);
         card.append(el('strong', order.customer), el('p', items.map(i =>
@@ -314,10 +373,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
           el('p', (order.delivery_on || 'Jadwal belum diisi') + ' · ' + paymentLabel(order)));
         const details = [order.contact,order.delivery_location,order.delivery_note].filter(Boolean);
         if (details.length) card.append(el('p',details.join(' · ')));
-        const readyItems = items.filter(item => {
-          const row = stock(item.stock_id);
-          return row && row.received - row.delivered >= row.reserved;
-        });
+        const readyItems = items.filter(packingReady);
         if (mode !== 'unpaid') {
           card.append(el('p', readyItems.length === items.length ? 'Siap dikemas'
             : (readyItems.length ? 'Siap sebagian' : 'Tertahan')
@@ -532,14 +588,14 @@ export function initOperations({ $, request, status, products, prices, today, fo
     render();
   }
 
-  const views={packing,purchasing,finance,promotions};
-  async function open(view) {
+  const views={today:overview,packing,purchasing,finance,promotions};
+  async function open(view, packingMode) {
     if (!views[view]) return;
     const token=getSession();
     if (!token) return;
     const target=$(view+'-body');
     target.setAttribute('aria-busy', 'true');
-    try { await views[view](target); }
+    try { await views[view](target, packingMode); }
     catch { if (getSession()===token) target.textContent='Data belum bisa dimuat. Buka kembali menu untuk mencoba lagi.'; }
     finally {
       target.setAttribute('aria-busy', 'false');

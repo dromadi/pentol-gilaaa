@@ -7,8 +7,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src https://gnwzgiiarbxutattxhcy.supabase.co; base-uri 'none'; form-action 'none'; object-src 'none'">
 <meta name="referrer" content="no-referrer">
 <title>Admin · Pentol Gilaaa Surabaya</title>
-<link rel="stylesheet" href="style.css?v=design-1">
-<script type="module" src="app.js?v=packing-1"></script>
+<link rel="stylesheet" href="style.css?v=hari-ini-1">
+<script type="module" src="app.js?v=hari-ini-1"></script>
 </head>
 <body>
 <header class="app-header"><div class="bar">
@@ -31,10 +31,11 @@
 <div id="dashboard" hidden>
 <aside class="admin-sidebar"><p class="sidebar-caption">KELOLA TOKO</p>
 <button id="menu-toggle" class="secondary" type="button" aria-controls="admin-menu" aria-expanded="false">
-<span class="menu-icon" aria-hidden="true"></span> <span id="mobile-view-label">Stok per Batch</span> <span class="menu-chevron" aria-hidden="true">⌄</span>
+<span class="menu-icon" aria-hidden="true"></span> <span id="mobile-view-label">Hari Ini</span> <span class="menu-chevron" aria-hidden="true">⌄</span>
 </button>
 <nav id="admin-menu" aria-label="Menu admin">
-<button type="button" data-view="stock" aria-controls="stock" aria-pressed="true"><span class="nav-icon" aria-hidden="true">▦</span><span>Stok per Batch</span></button>
+<button type="button" data-view="today" aria-controls="today" aria-pressed="true"><span class="nav-icon" aria-hidden="true">◷</span><span>Hari Ini</span></button>
+<button type="button" data-view="stock" aria-controls="stock" aria-pressed="false"><span class="nav-icon" aria-hidden="true">▦</span><span>Stok per Batch</span></button>
 <button type="button" data-view="orders" aria-controls="orders" aria-pressed="false"><span class="nav-icon" aria-hidden="true">▤</span><span>Pesanan</span></button>
 <button type="button" data-view="packing" aria-controls="packing" aria-pressed="false"><span class="nav-icon" aria-hidden="true">□</span><span>Packing &amp; Tagihan</span></button>
 <button type="button" data-view="purchasing" aria-controls="purchasing" aria-pressed="false"><span class="nav-icon" aria-hidden="true">↙</span><span>Restok &amp; Supplier</span></button>
@@ -44,7 +45,11 @@
 </nav>
 </aside>
 <div class="admin-content">
-<section id="stock" class="panel">
+<section id="today" class="panel">
+<div class="section-head"><div><h2 tabindex="-1">Hari Ini</h2><p>Pantau permintaan, packing, pengantaran, dan tagihan.</p></div><button id="refresh-today" type="button" class="secondary">↻ Muat ulang</button></div>
+<div id="today-body" aria-live="polite"></div>
+</section>
+<section id="stock" class="panel" hidden>
 <div class="section-head"><div><p class="eyebrow">INVENTORI</p><h2 tabindex="-1">Stok per Batch</h2><p>Catat barang masuk dan alokasi pesanan per varian.</p></div><button type="button" id="new-entry" aria-controls="batch-form" aria-expanded="false">+ Tambah stok batch</button></div>
 <form id="batch-form" class="editor" hidden>
 <h3 id="editor-title">Tambah varian ke batch</h3>
