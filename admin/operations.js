@@ -1,4 +1,5 @@
-import { openReconciliation, reconciliationRows } from './reconcile.js?v=1';
+import { invoiceContent, invoicePdf } from './invoice.js?v=1';
+import { openReconciliation, reconciliationRows } from './reconcile.js?v=2';
 
 export function initOperations({ $, request, status, products, prices, today, format,
   tableRow, emptyRow, quantities, getRows, getSession, openOrder, refresh, selectView, loadRows }) {
@@ -9,6 +10,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
   const dialogForm = $('ops-form');
   let submit;
   let dialogRun = 0;
+  let excelInvoices = new Map();
   const sizes = {UR:'9 pcs',PK:'30 pcs',TP:'30 pcs',JM:'9 pcs',MZ:'9 pcs',RJ:'9 pcs',TD:'9 pcs',PG:'9 pcs',SG:'±100 g'};
   const money = value => 'Rp' + format.format(Math.round(value));
   const total = order => Number(order.shipping_charge) + order.pentol_order_items.reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
@@ -132,6 +134,8 @@ export function initOperations({ $, request, status, products, prices, today, fo
   function orderDialog(action, order, title, nodes, payload) {
     showDialog(title, nodes, async data => {
       await mutate(action, order.id, order.revision, payload(data));
+      const mapped = excelInvoices.get(order.id);
+      if (mapped?.revision === order.revision && ['pay', 'ship', 'schedule'].includes(action)) mapped.revision++;
       return async () => {
         await refresh('Pesanan diperbarui.');
         if (!$('packing').hidden) open('packing');
@@ -181,47 +185,10 @@ export function initOperations({ $, request, status, products, prices, today, fo
     } else target.append(actions);
   }
 
-  function makeInvoice(order) {
-    const lines = [
-      'PENTOL GILAAA SURABAYA',
-      'Invoice #' + String(order.invoice_no).padStart(5, '0'),
-      'Tanggal pesanan: ' + order.order_date,
-      'Pelanggan: ' + order.customer, '',
-      ...order.pentol_order_items.flatMap(item => [
-        label(item),
-        item.quantity + ' pack × ' + money(item.unit_price) + ' = ' + money(item.quantity * item.unit_price)
-      ]),
-      '',
-      'Ongkir: ' + money(order.shipping_charge),
-      'Total: ' + money(total(order)),
-      'Pembayaran diterima: ' + money(paid(order)),
-      'Sisa tagihan: ' + money(balance(order))
-    ];
-    return lines;
-  }
-
-  function printInvoice(order, lines) {
-    const page = window.open('', '_blank');
-    if (!page) return status('Izinkan jendela baru untuk mencetak invoice.', true);
-    page.opener = null;
-    page.document.title = 'Invoice-' + order.invoice_no;
-    const article = page.document.createElement('article');
-    article.style.cssText = 'font:16px/1.45 system-ui; padding:24px; max-width:680px; margin:auto';
-    lines.forEach((line, i) => {
-      const row = page.document.createElement(i === 0 ? 'h1' : 'p');
-      row.textContent = line || ' ';
-      row.style.margin = '0 0 6px';
-      article.append(row);
-    });
-    page.document.body.append(article);
-    page.focus();
-    page.print();
-  }
-
-  function png(lines, filename, width = 900, minHeight = 0) {
+  function renderImage(lines, width, minHeight) {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
-    if (!ctx) return status('Ekspor gambar tidak tersedia di browser ini.', true);
+    if (!ctx) throw new Error('Ekspor gambar tidak tersedia di browser ini.');
     canvas.width = width;
     const font = '28px system-ui';
     ctx.font = font;
@@ -245,22 +212,89 @@ export function initOperations({ $, request, status, products, prices, today, fo
       ctx.font = i === 0 ? 'bold 34px system-ui' : font;
       ctx.fillText(line, 48, 72 + i * 48, width - 96);
     });
+    return canvas;
+  }
+
+  function download(url, filename) {
     const link = el('a');
-    link.href = canvas.toDataURL('image/png');
-    link.download = filename + '.png';
+    link.href = url;
+    link.download = filename;
     link.click();
   }
 
-  function showInvoice(order) {
-    const lines = makeInvoice(order);
-    showDialog('Invoice', [el('p', lines.join('\n'), 'ops-copy'),
-      block([
-        button('Cetak / Simpan PDF', () => printInvoice(order, lines)),
-        button('Unduh PNG', () => png(lines, 'Invoice-' + order.invoice_no))
-      ], 'ops-actions')], async () => {});
-    const save = dialogForm.querySelector('button:not([type])');
-    save.hidden = true;
-    dialog.addEventListener('close', () => { save.hidden = false; }, {once:true});
+  function png(lines, filename, width = 900, minHeight = 0) {
+    try { download(renderImage(lines, width, minHeight).toDataURL('image/png'), filename + '.png'); }
+    catch { status('Gambar belum bisa diunduh.', true); }
+  }
+
+  function pdf(lines, filename) {
+    const pages = [];
+    // Short lines wrap in the same way as PNG. Split long invoices across A4 pages.
+    for (let start = 0; start < lines.length; start += 22) {
+      const canvas = renderImage(lines.slice(start, start + 22), 900, 0);
+      const jpeg = canvas.toDataURL('image/jpeg', .94).split(',')[1];
+      pages.push({width:canvas.width,height:canvas.height,bytes:Uint8Array.from(atob(jpeg), char => char.charCodeAt(0))});
+    }
+    const url = URL.createObjectURL(invoicePdf(pages));
+    download(url, filename + '.pdf');
+    setTimeout(() => URL.revokeObjectURL(url), 30_000);
+  }
+
+  async function showInvoice(order) {
+    const session = getSession();
+    try {
+      const [fresh] = await orderQuery('&id=eq.' + encodeURIComponent(order.id));
+      if (!session || getSession() !== session) return;
+      if (!fresh) return status('Pesanan aktif tidak ditemukan. Muat ulang daftar.', true);
+      const mapped = excelInvoices.get(fresh.id);
+      const number = mapped?.revision === fresh.revision ? mapped.reference
+        : String(fresh.invoice_no).padStart(5, '0');
+      const filename = 'Invoice-' + number.replace(/[^A-Za-z0-9_-]/g, '-');
+      const {lines, reminder} = invoiceContent({
+        number, customer:fresh.customer, shipping:fresh.shipping_charge,
+        total:total(fresh), paid:paid(fresh),
+        items:fresh.pentol_order_items.map(item => ({
+          name:products.get(stock(item.stock_id)?.sku) || label(item),
+          quantity:item.quantity, unitPrice:item.unit_price
+        }))
+      });
+      const feedback = el('p');
+      feedback.setAttribute('role', 'status');
+      const actions = [
+        button('Unduh PDF', () => {
+          try { pdf(lines, filename); }
+          catch { feedback.textContent = 'PDF belum bisa diunduh.'; }
+        }),
+        button('Unduh PNG', () => png(lines, filename))
+      ];
+      const nodes = [
+        el('p', mapped?.revision === fresh.revision ? 'Nomor dari Excel' : 'Nomor aplikasi · cocokkan Excel lewat Rekonsiliasi Excel.'),
+        el('p', lines.join('\n'), 'ops-copy'), block(actions, 'ops-actions'), feedback
+      ];
+      if (reminder && fresh.delivered) {
+        const message = el('textarea');
+        message.readOnly = true;
+        message.value = reminder;
+        const field = el('label', 'Pesan tagihan WhatsApp');
+        field.append(message);
+        nodes.push(field, button('Salin pesan tagihan', async () => {
+          try {
+            await navigator.clipboard.writeText(message.value);
+            feedback.textContent = 'Pesan tagihan disalin.';
+          } catch {
+            message.select();
+            feedback.textContent = 'Salin teks yang dipilih.';
+          }
+        }));
+      }
+      if (dialog.open) return;
+      showDialog('Invoice', nodes, async () => {});
+      const save = dialogForm.querySelector('button:not([type])');
+      save.hidden = true;
+      dialog.addEventListener('close', () => { save.hidden = false; }, {once:true});
+    } catch {
+      if (getSession() === session) status('Invoice belum bisa dimuat. Coba lagi.', true);
+    }
   }
 
   async function loadPrices() {
@@ -620,7 +654,8 @@ export function initOperations({ $, request, status, products, prices, today, fo
         ]);
         await loadRows();
         if (id !== generation || getSession() !== session || !target.contains(file)) return;
-        const {stockRows, orderRows} = reconciliationRows(targets, getRows(), orders, products, total, paid);
+        const {stockRows, orderRows, invoiceMatches} = reconciliationRows(targets, getRows(), orders, products, total, paid);
+        excelInvoices = invoiceMatches;
         function section(title, rows) {
           return block([el('h3', title), table(['Data', 'Excel', 'Aplikasi', 'Hasil', 'Tindakan'],
             rows.map(({label, excel, app, status:detail, action}) => {
@@ -699,6 +734,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
   }
   function clear() {
     if (dialog.open) dialog.close();
+    excelInvoices.clear();
     for (const view of Object.keys(views)) $(view+'-body').replaceChildren();
     $('inbox-list').replaceChildren();
     $('inbox-count').textContent='';

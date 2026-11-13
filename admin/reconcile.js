@@ -137,6 +137,7 @@ export function reconciliationRows(targets, stocks, orders, products, total, pai
     return { label:products.get(target.sku) + ' · Batch ' + target.batch, excel:target.free + ' pack',
       app:free === null ? 'Batch/varian belum cocok' : free + ' pack', status, action };
   });
+  const invoiceCandidates = [];
   const orderRows = targets.orders.map(target => {
     const ref = normalize(target.reference);
     const candidates = byOrder.get(normalize(target.customer)) || [];
@@ -163,6 +164,7 @@ export function reconciliationRows(targets, stocks, orders, products, total, pai
     const app = live ? (live.delivered ? 'Diantar' : 'Belum selesai diantar') + ' · Sisa ' + rupiah(target.amount - received) : '—';
     if (duplicate || exact.length > 1 || (pool.length > 1 && !live)) status = 'Pencocokan ambigu';
     else if (live) {
+      if (ref) invoiceCandidates.push({id:live.id, revision:live.revision, reference:target.reference});
       const ship = target.delivered && !live.delivered;
       const amount = target.paid === null ? 0 : target.paid - received;
       if (target.paid !== null && (amount < 0 || target.paid > target.amount)) status = 'Kas berbeda · periksa riwayat';
@@ -174,7 +176,11 @@ export function reconciliationRows(targets, stocks, orders, products, total, pai
     }
     return { label, excel, app, status, action };
   });
-  return { stockRows, orderRows };
+  const byId = Map.groupBy(invoiceCandidates, match => match.id);
+  const byReference = Map.groupBy(invoiceCandidates, match => normalize(match.reference));
+  const invoiceMatches = new Map(invoiceCandidates.filter(match => byId.get(match.id).length === 1
+    && byReference.get(normalize(match.reference)).length === 1).map(match => [match.id, match]));
+  return { stockRows, orderRows, invoiceMatches };
 }
 
 export async function openReconciliation({ file, products }) {
