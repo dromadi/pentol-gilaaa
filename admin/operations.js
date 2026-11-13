@@ -89,7 +89,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
   }
 
   function errorMessage(error) {
-    const known = /^(Booking lama |Pesanan |Isi 1|Periksa varian|Gabungkan varian|Varian batch |Pilih jumlah|Jumlah |Stok fisik|Nominal |Pilih 1|Varian tidak)/;
+    const known = /^(Booking lama |Pesanan |Isi 1|Periksa varian|Gabungkan varian|Varian batch |Pilih jumlah|Jumlah |Stok fisik|Nominal |Pilih 1|Varian tidak|PO tidak |Penerimaan )/;
     return known.test(error.message) ? error.message : 'Perubahan belum terkonfirmasi. Muat ulang daftar sebelum mencoba lagi.';
   }
 
@@ -471,23 +471,71 @@ export function initOperations({ $, request, status, products, prices, today, fo
     });
   }
 
+  function receivePurchase(purchase, items) {
+    const receiptId = crypto.randomUUID();
+    const date = control('Tanggal diterima', 'received_on', {type:'date',value:today(),props:{max:today()}});
+    const inputs = items.filter(item => item.remaining > 0).map(item => {
+      const name = products.get(item.sku) || item.sku;
+      return control(name + ' · sisa ' + item.remaining + ' pack', item.sku,
+        {type:'number', value:0, props:{min:0,max:item.remaining,step:1}});
+    });
+    showDialog('Terima barang · ' + purchase.batch_code, [
+      el('p', 'Isi jumlah fisik yang diterima kali ini. Jumlah booking dan pengantaran tidak diubah.'),
+      date, block(inputs)
+    ], async data => {
+      const receiptItems = items.map(item => ({sku:item.sku,quantity:Number(data.get(item.sku))}))
+        .filter(item => item.quantity > 0);
+      if (!receiptItems.length) throw new Error('Pilih jumlah barang yang benar-benar diterima.');
+      await request(root + 'rpc/pentol_receive_purchase', {method:'POST',body:{
+        receipt_id:receiptId,purchase_code:purchase.batch_code,arrival_date:data.get('received_on'),
+        receipt_items:receiptItems
+      }});
+      return async () => {
+        await refresh('Penerimaan tersimpan. Stok sudah diperbarui.');
+        if (!$('purchasing').hidden) await open('purchasing');
+      };
+    });
+  }
+
   async function purchasing(target) {
-    const data = await purchases();
+    const session = getSession();
+    const [data, receipts] = await Promise.all([
+      purchases(),
+      list('pentol_purchase_receipts?select=id,batch_code,received_on,items', '&order=received_on.desc,created_at.desc,id')
+        .catch(error => {
+          if (error.status === 404) return null;
+          throw error;
+        }),
+      loadRows()
+    ]);
+    if (getSession() !== session) return;
     target.replaceChildren(button('+ Catat restok', () => purchaseDialog(null)));
+    if (!receipts) target.append(el('p', 'Terima Barang dari PO tersedia setelah migrasi penerimaan di Supabase dijalankan.'));
     for (const p of data) {
       const card = el('article', undefined, 'ops-card');
       const totalCost = p.shipping+p.packaging+p.other_cost
         + p.pentol_purchase_items.reduce((sum,i) => sum+i.quantity*i.unit_cost,0);
+      const items = p.pentol_purchase_items.map(item => {
+        const row = getRows().find(stock => stock.batch_code === p.batch_code && stock.sku === item.sku);
+        const received = row?.received ?? 0;
+        return {...item,received,remaining:Math.max(0, item.quantity-received),row};
+      });
+      const history = receipts?.filter(receipt => receipt.batch_code === p.batch_code) ?? [];
+      const historyPanel = el('details');
+      historyPanel.append(el('summary', 'Riwayat penerimaan (' + history.length + ')'));
+      historyPanel.append(...history.map(receipt => el('p', receipt.received_on + ' · ' + receipt.items
+        .map(item => (products.get(item.sku) || item.sku) + ' × ' + item.quantity).join(', '))));
+      if (!history.length) historyPanel.append(el('p', 'Belum ada penerimaan yang dicatat dari PO.'));
+      const receive = button('Terima barang', () => receivePurchase(p, items));
+      receive.disabled = !receipts || !items.some(item => item.remaining > 0);
       card.append(el('strong', p.batch_code + ' · ' + p.supplier),
         el('p', [p.reference,p.ordered_on,p.expected_on && 'Estimasi tiba ' + p.expected_on].filter(Boolean).join(' · ')),
         el('p','Total biaya batch: ' + money(totalCost)),
-        table(['Varian','Dipesan ke supplier','Diterima','Booking pelanggan','Sisa setelah tiba'],
-          p.pentol_purchase_items.map(i => {
-            const s = getRows().find(r => r.batch_code === p.batch_code && r.sku === i.sku);
-            return [products.get(i.sku), i.quantity, s?.received || 0,s?.reserved || 0,
-              Math.max(0,Math.max(i.quantity,s?.received || 0)-(s?.reserved || 0)-(s?.delivered || 0))];
-          }), 'Belum ada varian.'),
-        block([button('Edit restok', () => purchaseDialog(p)),
+        table(['Varian','Dipesan ke supplier','Diterima','Sisa PO','Booking pelanggan','Siap jual'],
+          items.map(item => [products.get(item.sku),item.quantity,item.received,item.remaining,
+            item.row?.reserved ?? 0,item.row ? quantities(item.row)[3] : 0]), 'Belum ada varian.'),
+        historyPanel,
+        block([receive, button('Edit restok', () => purchaseDialog(p)),
           button('Salin pesan supplier', async () => {
             const lines = ['Halo Kak, mohon cek restok berikut untuk ' + p.batch_code + ':',
               ...p.pentol_purchase_items.map(i => products.get(i.sku) + ' × ' + i.quantity + ' pack'),

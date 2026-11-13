@@ -9,6 +9,7 @@ Katalog pelanggan (`/index.html`) memakai GitHub Pages. Area admin (`/admin/`) m
    2. `orders.sql` – pesanan
    3. `operations.sql` – pembayaran, restok, harga, inbox checkout (berisi data contoh BATCH-01/02)
    4. `security-2026-11.sql` – perbaikan audit: batas checkout, katalog v2 dengan batas stok (boleh dijalankan ulang)
+   5. `receipts-2026-11.sql` – penerimaan bertahap dari PO (boleh dijalankan ulang)
 2. Nonaktifkan pendaftaran mandiri di pengaturan Auth. Buat pengguna di **Authentication → Users** dan salin UUID pengguna.
 3. Daftarkan UUID tersebut lewat SQL Editor.
 
@@ -28,5 +29,9 @@ Katalog pelanggan (`/index.html`) memakai GitHub Pages. Area admin (`/admin/`) m
 - **Pesanan, pembayaran, pengantaran:** dicatat di menu Pesanan dan Packing & Tagihan. Setiap pembayaran disimpan dengan tanggalnya, dan laporan kas mengikuti tanggal itu.
 - **Restok, HPP, harga jual, laba:** di menu Restok & Supplier dan Harga & Laba.
 - **Checkout katalog:** pembeli mengirim permintaan ke inbox (`pentol_submit_checkout`). Batasnya 8 per nomor per jam, 40 total per jam, dan 150 yang menunggu. Jika batas tercapai, pembeli tetap diarahkan ke WhatsApp. Jumlah per varian tidak boleh melebihi stok bebas; katalog menampilkan "Sisa N pack" saat stok tinggal 1–9.
+
+### Aktifkan penerimaan PO pada produksi yang sudah berjalan
+
+Jalankan hanya `receipts-2026-11.sql` di Supabase SQL Editor, lalu buka **Restok & Supplier → Terima barang**. Angka diterima yang sudah tercatat di Stok per Batch menjadi saldo awal. Isi jumlah fisik tambahan pada setiap penerimaan, bukan total kumulatif. Tanggal di Stok per Batch menunjukkan tanggal penerimaan terakhir, dan rincian masing-masing kedatangan tersimpan di riwayat PO.
 
 Riwayat audit dan catatan teknis: `../docs/AUDIT-2026-11.md`.
