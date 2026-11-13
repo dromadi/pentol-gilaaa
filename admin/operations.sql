@@ -1,3 +1,6 @@
+-- SUDAH DIJALANKAN di produksi. Jangan dijalankan ulang: berisi ALTER/CREATE tanpa
+-- "if not exists" dan data contoh BATCH-01/02 (transaksi akan gagal dan dibatalkan).
+-- Perubahan baru dibuat sebagai file migrasi terpisah, mis. security-2026-11.sql.
 begin;
 
 alter table public.pentol_orders add column cancelled boolean not null default false,
