@@ -1,5 +1,5 @@
 import { supabaseUrl, supabasePublishableKey } from './config.js';
-import { initOperations } from './operations.js?v=design-1';
+import { initOperations } from './operations.js?v=packing-1';
 
 const products = new Map([
   ['UR','Pentol Urat'], ['PK','Pentol Kecil'], ['TP','Tahu Pentol'],
@@ -615,11 +615,24 @@ function openOrder(order = null, inboxEntry = null) {
   e.shipping_charge.value = order?.shipping_charge || 0;
   e.shipping_cost.value = order?.shipping_cost || 0;
   if (order) order.pentol_order_items.forEach(addOrderItem);
-  else if (inboxEntry) inboxEntry.items.forEach(item => {
-    const stock = rows.find(row => row.sku === item.sku && quantities(row)[3] >= item.quantity)
-      || rows.find(row => row.sku === item.sku);
-    addOrderItem({ stock_id:stock?.id, quantity:item.quantity, unit_price:prices[item.sku] });
-  });
+  else if (inboxEntry) {
+    for (const item of inboxEntry.items) {
+      const batches = rows.filter(row => row.sku === item.sku);
+      const wholeBatch = batches.find(row => quantities(row)[3] >= item.quantity);
+      let remaining = item.quantity;
+      for (const batch of wholeBatch ? [wholeBatch] : batches) {
+        const quantity = Math.min(remaining, quantities(batch)[3]);
+        if (!quantity) continue;
+        addOrderItem({ stock_id:batch.id, quantity, unit_price:prices[item.sku] });
+        remaining -= quantity;
+        if (!remaining) break;
+      }
+      if (remaining) {
+        addOrderItem({ quantity:remaining, unit_price:prices[item.sku] });
+        status('Sebagian stok belum tersedia. Pilih batch untuk sisa jumlah sebelum menyimpan.', true);
+      }
+    }
+  }
   else addOrderItem();
   orderForm.hidden = false;
   $('order-editor-title').textContent = order ? 'Edit pesanan · ' + order.customer : 'Catat pesanan';
