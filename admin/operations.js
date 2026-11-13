@@ -1,5 +1,7 @@
+import { openReconciliation, reconciliationRows } from './reconcile.js?v=1';
+
 export function initOperations({ $, request, status, products, prices, today, format,
-  tableRow, emptyRow, quantities, getRows, getSession, openOrder, refresh, selectView }) {
+  tableRow, emptyRow, quantities, getRows, getSession, openOrder, refresh, selectView, loadRows }) {
   const root = '/rest/v1/';
   const ordersSelect = '*,pentol_order_items(*),pentol_payments(*)';
   const dialog = $('ops-dialog');
@@ -63,7 +65,13 @@ export function initOperations({ $, request, status, products, prices, today, fo
     const header = grid.createTHead().insertRow();
     header.append(...headers.map(text => el('th', text)));
     const body = grid.createTBody();
-    body.append(...data.map(tableRow));
+    body.append(...data.map(values => {
+      const row = tableRow(values.map(value => value instanceof HTMLElement ? '' : value));
+      values.forEach((value, index) => {
+        if (value instanceof HTMLElement) row.cells[index].append(value);
+      });
+      return row;
+    }));
     emptyRow(body, headers.length, empty);
     wrap.append(grid);
     return wrap;
@@ -588,7 +596,94 @@ export function initOperations({ $, request, status, products, prices, today, fo
     render();
   }
 
-  const views={today:overview,packing,purchasing,finance,promotions};
+  function reconcile(target) {
+    const file = el('input');
+    file.type = 'file';
+    file.accept = '.xlsx';
+    const field = el('label', 'File pembukuan terbaru (.xlsx)');
+    field.append(file);
+    const result = el('div');
+    const feedback = el('p');
+    feedback.setAttribute('role', 'status');
+    let generation = 0;
+    let saving = false;
+
+    async function compare(message = '') {
+      const id = ++generation;
+      const session = getSession();
+      result.replaceChildren();
+      feedback.textContent = 'Membandingkan Excel dan aplikasi…';
+      try {
+        const [targets, orders] = await Promise.all([
+          openReconciliation({ file:file.files[0], products }),
+          orderQuery('')
+        ]);
+        await loadRows();
+        if (id !== generation || getSession() !== session || !target.contains(file)) return;
+        const {stockRows, orderRows} = reconciliationRows(targets, getRows(), orders, products, total, paid);
+        function section(title, rows) {
+          return block([el('h3', title), table(['Data', 'Excel', 'Aplikasi', 'Hasil', 'Tindakan'],
+            rows.map(({label, excel, app, status:detail, action}) => {
+              const cell = el('span', '—');
+              if (action) {
+                cell.textContent = '';
+                cell.append(button('Terapkan', () => {
+                  if (saving || id !== generation) return;
+                  const {live, type, amount, reserved} = action;
+                  const nodes = [el('p', label), el('p', app + ' → ' + excel)];
+                  if (type === 'stock') nodes.push(el('p', 'Booking: ' + live.reserved + ' → ' + reserved
+                    + ' pack. Terapkan hanya jika booking ini belum tercatat dalam pesanan aplikasi.'));
+                  if (type === 'ship') nodes.push(el('p', 'Aplikasi mencatat waktu penyimpanan sebagai waktu pengantaran.'));
+                  if (type === 'pay') {
+                    nodes.push(el('p', 'Catat penerimaan sebesar ' + money(amount) + '.'));
+                    nodes.push(control('Tanggal pembayaran aktual', 'date', {type:'date',props:{max:today()}}));
+                  }
+                  const paymentId = type === 'pay' ? crypto.randomUUID() : null;
+                  showDialog(detail, nodes, async data => {
+                    if (id !== generation || getSession() !== session) throw new Error('Pesanan berubah. Bandingkan lagi.');
+                    saving = true;
+                    try {
+                      if (type === 'stock') {
+                        const updated = await request(root + 'pentol_batch_stock?id=eq.' + encodeURIComponent(live.id)
+                          + '&revision=eq.' + live.revision, { method:'PATCH',
+                          body:{reserved, revision:live.revision + 1}, prefer:'return=representation' });
+                        if (updated?.length !== 1) throw new Error('Jumlah stok berubah. Bandingkan lagi.');
+                      } else {
+                        const payload = type === 'pay' ? {payment_id:paymentId,date:data.get('date'),amount}
+                          : {items:live.pentol_order_items.filter(item => item.quantity > item.shipped)
+                            .map(item => ({stock_id:item.stock_id,quantity:item.quantity-item.shipped}))};
+                        await mutate(type, live.id, live.revision, payload);
+                      }
+                    } finally {
+                      saving = false;
+                    }
+                    return () => compare('Koreksi tersimpan. ');
+                  });
+                }));
+              }
+              return [label, excel, app, detail, cell];
+            }), 'Tidak ada baris pada bagian ini.')], 'reconcile-section');
+        }
+        result.replaceChildren(section('Stok per batch', stockRows), section('Pengantaran dan tagihan', orderRows));
+        feedback.textContent = message + file.files[0].name + ' · ' + (stockRows.length + orderRows.length) + ' baris dibandingkan.';
+      } catch (error) {
+        if (id === generation && target.contains(file)) feedback.textContent =
+          message + 'Perbandingan gagal. ' + (error.status ? 'Coba muat ulang data admin.' : error.message);
+      }
+    }
+    const check = button('Bandingkan', () => { if (file.files.length && !saving) compare(); });
+    check.disabled = true;
+    file.addEventListener('change', () => {
+      generation++;
+      result.replaceChildren();
+      feedback.textContent = '';
+      check.disabled = !file.files.length;
+    });
+    target.replaceChildren(block([field, check], 'ops-filters'),
+      el('p', 'Gunakan tab Tutup Hari, Pesanan, Packing, dan Booking dan Invoice B2 dari pembukuan Pentol Gilaaa. File dibaca di browser. Periksa pratinjau sebelum menerapkan koreksi.'), feedback, result);
+  }
+
+  const views={today:overview,packing,purchasing,finance,promotions,reconcile};
   async function open(view, packingMode) {
     if (!views[view]) return;
     const token=getSession();

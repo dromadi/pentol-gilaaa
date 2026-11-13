@@ -1,5 +1,5 @@
 import { supabaseUrl, supabasePublishableKey } from './config.js';
-import { initOperations } from './operations.js?v=hari-ini-1';
+import { initOperations } from './operations.js?v=rekonsiliasi-1';
 
 const products = new Map([
   ['UR','Pentol Urat'], ['PK','Pentol Kecil'], ['TP','Tahu Pentol'],
@@ -706,7 +706,7 @@ orderForm.addEventListener('submit', event => {
 const ops = initOperations({
   $, request, status, products, prices, today, format, tableRow, emptyRow, quantities,
   getRows:() => rows, getSession:() => session, openOrder,
-  refresh:refreshAfterOrder, selectView
+  refresh:refreshAfterOrder, selectView, loadRows
 });
 
 async function restoreSession() {

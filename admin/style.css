@@ -239,3 +239,7 @@ summary { cursor: pointer; }
 .today-grid h3, .today-grid p, .today-grid ul { margin: 0; }
 .today-grid ul { padding-inline-start: 20px; overflow-wrap: anywhere; }
 .today-grid button { margin-top: auto; }
+
+.reconcile-section { margin-top: 22px; }
+.reconcile-section td { min-width: 120px; }
+.reconcile-section td:last-child { min-width: 0; }
