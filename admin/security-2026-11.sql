@@ -58,7 +58,13 @@ begin
   if (select count(distinct sku) from jsonb_to_recordset(cart) as x(sku text))<>jsonb_array_length(cart) then
     raise exception 'Varian ganda.';
   end if;
-  -- Permintaan ulang dengan request_id yang sama selalu boleh (idempotent).
+  contact:=regexp_replace(contact,'[^0-9]','','g');
+  if length(contact) not between 8 and 16 then raise exception 'Nomor WhatsApp tidak valid.'; end if;
+  -- Satu kunci bersama untuk semua checkout: pengecekan batas dan penyimpanan
+  -- berjalan bergantian, sehingga permintaan bersamaan tidak bisa melewati batas.
+  perform pg_advisory_xact_lock(hashtextextended('pentol_submit_checkout', 0));
+  -- Retry dengan request_id yang sama selalu sukses, juga saat antrean penuh,
+  -- dan dicek setelah kunci didapat agar retry bersamaan tetap satu entri.
   if exists(select 1 from public.pentol_inbox where id=request_id) then return; end if;
   -- Jumlah tidak boleh melebihi stok bebas (diterima - terpesan - diantar).
   select x.sku, x.quantity, p.name, coalesce(f.free,0) as free into bad
@@ -69,9 +75,6 @@ begin
   if found then
     raise exception 'Stok % tersisa % pack.', bad.name, bad.free using errcode='P0001', hint='stock';
   end if;
-  contact:=regexp_replace(contact,'[^0-9]','','g');
-  if length(contact) not between 8 and 16 then raise exception 'Nomor WhatsApp tidak valid.'; end if;
-  perform pg_advisory_xact_lock(hashtextextended(contact, 0));
   -- Batas per nomor: 8 per jam.
   if (select count(*) from public.pentol_inbox where phone=contact and created_at>now()-interval '1 hour')>=8 then
     raise exception 'Terlalu banyak permintaan. Hubungi toko lewat WhatsApp.';
