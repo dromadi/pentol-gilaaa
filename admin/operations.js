@@ -473,7 +473,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
     const list = items => items.map(item => products.get(item.sku) + ' × ' + item.quantity).join(', ');
     if (action.type === 'order') return 'Pesanan baru · ' + action.customer + ' · ' + list(action.items)
       + (action.deliveryOn ? ' · antar ' + action.deliveryOn : '') + (action.location ? ' · ' + action.location : '');
-    if (action.type === 'pay') return 'Bayar · ' + (action.customer || 'Invoice ' + action.invoice) + ' · ' + money(action.amount) + ' · ' + action.date;
+    if (action.type === 'pay') return 'Bayar · ' + (action.customer || 'Invoice ' + action.invoice) + ' · ' + (action.full ? 'lunas' : money(action.amount)) + ' · ' + action.date;
     return 'Antar · ' + (action.customer || 'Invoice ' + action.invoice) + ' · ' + (action.items.length ? list(action.items) : 'semua sisa pesanan') + ' · ' + action.date;
   }
 

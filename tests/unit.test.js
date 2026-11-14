@@ -7,6 +7,11 @@ const products = new Map([['UR','Pentol Urat'],['PK','Pentol Kecil'],['TP','Tahu
   ['MZ','Pentol Mozzarella'],['RJ','Pentol Ranjau'],['TD','Tahu Pedas'],['PG','Pentol Goreng'],['SG','Sambal Gila Tambahan']]);
 
 export function unitTests() {
+  test('bayar "lunas" = seluruh sisa tagihan', () => {
+    const result = parseGptText('{"aksi":[{"jenis":"bayar","pelanggan":"Sari","nominal":"Lunas"}]}', products, '2026-11-14');
+    equal([result.errors.length, result.actions[0].full, result.actions[0].amount], [0, true, null], 'lunas diterima tanpa nominal');
+  });
+
   test('nominal: rb, jt, titik ribuan', () => {
     equal(['100rb', 'Rp 1,5jt', '100.000', '1.250.000', 250000, '100k', 'abc'].map(parseAmount),
       [100000, 1500000, 100000, 1250000, 250000, 100000, null], 'parseAmount');

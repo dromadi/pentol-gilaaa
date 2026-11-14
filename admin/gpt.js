@@ -94,9 +94,11 @@ export function parseGptText(text, products, today) {
         note: String(entry?.catatan ?? '').trim().slice(0, 500),
         deliveryOn: isDate(entry?.jadwal_antar) ? entry.jadwal_antar : '' });
     } else if (type === 'pay') {
-      const amount = parseAmount(entry?.nominal ?? entry?.jumlah);
-      if (!Number.isSafeInteger(amount) || amount < 1) { errors.push(where + ': nominal bayar tidak valid.'); return; }
-      actions.push({ type, customer, invoice, date, amount });
+      // "lunas" = seluruh sisa tagihan pesanan itu (amount null; form bayar terisi sisa tagihan).
+      const full = normalize(entry?.nominal) === 'lunas';
+      const amount = full ? null : parseAmount(entry?.nominal ?? entry?.jumlah);
+      if (!full && (!Number.isSafeInteger(amount) || amount < 1)) { errors.push(where + ': nominal bayar tidak valid.'); return; }
+      actions.push({ type, customer, invoice, date, amount, full });
     } else {
       const lines = items(entry.item ?? entry.items, products, errors, where, false);
       if (errors.length > before) return;
@@ -119,6 +121,6 @@ export function gptInstructions(products, today) {
     ' {"jenis":"bayar","pelanggan":"Nama","invoice":"","nominal":100000,"tanggal":"YYYY-MM-DD"},',
     ' {"jenis":"antar","pelanggan":"Nama","invoice":"","tanggal":"YYYY-MM-DD","item":[{"varian":"UR","jumlah":3}]}',
     ']}',
-    'Aturan: jumlah dalam pack; nominal dalam rupiah tanpa titik; kosongkan kolom yang tidak disebut; untuk "antar" tanpa rincian, item boleh kosong (berarti semua sisa pesanan). Jangan mengarang harga, jumlah, atau nama yang tidak saya sebut. Jika ragu, tulis di "catatan".'
+    'Aturan: jumlah dalam pack; nominal dalam rupiah tanpa titik (atau "lunas" untuk melunasi seluruh sisa tagihan); kosongkan kolom yang tidak disebut; untuk "antar" tanpa rincian, item boleh kosong (berarti semua sisa pesanan). Jangan mengarang harga, jumlah, atau nama yang tidak saya sebut. Jika ragu, tulis di "catatan".'
   ].join('\n');
 }
