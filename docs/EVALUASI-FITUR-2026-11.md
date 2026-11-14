@@ -54,6 +54,17 @@ Pengujian B1–B3 (Chromium, Pixel 7, data tiruan dengan 8 jenis pesanan): pesan
 
 Sampai `stock-integrity-2026-11.sql` dijalankan di produksi, tombol **Koreksi** di Stok per Batch memanggil `pentol_correct_received`; jika fungsi itu belum ada (404), jumlah diterima disimpan langsung ke `pentol_batch_stock` dengan cek revisi, seperti form lama, dan tidak tercatat di riwayat. Alur barang masuk akhir pekan: Catat restok → Koreksi. Setelah migrasi berjalan, jalur sementara ini tidak terpakai (tulis langsung ditolak) dan bisa dihapus dari `admin/app.js`.
 
+## Input lewat ChatGPT (tahap 1: tempel)
+
+Keputusan: **aplikasi (Supabase) tetap sumber kebenaran**; ChatGPT hanya pintu masuk. Tidak ada data yang tersimpan tanpa konfirmasi admin di form aplikasi, sehingga semua validasi database tetap berlaku.
+
+- Pesanan → **✦ Tempel dari GPT**. Tombol "Salin instruksi untuk ChatGPT" menyalin aturan format (daftar kode varian, tanggal hari ini) untuk dikirim sekali ke ChatGPT.
+- Format JSON: `{"aksi":[{"jenis":"pesanan|bayar|antar", ...}]}`; definisi lengkap di `gptInstructions()` (`admin/gpt.js`). Pembaca menerima teks di sekitar blok JSON, kode atau nama varian (nama ambigu seperti "tahu" ditolak), dan nominal seperti "100rb", "1,5jt", "100.000".
+- Hasil tampil sebagai daftar aksi. **Pesanan** membuka form Catat pesanan yang sudah terisi (batch dipilih otomatis); **bayar** dan **antar** mencari pesanan menurut nomor invoice atau nama pelanggan, lalu membuka dialog yang sudah terisi; jika lebih dari satu pesanan cocok, admin memilih; jika tidak ada, diberi tahu.
+- Diuji di Chromium HP dengan data tiruan: 4 aksi valid + 1 ditolak; form pesanan terisi benar (ongkir 5rb → 5000); bayar dan antar tersimpan lewat `pentol_order_action`; nama yang tidak cocok diberi pesan.
+
+Tahap 2 (belum): Custom GPT dengan Actions ke Edge Function Supabase berkunci terbatas, setelah migrasi SQL berjalan.
+
 ## Fitur yang tumpang tindih (bikin ribet, bukan memudahkan)
 
 | Tumpang tindih | Saran |

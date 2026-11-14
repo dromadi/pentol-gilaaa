@@ -1,6 +1,7 @@
 import { closeDaySheets, closeDayWorkbook } from './close-day.js?v=1';
 import { invoiceContent, invoicePdf } from './invoice.js?v=1';
 import { openReconciliation, reconciliationRows } from './reconcile.js?v=4';
+import { parseGptText, gptInstructions } from './gpt.js?v=1';
 
 export function initOperations({ $, request, status, products, prices, today, format,
   tableRow, emptyRow, quantities, getRows, getSession, openOrder, refresh, selectView, loadRows }) {
@@ -91,7 +92,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
   }
 
   function errorMessage(error) {
-    const known = /^(Booking lama |Pesanan |Isi 1|Periksa varian|Gabungkan varian|Varian batch |Pilih jumlah|Jumlah |Stok fisik|Nominal |Pilih 1|Varian tidak|PO tidak |Penerimaan |Nomor invoice |Alasan koreksi |Stok berubah )/;
+    const known = /^(Booking lama |Pesanan |Isi 1|Periksa varian|Gabungkan varian|Varian batch |Pilih jumlah|Jumlah |Stok fisik|Nominal |Pilih 1|Varian tidak|PO tidak |Penerimaan |Nomor invoice |Alasan koreksi |Stok berubah |Teks tidak |Aksi \d|Tidak ada aksi)/;
     return known.test(error.message) ? error.message : 'Perubahan belum terkonfirmasi. Muat ulang daftar sebelum mencoba lagi.';
   }
 
@@ -133,9 +134,10 @@ export function initOperations({ $, request, status, products, prices, today, fo
     } finally { save.disabled = false; }
   });
 
-  function orderDialog(action, order, title, nodes, payload) {
+  function orderDialog(action, order, title, nodes, payload, onDone) {
     showDialog(title, nodes, async data => {
       await mutate(action, order.id, order.revision, payload(data));
+      onDone?.();
       const mapped = excelInvoices.get(order.id);
       if (mapped?.revision === order.revision && ['pay', 'ship', 'schedule'].includes(action)) mapped.revision++;
       return async () => {
@@ -147,29 +149,51 @@ export function initOperations({ $, request, status, products, prices, today, fo
     });
   }
 
+  function payDialog(order, prefill = {}) {
+    const paymentId = crypto.randomUUID();
+    const due = balance(order);
+    const amount = prefill.amount ? Math.min(prefill.amount, due) : due;
+    const notes = prefill.amount && prefill.amount > due
+      ? [el('p', 'Dari GPT: ' + money(prefill.amount) + '. Sisa tagihan hanya ' + money(due) + '; periksa kelebihan bayar.')] : [];
+    orderDialog('pay', order, 'Catat pembayaran · ' + order.customer + ' · Invoice ' + invoiceNumber(order), [...notes, block([
+      control('Tanggal bayar', 'date', {type:'date', value:prefill.date || today(), props:{max:today()}}),
+      control('Nominal diterima (Rp)', 'amount', {type:'number', value:amount, props:{min:1,max:due}})
+    ]), el('p', 'Total ' + money(total(order)) + ' · sudah dibayar ' + money(paid(order))),
+      ...order.pentol_payments.map(p => el('p', p.paid_on + ' · ' + money(p.amount)))],
+    data => ({payment_id:paymentId,date:data.get('date'),amount:Number(data.get('amount'))}), prefill.onDone);
+  }
+
+  // prefill.items: [{sku, quantity}] dibagi ke baris pesanan varian yang sama; kosong = semua sisa.
+  function shipDialog(order, prefill = {}) {
+    const pending = order.pentol_order_items.filter(i => i.shipped < i.quantity);
+    const wanted = new Map((prefill.items || []).map(item => [item.sku, item.quantity]));
+    const notes = [];
+    const value = item => {
+      const left = item.quantity - item.shipped;
+      if (!wanted.size) return left;
+      const sku = stock(item.stock_id)?.sku;
+      const take = Math.min(left, wanted.get(sku) || 0);
+      if (take) wanted.set(sku, wanted.get(sku) - take);
+      return take;
+    };
+    const fields = pending.map(i => control(label(i), i.stock_id, {type:'number',value:value(i),props:{min:0,max:i.quantity-i.shipped}}));
+    for (const [sku, rest] of wanted) if (rest > 0) notes.push(el('p', 'Dari GPT: ' + rest + ' pack ' + (products.get(sku) || sku) + ' tidak ada di sisa pesanan ini.'));
+    orderDialog('ship', order, 'Jumlah yang sudah diantar · ' + order.customer, [...notes, block(fields)],
+      data => ({items:pending.map(i => ({stock_id:i.stock_id,quantity:Number(data.get(i.stock_id))})).filter(i => i.quantity)}), prefill.onDone);
+  }
+
   function orderButtons(order, target) {
     if (order.cancelled) { target.textContent = '—'; return; }
     const actions = el('div', undefined, 'ops-actions');
     actions.append(button('Invoice', () => showInvoice(order)));
     if (!order.paid && balance(order)) {
-      actions.append(button('Catat bayar', () => {
-        const paymentId = crypto.randomUUID();
-        orderDialog('pay', order, 'Catat pembayaran · ' + order.customer, [block([
-          control('Tanggal bayar', 'date', {type:'date', value:today()}),
-          control('Nominal diterima (Rp)', 'amount', {type:'number', value:balance(order), props:{min:1,max:balance(order)}})
-        ]), ...order.pentol_payments.map(p => el('p', p.paid_on + ' · ' + money(p.amount)))],
-        data => ({payment_id:paymentId,date:data.get('date'),amount:Number(data.get('amount'))}));
-      }));
+      actions.append(button('Catat bayar', () => payDialog(order)));
     }
     if (!order.delivered) {
       actions.append(button('Jadwal antar', () => orderDialog('schedule', order, 'Jadwal antar · ' + order.customer,
         [control('Tanggal antar', 'date', {type:'date', value:order.delivery_on || today(), required:false})],
         data => ({delivery_on:data.get('date') || null}))));
-      const pending = order.pentol_order_items.filter(i => i.shipped < i.quantity);
-      actions.append(button('Catat pengantaran', () => orderDialog('ship', order, 'Jumlah yang sudah diantar · ' + order.customer,
-        [block(pending.map(i => control(label(i), i.stock_id,
-          {type:'number',value:i.quantity-i.shipped,props:{min:0,max:i.quantity-i.shipped}})))],
-        data => ({items:pending.map(i => ({stock_id:i.stock_id,quantity:Number(data.get(i.stock_id))})).filter(i => i.quantity)}))));
+      actions.append(button('Catat pengantaran', () => shipDialog(order)));
     }
     if (!order.paid && !paid(order) && !order.pentol_order_items.some(i => i.shipped)) {
       actions.append(button('Edit', () => {
@@ -332,7 +356,106 @@ export function initOperations({ $, request, status, products, prices, today, fo
     }
   }
 
+  // ===== Tempel dari GPT: teks JSON dari ChatGPT -> form yang sudah terisi, dikonfirmasi admin. =====
+  const nameKey = value => String(value ?? '').trim().toLocaleLowerCase('id').replace(/\s+/g, ' ');
+  function matchOrders(orders, action) {
+    if (action.invoice) {
+      const ref = nameKey(action.invoice).replace(/^#/, '');
+      const byInvoice = orders.filter(order => nameKey(invoiceNumber(order)) === ref
+        || nameKey(order.excel_invoice_no) === ref || String(order.invoice_no) === ref.replace(/^0+/, ''));
+      if (byInvoice.length) return byInvoice;
+    }
+    const wanted = nameKey(action.customer);
+    if (!wanted) return [];
+    const exact = orders.filter(order => nameKey(order.customer) === wanted);
+    return exact.length ? exact : orders.filter(order => nameKey(order.customer).includes(wanted) || wanted.includes(nameKey(order.customer)));
+  }
+
+  function describeAction(action) {
+    const list = items => items.map(item => products.get(item.sku) + ' × ' + item.quantity).join(', ');
+    if (action.type === 'order') return 'Pesanan baru · ' + action.customer + ' · ' + list(action.items)
+      + (action.deliveryOn ? ' · antar ' + action.deliveryOn : '') + (action.location ? ' · ' + action.location : '');
+    if (action.type === 'pay') return 'Bayar · ' + (action.customer || 'Invoice ' + action.invoice) + ' · ' + money(action.amount) + ' · ' + action.date;
+    return 'Antar · ' + (action.customer || 'Invoice ' + action.invoice) + ' · ' + (action.items.length ? list(action.items) : 'semua sisa pesanan');
+  }
+
+  async function runGptAction(action, row, mark) {
+    if (action.type === 'order') {
+      selectView('orders');
+      openOrder(null, {customer:action.customer, phone:action.contact, area:action.location, note:action.note, items:action.items});
+      const form = $('order-form').elements;
+      form.order_date.value = action.date;
+      form.delivery_on.value = action.deliveryOn;
+      form.shipping_charge.value = action.shipping;
+      form.shipping_charge.dispatchEvent(new Event('input', {bubbles:true}));
+      $('order-form').scrollIntoView({block:'start'});
+      mark('Form pesanan dibuka · periksa lalu Simpan');
+      return;
+    }
+    mark('Mencari pesanan…');
+    const candidates = matchOrders(action.type === 'pay'
+      ? (await orderQuery('&paid=eq.false')).filter(order => balance(order) > 0)
+      : await orderQuery('&delivered=eq.false'), action);
+    const open = order => action.type === 'pay'
+      ? payDialog(order, {amount:action.amount, date:action.date, onDone:() => mark('✓ Tersimpan')})
+      : shipDialog(order, {items:action.items, onDone:() => mark('✓ Tersimpan')});
+    if (!candidates.length) return mark(action.type === 'pay'
+      ? 'Tidak ada pesanan belum lunas atas nama ini' : 'Tidak ada pesanan belum diantar atas nama ini', true);
+    if (candidates.length === 1) { mark('Periksa lalu Simpan'); return open(candidates[0]); }
+    mark('Ada ' + candidates.length + ' pesanan cocok · pilih satu');
+    row.append(block(candidates.map(order => button('Invoice ' + invoiceNumber(order) + ' · ' + order.order_date + ' · '
+      + (action.type === 'pay' ? 'sisa ' + money(balance(order)) : order.pentol_order_items.map(label).join(', ')),
+      () => open(order))), 'ops-actions'));
+  }
+
+  function renderGptResults({actions, errors}) {
+    const panel = $('gpt-results');
+    panel.hidden = false;
+    const head = block([el('strong', 'Dari GPT · ' + actions.length + ' aksi'),
+      button('Tutup', () => { panel.hidden = true; panel.replaceChildren(); })], 'gpt-head');
+    panel.replaceChildren(head, ...errors.map(error => el('p', error, 'gpt-error')));
+    for (const action of actions) {
+      const row = el('article', undefined, 'gpt-action');
+      const state = el('p', '', 'gpt-state');
+      const mark = (text, bad = false) => { state.textContent = text; state.dataset.error = String(bad); };
+      const go = button(action.type === 'order' ? 'Buka form pesanan' : action.type === 'pay' ? 'Catat bayar' : 'Catat antar',
+        () => runGptAction(action, row, mark).catch(() => mark('Data pesanan belum bisa dimuat. Coba lagi.', true)));
+      row.append(el('p', describeAction(action)), state, block([go], 'ops-actions'));
+      panel.append(row);
+    }
+    panel.scrollIntoView({block:'start'});
+  }
+
+  function gptImport() {
+    const date = today();
+    const box = el('textarea');
+    box.name = 'gpt_text';
+    box.rows = 8;
+    box.required = true;
+    box.placeholder = 'Tempel jawaban ChatGPT di sini (blok JSON)';
+    const wrap = el('label', 'Hasil dari ChatGPT');
+    wrap.append(box);
+    const copy = button('Salin instruksi untuk ChatGPT', async () => {
+      try { await navigator.clipboard.writeText(gptInstructions(products, date)); copy.textContent = 'Instruksi disalin ✓'; }
+      catch { copy.textContent = 'Salin gagal · pilih teks di bawah'; }
+    });
+    const howTo = el('details');
+    howTo.append(el('summary', 'Cara pakai'), el('p', '1. Salin instruksi lalu kirim ke ChatGPT sekali di awal percakapan. '
+      + '2. Tulis pesanan, bayar, atau antar seperti biasa di ChatGPT. 3. Salin blok JSON jawabannya dan tempel di sini. '
+      + 'Tidak ada yang tersimpan sebelum Anda menekan Simpan di setiap form.'), el('p', gptInstructions(products, date), 'ops-copy'));
+    showDialog('Tempel dari GPT', [block([copy], 'ops-actions'), howTo, wrap], async data => {
+      const result = parseGptText(data.get('gpt_text'), products, date);
+      if (!result.actions.length) throw new Error(result.errors.join(' '));
+      return () => renderGptResults(result);
+    });
+    const save = dialogForm.querySelector('button:not([type])');
+    save.textContent = 'Baca';
+    dialog.addEventListener('close', () => { save.textContent = 'Simpan'; }, {once:true});
+  }
+  $('gpt-import').addEventListener('click', () => { if (getSession()) gptImport(); });
+
   async function loadPrices() {
+
     const data = await request(root + 'pentol_products?select=sku,price');
     for (const row of data) prices[row.sku] = row.price;
   }

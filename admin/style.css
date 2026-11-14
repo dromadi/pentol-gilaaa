@@ -313,3 +313,17 @@ body { background: radial-gradient(1100px 480px at 105% -10%, #fbe7d9 0, transpa
 }
 #checkout-inbox:has(#inbox-list .ops-card) { background: linear-gradient(140deg, var(--peach-1), #ffe6d6); border-color: #f6c3a8; }
 #checkout-inbox > summary { font-size: 13px; }
+
+/* ===== Tempel dari GPT ===== */
+.head-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.gpt-results { margin: 0 0 18px; padding: 16px; border-radius: var(--radius); background: linear-gradient(140deg, #e6f2ea, #f3f8f1); border: 1px solid #cfe4d7; box-shadow: var(--shadow); }
+.gpt-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.gpt-head strong { color: var(--mint-ink); font-size: 15px; }
+.gpt-action { padding: 14px; margin-top: 10px; border-radius: 14px; background: var(--paper); border: 1px solid var(--line); }
+.gpt-action > p:first-child { color: #3a2b25; font-size: 13px; font-weight: 600; margin: 0; }
+.gpt-state { font-size: 12px; margin: 6px 0 0; color: var(--mint-ink); }
+.gpt-state:empty { display: none; }
+.gpt-state[data-error="true"], .gpt-error { color: #a44337; font-size: 12px; }
+#ops-dialog textarea { width: 100%; min-height: 150px; font-family: ui-monospace, monospace; font-size: 12px; }
+@media (max-width: 620px) { .head-actions { width: 100%; justify-content: stretch; } .head-actions button { flex: 1; } }
+.gpt-results, #order-form { scroll-margin-top: 92px; }

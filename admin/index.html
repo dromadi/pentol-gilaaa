@@ -7,9 +7,9 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src https://gnwzgiiarbxutattxhcy.supabase.co; base-uri 'none'; form-action 'none'; object-src 'none'">
 <meta name="referrer" content="no-referrer">
 <title>Admin · Pentol Gilaaa Surabaya</title>
-<link rel="stylesheet" href="style.css?v=ui-3">
+<link rel="stylesheet" href="style.css?v=gpt-1">
 <script defer src="vendor/jszip.min.js"></script>
-<script type="module" src="app.js?v=ui-4"></script>
+<script type="module" src="app.js?v=gpt-1"></script>
 </head>
 <body>
 <header class="app-header"><div class="bar">
@@ -84,8 +84,9 @@
 </div>
 </section>
 <section id="orders" class="panel" hidden>
-<div class="section-head"><div><p class="eyebrow">TRANSAKSI</p><h2 tabindex="-1">Pesanan</h2><p>Pantau pesanan dan tindak lanjut pelanggan.</p></div><button type="button" id="new-order" aria-controls="order-form" aria-expanded="false">+ Catat pesanan</button></div>
+<div class="section-head"><div><p class="eyebrow">TRANSAKSI</p><h2 tabindex="-1">Pesanan</h2><p>Pantau pesanan dan tindak lanjut pelanggan.</p></div><div class="head-actions"><button type="button" id="gpt-import" class="secondary">✦ Tempel dari GPT</button><button type="button" id="new-order" aria-controls="order-form" aria-expanded="false">+ Catat pesanan</button></div></div>
 <details id="checkout-inbox"><summary>Permintaan dari katalog <span id="inbox-count"></span></summary><div id="inbox-list"></div></details>
+<section id="gpt-results" class="gpt-results" aria-live="polite" hidden></section>
 <form id="order-form" class="editor" hidden>
 <h3 id="order-editor-title">Catat pesanan</h3><p>Isi pelanggan, lalu pilih varian dan batch.</p>
 <div class="fields">
