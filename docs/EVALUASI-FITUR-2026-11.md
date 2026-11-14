@@ -54,6 +54,14 @@ Pengujian B1–B3 (Chromium, Pixel 7, data tiruan dengan 8 jenis pesanan): pesan
 
 Sampai `stock-integrity-2026-11.sql` dijalankan di produksi, tombol **Koreksi** di Stok per Batch memanggil `pentol_correct_received`; jika fungsi itu belum ada (404), jumlah diterima disimpan langsung ke `pentol_batch_stock` dengan cek revisi, seperti form lama, dan tidak tercatat di riwayat. Alur barang masuk akhir pekan: Catat restok → Koreksi. Setelah migrasi berjalan, jalur sementara ini tidak terpakai (tulis langsung ditolak) dan bisa dihapus dari `admin/app.js`.
 
+## Upgrade UI/UX (paket 1–3)
+
+1. **Aksi langsung di kartu pesanan** (`orderButtons(order, target, context)` di `admin/operations.js`). Daftar pesanan: Antar / Bayar; Packing: Antar / Kabari diantar / Bayar; Tagihan: Bayar / Ingatkan via WA. Aksi jarang (Invoice, Jadwal antar, Edit, Batalkan, WA lain) di menu "⋯". Dialog bayar & antar = `payDialog` / `shipDialog`.
+2. **WhatsApp siap kirim** (`waTemplates`, `waNumber`, `waLink`). Nomor 08…/+62…/8… dinormalkan ke 62…; tombol hanya muncul bila kolom WhatsApp pesanan terisi. Template pengingat tagihan dan kabar pengantaran ada di satu tempat (`waTemplates`) agar mudah diubah. Kartu tagihan di Hari Ini juga punya tombol "Ingatkan WA".
+3. **Form Catat pesanan dengan − / + per varian** (`renderQuickPick`, `setSkuQuantity`, `allocate` di `admin/app.js`). Batch dan harga diatur otomatis (batch yang cukup dipakai utuh, kalau tidak dibagi; kekurangan stok membuka "Detail lain" dan memberi pesan). Tanggal, ongkir, catatan, rincian batch & harga, dan booking lama ada di "Detail lain". Mengubah jumlah satu varian hanya mengatur ulang baris varian itu dan mempertahankan harga yang sudah diubah.
+
+Diuji di Chromium HP dengan data tiruan: aksi utama per konteks, isi tautan WA, bayar 1 ketukan, − / + dan ketik jumlah, kekurangan stok, simpan pesanan (payload benar), edit pesanan lama, Tempel dari GPT, dan 11 halaman tanpa error.
+
 ## Input lewat ChatGPT (tahap 1: tempel)
 
 Keputusan: **aplikasi (Supabase) tetap sumber kebenaran**; ChatGPT hanya pintu masuk. Tidak ada data yang tersimpan tanpa konfirmasi admin di form aplikasi, sehingga semua validasi database tetap berlaku.

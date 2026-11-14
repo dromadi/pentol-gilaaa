@@ -7,9 +7,9 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src https://gnwzgiiarbxutattxhcy.supabase.co; base-uri 'none'; form-action 'none'; object-src 'none'">
 <meta name="referrer" content="no-referrer">
 <title>Admin · Pentol Gilaaa Surabaya</title>
-<link rel="stylesheet" href="style.css?v=gpt-1">
+<link rel="stylesheet" href="style.css?v=aksi-1">
 <script defer src="vendor/jszip.min.js"></script>
-<script type="module" src="app.js?v=gpt-1"></script>
+<script type="module" src="app.js?v=aksi-1"></script>
 </head>
 <body>
 <header class="app-header"><div class="bar">
@@ -88,20 +88,29 @@
 <details id="checkout-inbox"><summary>Permintaan dari katalog <span id="inbox-count"></span></summary><div id="inbox-list"></div></details>
 <section id="gpt-results" class="gpt-results" aria-live="polite" hidden></section>
 <form id="order-form" class="editor" hidden>
-<h3 id="order-editor-title">Catat pesanan</h3><p>Isi pelanggan, lalu pilih varian dan batch.</p>
+<h3 id="order-editor-title">Catat pesanan</h3>
+<div class="fields">
+<label>Nama pelanggan <input name="customer" maxlength="120" required></label>
+<label>WhatsApp <input name="contact" type="tel" maxlength="24" placeholder="08…"></label>
+<label>Jadwal antar <input name="delivery_on" type="date"></label>
+<label>Lokasi / alamat <input name="delivery_location" maxlength="200"></label>
+</div>
+<h4>Varian</h4>
+<div id="order-quick" class="order-quick" role="group" aria-label="Jumlah per varian"></div>
+<p id="order-estimate" class="order-estimate" aria-live="polite"></p>
+<details id="order-more" class="order-more"><summary>Detail lain · tanggal, ongkir, catatan, batch &amp; harga</summary>
 <div class="fields">
 <label>Tanggal pesanan <input name="order_date" type="date" required></label>
-<label>Nama pelanggan <input name="customer" maxlength="120" required></label>
-<label>Jadwal antar <input name="delivery_on" type="date"></label>
-<label>WhatsApp <input name="contact" type="tel" maxlength="24"></label>
-<label>Lokasi / alamat <input name="delivery_location" maxlength="200"></label>
 <label>Catatan pengantaran <input name="delivery_note" maxlength="500"></label>
 <label>Ongkir ditagih (Rp) <input name="shipping_charge" type="number" min="0" max="10000000" value="0" required></label>
 <label>Ongkir biaya toko (Rp) <input name="shipping_cost" type="number" min="0" max="10000000" value="0" required></label>
 </div>
-<h4>Item pesanan</h4><div id="order-items"></div><p id="order-estimate" class="order-estimate" aria-live="polite"></p>
-<p><button type="button" id="add-item" class="secondary">+ Tambah varian</button></p>
+<h4>Rincian batch &amp; harga</h4>
+<p class="order-hint">Diatur otomatis dari jumlah varian di atas. Ubah di sini hanya untuk batch atau harga khusus.</p>
+<div id="order-items"></div>
+<p><button type="button" id="add-item" class="secondary">+ Tambah baris batch</button></p>
 <label class="order-paid" id="existing-booking-option"><input type="checkbox" name="use_existing_booking"> Hubungkan ke booking lama yang sudah masuk stok batch</label>
+</details>
 <p class="form-actions"><button id="save-order">Simpan pesanan</button> <button type="button" id="cancel-order">Batal</button></p>
 </form>
 <div id="order-metrics" class="metrics summary-metrics" aria-label="Ringkasan periode pesanan"></div>

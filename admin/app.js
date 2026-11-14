@@ -1,5 +1,5 @@
 import { supabaseUrl, supabasePublishableKey } from './config.js';
-import { initOperations } from './operations.js?v=gpt-1';
+import { initOperations } from './operations.js?v=aksi-1';
 
 const products = new Map([
   ['UR','Pentol Urat'], ['PK','Pentol Kecil'], ['TP','Tahu Pentol'],
@@ -503,6 +503,8 @@ function resetOrderForm() {
   draftInbox = null;
   orderForm.reset();
   orderItems.replaceChildren();
+  $('order-quick').replaceChildren();
+  $('order-more').open = false;
   $('order-estimate').textContent = '';
   orderForm.hidden = true;
   $('new-order').setAttribute('aria-expanded', 'false');
@@ -530,6 +532,7 @@ function addOrderItem(item) {
     select.value = item.stock_id || '';
     line.querySelector('[name="quantity"]').value = item.quantity;
     line.querySelector('[name="unit_price"]').value = item.unit_price ?? '';
+    if (item.sku) line.dataset.sku = item.sku;
   }
   select.addEventListener('change', () => {
     const row = rows.find(item => item.id === select.value);
@@ -537,10 +540,86 @@ function addOrderItem(item) {
     updateOrderEstimate();
   });
   line.querySelector('button').addEventListener('click', () => {
-    if (!busy && orderItems.childElementCount > 1) { line.remove(); updateOrderEstimate(); }
+    if (!busy) { line.remove(); updateOrderEstimate(); }
   });
   orderItems.append(line);
   updateOrderEstimate();
+}
+
+// ===== Pilih varian dengan tombol − / +. Baris batch & harga diatur otomatis. =====
+const lineSku = line => rows.find(row => row.id === line.querySelector('select').value)?.sku || line.dataset.sku;
+
+// Bagi jumlah ke batch: satu batch yang cukup, kalau tidak dibagi; sisa tanpa batch dipilih admin.
+function allocate(sku, quantity, price) {
+  const batches = rows.filter(row => row.sku === sku);
+  const whole = batches.find(row => quantities(row)[3] >= quantity);
+  let remaining = quantity;
+  for (const batch of whole ? [whole] : batches) {
+    const take = Math.min(remaining, quantities(batch)[3]);
+    if (!take) continue;
+    addOrderItem({ stock_id:batch.id, quantity:take, unit_price:price, sku });
+    remaining -= take;
+    if (!remaining) break;
+  }
+  if (remaining) {
+    addOrderItem({ quantity:remaining, unit_price:price, sku });
+    $('order-more').open = true;
+    status('Stok ' + products.get(sku) + ' kurang ' + remaining + ' pack. Pilih batch untuk sisanya di Rincian batch & harga.', true);
+  }
+}
+
+function setSkuQuantity(sku, quantity) {
+  const lines = Array.from(orderItems.children).filter(line => lineSku(line) === sku);
+  const price = Number(lines[0]?.querySelector('[name="unit_price"]').value) || prices[sku];
+  lines.forEach(line => line.remove());
+  if ($('status').dataset.error === 'true' && $('status').textContent.startsWith('Stok ')) status('');
+  if (quantity > 0) allocate(sku, quantity, price);
+  renderQuickPick();
+  updateOrderEstimate();
+}
+
+function renderQuickPick() {
+  const counts = new Map();
+  for (const line of orderItems.children) {
+    const sku = lineSku(line);
+    if (sku) counts.set(sku, (counts.get(sku) || 0) + Number(line.querySelector('[name="quantity"]').value || 0));
+  }
+  $('order-quick').replaceChildren(...Array.from(products, ([sku, name]) => {
+    const count = counts.get(sku) || 0;
+    const free = rows.filter(row => row.sku === sku).reduce((sum, row) => sum + quantities(row)[3], 0);
+    const item = document.createElement('div');
+    item.className = 'quick-item' + (count ? ' selected' : free ? '' : ' empty');
+    const info = document.createElement('div');
+    const title = document.createElement('strong');
+    title.textContent = name;
+    const meta = document.createElement('small');
+    meta.textContent = 'Rp' + format.format(prices[sku]) + ' · sisa ' + format.format(free);
+    info.append(title, meta);
+    const stepper = document.createElement('div');
+    stepper.className = 'quick-stepper';
+    const minus = document.createElement('button');
+    minus.type = 'button';
+    minus.textContent = '−';
+    minus.disabled = !count;
+    minus.setAttribute('aria-label', 'Kurangi ' + name);
+    minus.addEventListener('click', () => setSkuQuantity(sku, count - 1));
+    const value = document.createElement('input');
+    value.type = 'number';
+    value.min = '0';
+    value.max = '1000';
+    value.inputMode = 'numeric';
+    value.value = count;
+    value.setAttribute('aria-label', 'Jumlah ' + name);
+    value.addEventListener('change', () => setSkuQuantity(sku, Math.max(0, Math.min(1000, Math.round(Number(value.value) || 0)))));
+    const plus = document.createElement('button');
+    plus.type = 'button';
+    plus.textContent = '+';
+    plus.setAttribute('aria-label', 'Tambah ' + name);
+    plus.addEventListener('click', () => setSkuQuantity(sku, count + 1));
+    stepper.append(minus, value, plus);
+    item.append(info, stepper);
+    return item;
+  }));
 }
 
 function orderRange(day, weekly) {
@@ -691,24 +770,9 @@ function openOrder(order = null, inboxEntry = null) {
   e.shipping_cost.value = order?.shipping_cost || 0;
   if (order) order.pentol_order_items.forEach(addOrderItem);
   else if (inboxEntry) {
-    for (const item of inboxEntry.items) {
-      const batches = rows.filter(row => row.sku === item.sku);
-      const wholeBatch = batches.find(row => quantities(row)[3] >= item.quantity);
-      let remaining = item.quantity;
-      for (const batch of wholeBatch ? [wholeBatch] : batches) {
-        const quantity = Math.min(remaining, quantities(batch)[3]);
-        if (!quantity) continue;
-        addOrderItem({ stock_id:batch.id, quantity, unit_price:prices[item.sku] });
-        remaining -= quantity;
-        if (!remaining) break;
-      }
-      if (remaining) {
-        addOrderItem({ quantity:remaining, unit_price:prices[item.sku] });
-        status('Sebagian stok belum tersedia. Pilih batch untuk sisa jumlah sebelum menyimpan.', true);
-      }
-    }
+    for (const item of inboxEntry.items) allocate(item.sku, item.quantity, prices[item.sku]);
   }
-  else addOrderItem();
+  renderQuickPick();
   orderForm.hidden = false;
   $('order-editor-title').textContent = order ? 'Edit pesanan · ' + order.customer : 'Catat pesanan';
   updateOrderEstimate();
@@ -717,7 +781,7 @@ function openOrder(order = null, inboxEntry = null) {
   e.customer.focus();
 }
 $('new-order').addEventListener('click', () => { if (orderForm.hidden) openOrder(); });
-$('add-item').addEventListener('click', () => { if (!busy) addOrderItem(); });
+$('add-item').addEventListener('click', () => { if (!busy) { addOrderItem(); renderQuickPick(); } });
 $('cancel-order').addEventListener('click', () => {
   if (busy) return;
   resetOrderForm();
@@ -729,7 +793,13 @@ $('refresh-orders').addEventListener('click', () => run($('refresh-orders'), asy
   await loadOrders();
   await ops.inbox();
 }));
-orderForm.addEventListener('input', updateOrderEstimate);
+orderForm.addEventListener('input', event => {
+  updateOrderEstimate();
+  if (orderItems.contains(event.target)) renderQuickPick();
+});
+orderForm.addEventListener('change', event => { if (orderItems.contains(event.target)) renderQuickPick(); });
+// Isian wajib di "Detail lain" yang tertutup: buka supaya browser bisa menunjukkan kesalahannya.
+orderForm.addEventListener('invalid', event => { if ($('order-more').contains(event.target)) $('order-more').open = true; }, true);
 orderDate.addEventListener('change', loadOrders);
 orderPeriod.addEventListener('change', loadOrders);
 $('previous-week').addEventListener('click', () => moveOrderWeek(-7));
@@ -740,6 +810,7 @@ orderForm.addEventListener('submit', event => {
   run($('save-order'), async () => {
     const customer = orderForm.elements.customer.value.trim();
     if (!customer) return status('Isi nama pelanggan.', true);
+    if (!orderItems.childElementCount) return status('Pilih minimal satu varian.', true);
     const items = Array.from(orderItems.children, line => ({
       stock_id:line.querySelector('select').value,
       quantity:Number(line.querySelector('[name="quantity"]').value),

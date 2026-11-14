@@ -327,3 +327,43 @@ body { background: radial-gradient(1100px 480px at 105% -10%, #fbe7d9 0, transpa
 #ops-dialog textarea { width: 100%; min-height: 150px; font-family: ui-monospace, monospace; font-size: 12px; }
 @media (max-width: 620px) { .head-actions { width: 100%; justify-content: stretch; } .head-actions button { flex: 1; } }
 .gpt-results, #order-form { scroll-margin-top: 92px; }
+
+/* ===== Paket 1–3: aksi langsung, WhatsApp, form pesanan dengan − / + ===== */
+.order-action-bar { display: flex; align-items: flex-start; gap: 6px; flex-wrap: wrap; }
+.order-action-bar .primary-actions { margin: 0; }
+.ops-card .order-action-bar { margin-top: 14px; }
+.primary-actions .primary-action { min-height: 40px; padding: 8px 16px; font-size: 12px; background: var(--wine); color: #fff; border-color: var(--wine); }
+.primary-actions .primary-action + .primary-action { background: var(--paper); color: var(--wine); border-color: #dcc7b4; }
+.wa-link { display: inline-flex; align-items: center; gap: 5px; min-height: 40px; padding: 8px 14px; border-radius: 999px; background: #e3f5ea; color: #1d6b45; border: 1px solid #bfe3cd; font-size: 12px; font-weight: 700; text-decoration: none; white-space: nowrap; }
+.wa-link::before { content: '✆'; font-size: 13px; }
+.wa-link:hover { background: #d3efdf; }
+.today-card li .wa-link { min-height: 30px; padding: 3px 10px; font-size: 11px; margin-top: 4px; }
+.more-actions { min-width: 0; position: relative; }
+.more-actions > summary { min-width: 44px; min-height: 40px; display: grid; place-items: center; padding: 0 12px; border-radius: 999px; font-size: 16px; line-height: 1; }
+.more-actions > summary::after { content: ''; }
+.more-actions[open] > .ops-actions { display: flex; flex-direction: column; align-items: stretch; margin-top: 8px; min-width: 170px; }
+.order-table .order-action-bar { min-width: 150px; }
+.order-table td[data-label="Aksi"] .ops-actions { display: flex; }
+
+.order-quick { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); gap: 8px; margin-bottom: 12px; }
+.quick-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 10px 10px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--paper); }
+.quick-item.selected { border-color: #9fcfb6; background: #f1faf4; }
+.quick-item strong { display: block; font-size: 13px; color: #3a2b25; }
+.quick-item small { color: var(--muted); font-size: 11px; }
+.quick-stepper { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.quick-stepper button { width: 40px; min-height: 40px; padding: 0; border-radius: 999px; font-size: 18px; background: var(--paper); color: var(--wine); border-color: #dcc7b4; }
+.quick-stepper button:hover { background: #f4ece2; }
+.quick-item.selected .quick-stepper button:last-child { background: var(--wine); color: #fff; border-color: var(--wine); }
+.quick-stepper input { width: 46px; min-height: 40px; padding: 4px; text-align: center; font-weight: 700; -moz-appearance: textfield; }
+.quick-stepper input::-webkit-inner-spin-button, .quick-stepper input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.order-more { margin: 4px 0 14px; padding: 12px 14px; border: 1px dashed #dcc7b4; border-radius: 14px; background: #fffaf2; }
+.order-more > summary { font-size: 12px; font-weight: 650; color: #80634a; }
+.order-more[open] > summary { margin-bottom: 14px; }
+.order-hint { font-size: 11px; margin: -6px 0 10px; }
+.order-estimate { font-size: 16px; }
+@media (max-width: 620px) {
+  .order-table td[data-label="Aksi"] .order-action-bar { min-width: 0; }
+  .primary-actions .primary-action, .wa-link { flex: 1 1 auto; justify-content: center; }
+  .order-action-bar .primary-actions { flex: 1; }
+}
+.quick-item.empty { opacity: .6; }

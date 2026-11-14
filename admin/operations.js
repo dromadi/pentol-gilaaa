@@ -182,35 +182,86 @@ export function initOperations({ $, request, status, products, prices, today, fo
       data => ({items:pending.map(i => ({stock_id:i.stock_id,quantity:Number(data.get(i.stock_id))})).filter(i => i.quantity)}), prefill.onDone);
   }
 
-  function orderButtons(order, target) {
+  // ===== Pesan WhatsApp siap kirim. Ubah teks di sini bila perlu. =====
+  const waTemplates = {
+    remind: order => 'Halo ' + order.customer + ', terima kasih sudah memesan Pentol Gilaaa 🙏\n'
+      + 'Ini pengingat tagihan invoice ' + invoiceNumber(order) + ':\n'
+      + '• Total ' + money(total(order)) + '\n• Sudah dibayar ' + money(paid(order)) + '\n• Sisa ' + money(balance(order)) + '\n\n'
+      + 'Mohon kabari kami bila sudah transfer. Terima kasih!',
+    delivering: order => 'Halo ' + order.customer + ', pesanan Pentol Gilaaa sedang diantar'
+      + (order.delivery_location ? ' ke ' + order.delivery_location : '') + ':\n'
+      + order.pentol_order_items.filter(i => i.shipped < i.quantity)
+        .map(i => '• ' + (products.get(stock(i.stock_id)?.sku) || 'Pesanan') + ' × ' + (i.quantity - i.shipped)).join('\n')
+      + '\n\n' + (balance(order) ? 'Sisa tagihan ' + money(balance(order)) + '.' : 'Pesanan sudah lunas.') + ' Terima kasih!'
+  };
+  // 08xx / +62 / 62 -> 62xxxxxxxx; null bila bukan nomor HP Indonesia yang wajar.
+  function waNumber(contact) {
+    let digits = String(contact ?? '').replace(/\D/g, '');
+    if (digits.startsWith('0')) digits = '62' + digits.slice(1);
+    else if (digits.startsWith('8')) digits = '62' + digits;
+    return /^62\d{8,13}$/.test(digits) ? digits : null;
+  }
+  function waLink(order, kind, text) {
+    const number = waNumber(order.contact);
+    if (!number) return null;
+    const link = el('a', text, 'wa-link');
+    link.href = 'https://wa.me/' + number + '?text=' + encodeURIComponent(waTemplates[kind](order));
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    return link;
+  }
+
+  // Aksi utama tampil langsung (Antar / Bayar / WA); aksi jarang dipakai di menu "⋯".
+  // context: 'packing' (daftar antar), 'receivables' (tagihan), atau kosong (daftar pesanan).
+  function orderButtons(order, target, context = '') {
     if (order.cancelled) { target.textContent = '—'; return; }
-    const actions = el('div', undefined, 'ops-actions');
-    actions.append(button('Invoice', () => showInvoice(order)));
-    if (!order.paid && balance(order)) {
-      actions.append(button('Catat bayar', () => payDialog(order)));
-    }
-    if (!order.delivered) {
-      actions.append(button('Jadwal antar', () => orderDialog('schedule', order, 'Jadwal antar · ' + order.customer,
-        [control('Tanggal antar', 'date', {type:'date', value:order.delivery_on || today(), required:false})],
-        data => ({delivery_on:data.get('date') || null}))));
-      actions.append(button('Catat pengantaran', () => shipDialog(order)));
-    }
-    if (!order.paid && !paid(order) && !order.pentol_order_items.some(i => i.shipped)) {
-      actions.append(button('Edit', () => {
+    const main = el('div', undefined, 'ops-actions primary-actions');
+    const extra = el('div', undefined, 'ops-actions');
+    const owes = !order.paid && balance(order) > 0;
+    const shipped = order.pentol_order_items.some(i => i.shipped);
+    const shipButton = button('Antar', () => shipDialog(order));
+    shipButton.setAttribute('aria-label', 'Catat pengantaran ' + order.customer);
+    const payButton = button('Bayar', () => payDialog(order));
+    payButton.setAttribute('aria-label', 'Catat bayar ' + order.customer);
+    const remind = owes && shipped ? waLink(order, 'remind', 'Ingatkan via WA') : null;
+    const notify = !order.delivered ? waLink(order, 'delivering', 'Kabari diantar') : null;
+    const primary = [];
+    if (context === 'receivables') primary.push(owes && payButton, remind);
+    else if (context === 'packing') primary.push(!order.delivered && shipButton, notify, owes && payButton);
+    else primary.push(!order.delivered && shipButton, owes && payButton);
+    const shown = primary.filter(Boolean);
+    shown.forEach(node => { if (node.tagName === 'BUTTON') node.classList.add('primary-action'); });
+    if (!shown.length) shown.push(button('Invoice', () => showInvoice(order)));
+    main.append(...shown);
+    const rest = [];
+    if (!shown.some(node => node.textContent === 'Invoice')) rest.push(button('Invoice', () => showInvoice(order)));
+    if (!order.delivered) rest.push(button('Jadwal antar', () => orderDialog('schedule', order, 'Jadwal antar · ' + order.customer,
+      [control('Tanggal antar', 'date', {type:'date', value:order.delivery_on || today(), required:false})],
+      data => ({delivery_on:data.get('date') || null}))));
+    if (!order.delivered && !shown.includes(shipButton)) rest.push(shipButton);
+    if (owes && !shown.includes(payButton)) rest.push(payButton);
+    if (remind && !shown.includes(remind)) rest.push(remind);
+    if (notify && !shown.includes(notify)) rest.push(notify);
+    if (!order.paid && !paid(order) && !shipped) {
+      rest.push(button('Edit', () => {
         selectView('orders');
         openOrder(order);
       }));
-      actions.append(button('Batalkan', () => orderDialog('cancel', order, 'Batalkan pesanan · ' + order.customer,
+      rest.push(button('Batalkan', () => orderDialog('cancel', order, 'Batalkan pesanan · ' + order.customer,
         [el('p', 'Stok yang dipesan akan dilepas. Riwayat pesanan tetap tampil dengan status Batal.')], () => ({}))));
     }
-    if (target.tagName === 'TD') {
-      const menu = el('details', undefined, 'action-menu');
-      const summary = el('summary', 'Kelola');
-      summary.setAttribute('aria-label', 'Kelola pesanan ' + order.customer);
-      menu.append(summary, actions);
-      target.append(menu);
-    } else target.append(actions);
+    extra.append(...rest);
+    const more = el('details', undefined, 'action-menu more-actions');
+    const summary = el('summary', '⋯');
+    summary.setAttribute('aria-label', 'Aksi lain untuk ' + order.customer);
+    more.append(summary, extra);
+    const bar = el('div', undefined, 'order-action-bar');
+    bar.append(main);
+    if (rest.length) bar.append(more);
+    target.append(bar);
   }
+
+
 
   function renderImage(lines, width, minHeight) {
     const canvas = document.createElement('canvas');
@@ -558,7 +609,12 @@ export function initOperations({ $, request, status, products, prices, today, fo
       // "Bisa dikemas" tidak mengulang daftar nama dari "Perlu diantar".
       if (records.length && records !== ready) {
         const preview = el('ul');
-        preview.append(...records.slice(0, 3).map(record => el('li', describe(record))));
+        preview.append(...records.slice(0, 3).map(record => {
+          const item = el('li', describe(record));
+          const wa = isMoney ? waLink(record, 'remind', 'Ingatkan WA') : null;
+          if (wa) item.append(' ', wa);
+          return item;
+        }));
         if (records.length > 3) preview.append(el('li', '+' + (records.length - 3) + ' lainnya', 'today-more'));
         card.append(preview);
       }
@@ -602,7 +658,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
           el('p', days === null ? 'Tanggal antar belum tercatat'
             : 'Antar tercatat ' + deliveryDay.format(new Date(order.delivered_at)) + ' · ' + days + ' hari'),
           el('p', 'Total ' + money(total(order)) + ' · Dibayar ' + money(paid(order)) + ' · Sisa ' + money(balance(order))));
-        orderButtons(order, item);
+        orderButtons(order, item, 'receivables');
         customer.append(item);
       }
       target.append(customer);
@@ -656,7 +712,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
           const name = label(item);
           totals.set(name,(totals.get(name) || 0) + item.quantity-item.shipped);
         }
-        orderButtons(order, card);
+        orderButtons(order, card, 'packing');
         output.append(card);
       }
       if (totals.size) output.prepend(table(['Varian / batch','Pack dikemas'],[...totals],''));
