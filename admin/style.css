@@ -432,3 +432,11 @@ body { background: radial-gradient(1100px 480px at 105% -10%, #fbe7d9 0, transpa
   #inbox-list .ops-card p { margin: 3px 0; }
 }
 #finance-body .report-chart h3, #finance-body .report-headline h3 { margin-top: 0; }
+
+/* ===== Badge navigasi & tombol pasang aplikasi ===== */
+.nav-badge { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: #d9432f; color: #fff; font-size: 11px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; box-shadow: 0 0 0 2px var(--paper); }
+#admin-menu .nav-badge { margin-left: auto; box-shadow: none; }
+.bottom-nav button { position: relative; }
+.bottom-nav .nav-badge { position: absolute; top: 4px; left: calc(50% + 6px); }
+#install-app { font-size: 12px; font-weight: 700; color: var(--wine); padding: 6px 10px; min-height: 36px; }
+@media (display-mode: standalone) { #install-app { display: none !important; } }

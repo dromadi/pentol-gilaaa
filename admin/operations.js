@@ -1,6 +1,6 @@
 import { closeDaySheets, closeDayWorkbook } from './close-day.js?v=1';
 import { invoiceContent, invoicePdf } from './invoice.js?v=1';
-import { openReconciliation, reconciliationRows } from './reconcile.js?v=4';
+import { openReconciliation, reconciliationRows, groupBy } from './reconcile.js?v=5';
 import { parseGptText, gptInstructions } from './gpt.js?v=1';
 
 export function initOperations({ $, request, status, products, prices, today, format,
@@ -358,7 +358,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
         el('p', lines.join('\n'), 'ops-copy'), block(actions, 'ops-actions'), feedback
       ];
       if (!fresh.excel_invoice_no && /^PG-[0-9]{8}-[0-9]{3,9}$/i.test(matched)) {
-        if (Object.hasOwn(fresh, 'excel_invoice_no')) {
+        if (Object.prototype.hasOwnProperty.call(fresh, 'excel_invoice_no')) {
           const saveReference = button('Simpan nomor Excel', async () => {
             saveReference.disabled = true;
             try {
@@ -649,7 +649,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
     };
     const sorted = orders.map(order => ({order,days:age(order)}))
       .sort((a,b) => (b.days ?? -1) - (a.days ?? -1));
-    const customers = Map.groupBy(sorted, ({order}) =>
+    const customers = groupBy(sorted, ({order}) =>
       JSON.stringify([order.customer.trim().replace(/\s+/g,' ').toLocaleLowerCase('id'), (order.contact || '').replace(/\D/g,'')]));
     const summary = el('strong', money(orders.reduce((sum, order) => sum + balance(order), 0)) + ' total sisa tagihan');
     const reload = button('Muat ulang piutang', () => open('receivables'));
@@ -1249,5 +1249,14 @@ export function initOperations({ $, request, status, products, prices, today, fo
     $('inbox-count').textContent='';
   }
 
-  return { total, paymentLabel, deliveryLabel, orderButtons, mutate, errorMessage, loadPrices, inbox, open, clear };
+  // Angka kecil untuk navigasi: permintaan katalog baru dan antaran yang lewat jadwal.
+  async function badgeCounts() {
+    const [requests, late] = await Promise.all([
+      list('pentol_inbox?select=id', '&status=eq.pending&order=id'),
+      list('pentol_orders?select=id', '&cancelled=eq.false&delivered=eq.false&delivery_on=lt.' + today() + '&order=id')
+    ]);
+    return { requests: requests.length, late: late.length };
+  }
+
+  return { badgeCounts, total, paymentLabel, deliveryLabel, orderButtons, mutate, errorMessage, loadPrices, inbox, open, clear };
 }

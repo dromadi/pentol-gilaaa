@@ -4,17 +4,24 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src https://gnwzgiiarbxutattxhcy.supabase.co; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src https://gnwzgiiarbxutattxhcy.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
 <meta name="referrer" content="no-referrer">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#411c1b">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Pentol Admin">
 <title>Admin · Pentol Gilaaa Surabaya</title>
-<link rel="stylesheet" href="style.css?v=ux-5">
+<link rel="stylesheet" href="style.css?v=app-6">
 <script defer src="vendor/jszip.min.js"></script>
-<script type="module" src="app.js?v=ux-5"></script>
+<script type="module" src="app.js?v=app-6"></script>
 </head>
 <body>
 <header class="app-header"><div class="bar">
 <a class="brand" href="../"><span class="brand-mark" aria-hidden="true">pg.</span><span>Pentol Gilaaa<small>Surabaya</small></span></a>
-<div class="header-actions"><span id="business-date"></span><a href="../" target="_blank" rel="noopener">Lihat katalog ↗</a><button id="logout" class="text-button" hidden>Keluar</button></div>
+<div class="header-actions"><span id="business-date"></span><button id="install-app" class="text-button" type="button" hidden>⬇ Pasang aplikasi</button><a href="../" target="_blank" rel="noopener">Lihat katalog ↗</a><button id="logout" class="text-button" hidden>Keluar</button></div>
 </div></header>
 <main class="wrap admin-main">
 <h1 class="sr-only">Admin Pentol Gilaaa</h1>

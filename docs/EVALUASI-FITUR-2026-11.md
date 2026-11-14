@@ -44,6 +44,7 @@ Ukurannya: apakah pekerjaan harian (terima pesanan → kemas & antar → terima 
 | B2 | **Diperbaiki.** "Diantar, belum lunas" berarti belum lunas dan sudah ada pack yang diantar. Definisi yang sama dipakai di Hari Ini, Ringkasan Piutang, dan Packing. Pesanan antar sebagian diberi tanda "antar sebagian". Sisa yang ditampilkan adalah sisa seluruh pesanan |
 | B6 | **Diperbaiki** (`stock-integrity-2026-11.sql`). Hak tulis langsung admin ke `pentol_batch_stock` dicabut. Diterima hanya bertambah lewat Terima barang dari PO; koreksi lewat `pentol_correct_received` (alasan wajib, tidak boleh di bawah jumlah diantar, tidak boleh tanggal masa depan, cek revisi) dan tercatat di Riwayat Perubahan. Form stok kini hanya untuk koreksi Diterima; "Tambah stok batch" diganti "Catat restok →" |
 | B7 | **Diperbaiki.** Rekonsiliasi tidak lagi bisa menaikkan booking (`pentol_reconcile_with_history` menolak jenis `stock`; UI menampilkan "Excel punya booking N pack yang belum jadi pesanan · catat di menu Pesanan"). Booking lama tanpa pesanan ditampilkan di Stok per Batch dan dibereskan lewat Catat pesanan → Pakai booking lama |
+| B8 | **Diperbaiki.** `Map.groupBy` diganti `groupBy()` di `admin/reconcile.js` (dipakai juga oleh Tagihan), `Object.hasOwn` diganti `hasOwnProperty`. Diuji di Chromium dengan kedua fungsi dihapus (simulasi HP lama): Tagihan tampil normal |
 | Lainnya | Belum dikerjakan |
 
 Pengujian B6/B7: Postgres lokal (tulis langsung ditolak; rekonsiliasi stok ditolak; koreksi valid/tidak valid; PO, pesanan, antar, bayar tetap jalan) dan Chromium HP (form koreksi hanya memanggil RPC, indikator booking tanpa pesanan, tombol Catat restok).
@@ -71,6 +72,11 @@ Diuji di Chromium HP dengan data tiruan: aksi utama per konteks, isi tautan WA, 
 8. **Saran pelanggan langganan** (`loadCustomers`, `<datalist id="customer-list">`): 500 pesanan terakhir; memilih nama mengisi WhatsApp dan lokasi bila masih kosong.
 
 Diuji di Chromium HP dengan data tiruan (filter URL per tombol, Batalkan/arsip setelah 6 detik, isi otomatis pelanggan, warna stok, navigasi Restok, laporan & grafik) plus seluruh uji sebelumnya (11 halaman, Tempel dari GPT, aksi & form − / +, navigasi tab) tanpa error.
+
+## Pasang sebagai aplikasi & badge navigasi
+
+- **PWA:** `admin/manifest.webmanifest`, ikon di `admin/icons/`, `admin/sw.js`. Service worker **tidak menyimpan cache** (supaya versi baru selalu termuat); ia hanya menampilkan halaman "Tidak ada koneksi" saat offline. CSP ditambah `manifest-src 'self'; worker-src 'self'`. Tombol "⬇ Pasang aplikasi" muncul di header bila browser mendukung (`beforeinstallprompt`); di iPhone: Bagikan → Tambahkan ke Layar Utama. Chrome melaporkan 0 galat kelayakan pasang.
+- **Badge:** `badgeCounts()` (operations.js) + `refreshBadges()` (app.js): Pesanan = permintaan katalog menunggu, Hari Ini = antaran yang lewat jadwal. Diperbarui saat masuk, tiap 2 menit, saat aplikasi dibuka lagi, dan setelah perubahan pesanan; jumlahnya juga di judul tab, mis. "(3) Hari Ini".
 
 ## Input lewat ChatGPT (tahap 1: tempel)
 

@@ -1,5 +1,5 @@
 import { supabaseUrl, supabasePublishableKey } from './config.js';
-import { initOperations } from './operations.js?v=ux-5';
+import { initOperations } from './operations.js?v=app-6';
 
 const products = new Map([
   ['UR','Pentol Urat'], ['PK','Pentol Kecil'], ['TP','Tahu Pentol'],
@@ -174,6 +174,9 @@ function endSession(message) {
   orderSearch.value = '';
   orderStatus.value = 'all';
   setOrderChip('action');
+  clearInterval(badgeTimer);
+  badgeTotal = 0;
+  document.querySelectorAll('.nav-badge').forEach(badge => badge.remove());
   customerBook = null;
   $('customer-list').replaceChildren();
   $('order-metrics').replaceChildren();
@@ -385,6 +388,7 @@ async function showDashboard() {
   $('logout').hidden = false;
   status('');
   selectView(currentView);
+  startBadges();
 }
 
 login.addEventListener('submit', event => {
@@ -537,10 +541,10 @@ function selectView(view, packingMode) {
   menuButtons.forEach(tab => tab.setAttribute('aria-pressed', String(tab.dataset.view === navView)));
   document.querySelectorAll('.admin-content > .panel').forEach(panel => { panel.hidden = panel.id !== view; });
   renderSubtabs(group, view);
-  const navLabel = Array.from(menuButtons).find(tab => tab.dataset.view === navView).querySelector('span:last-child').textContent;
+  const navLabel = Array.from(menuButtons).find(tab => tab.dataset.view === navView).querySelector('span:not(.nav-icon):not(.nav-badge)').textContent;
   const subLabel = group ? viewGroups[group].find(([id]) => id === view)[1] : '';
   $('mobile-view-label').textContent = navLabel;
-  document.title = (subLabel && subLabel !== navLabel ? subLabel + ' · ' : '') + navLabel + ' · Admin Pentol Gilaaa';
+  document.title = (badgeTotal ? '(' + badgeTotal + ') ' : '') + (subLabel && subLabel !== navLabel ? subLabel + ' · ' : '') + navLabel + ' · Admin Pentol Gilaaa';
   syncQuickNav(navView);
   if (isMobile()) {
     setMenuExpanded(false);
@@ -831,6 +835,7 @@ function updateOrderEstimate() {
 }
 
 async function refreshAfterOrder(message) {
+  refreshBadges();
   try {
     await loadRows();
     await loadOrders();
@@ -974,6 +979,58 @@ const ops = initOperations({
   getRows:() => rows, getSession:() => session, openOrder,
   refresh:refreshAfterOrder, selectView, loadRows
 });
+
+// ===== Badge angka di navigasi =====
+let badgeTimer;
+let badgeTotal = 0;
+async function refreshBadges() {
+  if (!session) return;
+  const token = session;
+  let counts;
+  try { counts = await ops.badgeCounts(); } catch { return; }
+  if (session !== token) return;
+  const marks = { orders:[counts.requests, ' permintaan baru'], today:[counts.late, ' antaran terlambat'] };
+  for (const [view, [count, text]] of Object.entries(marks)) {
+    for (const button of document.querySelectorAll(`.bottom-nav [data-go="${view}"], #admin-menu [data-view="${view}"]`)) {
+      button.querySelector('.nav-badge')?.remove();
+      button.removeAttribute('aria-description');
+      if (!count) continue;
+      const badge = document.createElement('span');
+      badge.className = 'nav-badge';
+      badge.textContent = count > 99 ? '99+' : String(count);
+      badge.setAttribute('aria-hidden', 'true');
+      button.append(badge);
+      button.setAttribute('aria-description', count + text);
+    }
+  }
+  const total = counts.requests + counts.late;
+  badgeTotal = total;
+  document.title = document.title.replace(/^\(\d+\+?\) /, '');
+  if (total) document.title = '(' + total + ') ' + document.title;
+}
+function startBadges() {
+  clearInterval(badgeTimer);
+  refreshBadges();
+  badgeTimer = setInterval(refreshBadges, 120_000);
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshBadges(); });
+
+// ===== Pasang sebagai aplikasi di HP =====
+let installPrompt = null;
+addEventListener('beforeinstallprompt', event => {
+  event.preventDefault();
+  installPrompt = event;
+  $('install-app').hidden = false;
+});
+$('install-app').addEventListener('click', async () => {
+  if (!installPrompt) return;
+  installPrompt.prompt();
+  await installPrompt.userChoice.catch(() => null);
+  installPrompt = null;
+  $('install-app').hidden = true;
+});
+addEventListener('appinstalled', () => { $('install-app').hidden = true; });
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 
 async function restoreSession() {
   if (!configured) {

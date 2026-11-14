@@ -1,3 +1,14 @@
+// Pengganti Map.groupBy (Chrome 117+) agar jalan di HP Android lama.
+export function groupBy(list, key) {
+  const groups = new Map();
+  for (const item of list) {
+    const name = key(item);
+    if (groups.has(name)) groups.get(name).push(item);
+    else groups.set(name, [item]);
+  }
+  return groups;
+}
+
 const normalize = value => String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
 const whole = value => value !== '' && value != null && /^\d+$/.test(String(value)) && Number.isSafeInteger(Number(value)) ? Number(value) : null;
 const batchCode = value => /^batch[ -]?0*(\d+)$/i.test(String(value).trim())
@@ -85,7 +96,7 @@ export function readTargets(sheets, products) {
   const orders = [];
   if (sheets.has('Pesanan') && sheets.has('Packing')) {
     const lines = records(sheets.get('Pesanan'), ['ID', 'Pelanggan', 'Produk', 'Qty pack', 'Status pesanan']);
-    const groups = Map.groupBy(lines.filter(row => row.id && normalize(row['status pesanan']) === 'aktif'), row => row.id);
+    const groups = groupBy(lines.filter(row => row.id && normalize(row['status pesanan']) === 'aktif'), row => row.id);
     const packing = records(sheets.get('Packing'), ['Pelanggan', 'Tagihan', 'Pembayaran diterima', 'Status packing']);
     for (const [reference, group] of groups) {
       const customer = group[0].pelanggan;
@@ -118,7 +129,7 @@ export function readTargets(sheets, products) {
 
 export function reconciliationRows(targets, stocks, orders, products, total, paid) {
   const byStock = new Map(stocks.map(row => [row.id, row]));
-  const byOrder = Map.groupBy(orders, order => normalize(order.customer));
+  const byOrder = groupBy(orders, order => normalize(order.customer));
   const stockRows = targets.stocks.map(target => {
     const matches = stocks.filter(row => batchCode(row.batch_code) === target.batch && row.sku === target.sku);
     const live = matches.length === 1 ? matches[0] : null;
@@ -175,8 +186,8 @@ export function reconciliationRows(targets, stocks, orders, products, total, pai
     }
     return { label, excel, app, status, action };
   });
-  const byId = Map.groupBy(invoiceCandidates, match => match.id);
-  const byReference = Map.groupBy(invoiceCandidates, match => normalize(match.reference));
+  const byId = groupBy(invoiceCandidates, match => match.id);
+  const byReference = groupBy(invoiceCandidates, match => normalize(match.reference));
   const invoiceMatches = new Map(invoiceCandidates.filter(match => byId.get(match.id).length === 1
     && byReference.get(normalize(match.reference)).length === 1).map(match => [match.id, match]));
   return { stockRows, orderRows, invoiceMatches };
