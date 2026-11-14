@@ -11,6 +11,7 @@ Katalog pelanggan (`/index.html`) memakai GitHub Pages. Area admin (`/admin/`) m
    4. `security-2026-11.sql` – perbaikan audit: batas checkout, katalog v2 dengan batas stok (boleh dijalankan ulang)
    5. `receipts-2026-11.sql` – penerimaan bertahap dari PO (boleh dijalankan ulang)
    6. `invoice-reference-2026-11.sql` – penyimpanan nomor invoice Excel (boleh dijalankan ulang)
+   7. `reconciliation-history-2026-11.sql` – riwayat koreksi Excel (boleh dijalankan ulang)
 2. Nonaktifkan pendaftaran mandiri di pengaturan Auth. Buat pengguna di **Authentication → Users** dan salin UUID pengguna.
 3. Daftarkan UUID tersebut lewat SQL Editor.
 
@@ -38,5 +39,9 @@ Jalankan hanya `receipts-2026-11.sql` di Supabase SQL Editor, lalu buka **Restok
 ### Aktifkan penyimpanan nomor invoice Excel
 
 Jalankan `invoice-reference-2026-11.sql` di Supabase SQL Editor. Di admin, bandingkan file pada **Rekonsiliasi Excel**, buka invoice untuk pesanan yang cocok, lalu pilih **Simpan nomor Excel**. Nomor invoice berformat `PG-YYYYMMDD-NNN` dapat disimpan satu kali per pesanan dan harus unik. Kode internal pesanan tetap digunakan untuk identifikasi di database.
+
+### Aktifkan riwayat koreksi Excel
+
+Jalankan `reconciliation-history-2026-11.sql` di Supabase SQL Editor. Koreksi dari **Rekonsiliasi Excel** akan meminta alasan dan tampil di **Riwayat Perubahan**. Pencatatan dimulai saat migrasi aktif. Riwayat menampilkan waktu WIB, ID admin, nilai sebelum dan sesudah, serta alasan.
 
 Riwayat audit dan catatan teknis: `../docs/AUDIT-2026-11.md`.

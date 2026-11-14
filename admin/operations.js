@@ -89,7 +89,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
   }
 
   function errorMessage(error) {
-    const known = /^(Booking lama |Pesanan |Isi 1|Periksa varian|Gabungkan varian|Varian batch |Pilih jumlah|Jumlah |Stok fisik|Nominal |Pilih 1|Varian tidak|PO tidak |Penerimaan |Nomor invoice )/;
+    const known = /^(Booking lama |Pesanan |Isi 1|Periksa varian|Gabungkan varian|Varian batch |Pilih jumlah|Jumlah |Stok fisik|Nominal |Pilih 1|Varian tidak|PO tidak |Penerimaan |Nomor invoice |Alasan koreksi |Stok berubah )/;
     return known.test(error.message) ? error.message : 'Perubahan belum terkonfirmasi. Muat ulang daftar sebelum mencoba lagi.';
   }
 
@@ -704,6 +704,32 @@ export function initOperations({ $, request, status, products, prices, today, fo
     render();
   }
 
+  const historyPath = 'pentol_reconciliation_history';
+  async function history(target) {
+    const session = getSession();
+    target.textContent = 'Memuat riwayat…';
+    let entries;
+    try {
+      entries = await request(root + historyPath + '?select=*&order=id.desc&limit=100');
+    } catch (error) {
+      if (error.status !== 404) throw error;
+      if (getSession() === session) target.textContent = 'Riwayat tersedia setelah migrasi rekonsiliasi dijalankan di Supabase.';
+      return;
+    }
+    if (getSession() !== session) return;
+    const time = new Intl.DateTimeFormat('id-ID',{dateStyle:'medium',timeStyle:'short',timeZone:'Asia/Jakarta'});
+    const describe = value => {
+      if ('booking' in value) return 'Booking ' + value.booking + ' pack · Sisa jual ' + value.sisa_jual + ' pack';
+      if ('pack_diantar' in value) return value.pack_diantar + ' pack diantar · ' + (value.antar_selesai ? 'Selesai' : 'Belum selesai');
+      return 'Dibayar ' + money(value.dibayar) + ' · Sisa ' + money(value.sisa_tagihan);
+    };
+    const actions = {stock:'Stok',ship:'Pengantaran',pay:'Pembayaran'};
+    target.replaceChildren(table(['Waktu WIB','Admin (ID)','Data','Sebelum','Sesudah','Alasan'],
+      entries.map(row => [time.format(new Date(row.changed_at)),row.changed_by,
+        actions[row.action] + ' · ' + row.label,describe(row.before_value),describe(row.after_value),row.reason]),
+      'Belum ada koreksi yang tercatat.'));
+  }
+
   function reconcile(target) {
     const file = el('input');
     file.type = 'file';
@@ -722,9 +748,13 @@ export function initOperations({ $, request, status, products, prices, today, fo
       result.replaceChildren();
       feedback.textContent = 'Membandingkan Excel dan aplikasi…';
       try {
-        const [targets, orders] = await Promise.all([
+        const [targets, orders, historyAvailable] = await Promise.all([
           openReconciliation({ file:file.files[0], products }),
-          orderQuery('')
+          orderQuery(''),
+          request(root + historyPath + '?select=id&limit=1').then(() => true).catch(error => {
+            if (error.status === 404) return false;
+            throw error;
+          })
         ]);
         await loadRows();
         if (id !== generation || getSession() !== session || !target.contains(file)) return;
@@ -747,20 +777,28 @@ export function initOperations({ $, request, status, products, prices, today, fo
                     nodes.push(el('p', 'Catat penerimaan sebesar ' + money(amount) + '.'));
                     nodes.push(control('Tanggal pembayaran aktual', 'date', {type:'date',props:{max:today()}}));
                   }
+                  if (historyAvailable) nodes.push(control('Alasan koreksi', 'reason', {props:{maxLength:500}}));
                   const paymentId = type === 'pay' ? crypto.randomUUID() : null;
                   showDialog(detail, nodes, async data => {
                     if (id !== generation || getSession() !== session) throw new Error('Pesanan berubah. Bandingkan lagi.');
                     saving = true;
                     try {
-                      if (type === 'stock') {
+                      const payload = type === 'stock' ? {reserved}
+                        : type === 'pay' ? {payment_id:paymentId,date:data.get('date'),amount}
+                          : {items:live.pentol_order_items.filter(item => item.quantity > item.shipped)
+                            .map(item => ({stock_id:item.stock_id,quantity:item.quantity-item.shipped}))};
+                      if (historyAvailable) {
+                        const reason = String(data.get('reason') ?? '').trim();
+                        if (!reason) throw new Error('Alasan koreksi wajib diisi.');
+                        await request(root + 'rpc/pentol_reconcile_with_history', {method:'POST',body:{
+                          change_type:type,target:live.id,expected_revision:live.revision,payload,change_reason:reason
+                        }});
+                      } else if (type === 'stock') {
                         const updated = await request(root + 'pentol_batch_stock?id=eq.' + encodeURIComponent(live.id)
                           + '&revision=eq.' + live.revision, { method:'PATCH',
                           body:{reserved, revision:live.revision + 1}, prefer:'return=representation' });
                         if (updated?.length !== 1) throw new Error('Jumlah stok berubah. Bandingkan lagi.');
                       } else {
-                        const payload = type === 'pay' ? {payment_id:paymentId,date:data.get('date'),amount}
-                          : {items:live.pentol_order_items.filter(item => item.quantity > item.shipped)
-                            .map(item => ({stock_id:item.stock_id,quantity:item.quantity-item.shipped}))};
                         await mutate(type, live.id, live.revision, payload);
                       }
                     } finally {
@@ -774,7 +812,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
             }), 'Tidak ada baris pada bagian ini.')], 'reconcile-section');
         }
         result.replaceChildren(section('Stok per batch', stockRows), section('Pengantaran dan tagihan', orderRows));
-        feedback.textContent = message + file.files[0].name + ' · ' + (stockRows.length + orderRows.length) + ' baris dibandingkan.';
+        feedback.textContent = message + (historyAvailable ? '' : 'Riwayat koreksi belum aktif di Supabase. ') + file.files[0].name + ' · ' + (stockRows.length + orderRows.length) + ' baris dibandingkan.';
       } catch (error) {
         if (id === generation && target.contains(file)) feedback.textContent =
           message + 'Perbandingan gagal. ' + (error.status ? 'Coba muat ulang data admin.' : error.message);
@@ -792,7 +830,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
       el('p', 'Gunakan tab Tutup Hari, Pesanan, Packing, dan Booking dan Invoice B2 dari pembukuan Pentol Gilaaa. File dibaca di browser. Periksa pratinjau sebelum menerapkan koreksi.'), feedback, result);
   }
 
-  const views={today:overview,packing,purchasing,finance,promotions,reconcile};
+  const views={today:overview,packing,purchasing,finance,promotions,reconcile,history};
   async function open(view, packingMode) {
     if (!views[view]) return;
     const token=getSession();
