@@ -124,4 +124,22 @@ do $$ begin
 end $$;
 select pg_temp.expect_error($$select public.pentol_edit_order('cccccccc-0000-0000-0000-000000000002',4,'{"items":[]}','x')$$, 'sudah berubah');
 reset role;
+
+\echo '• tanggal antar: pencatatan terlambat memakai tanggal yang dipilih'
+set role authenticated;
+select set_config('request.uid','11111111-1111-1111-1111-111111111111',false);
+select public.pentol_order_action('create','cccccccc-0000-0000-0000-000000000003',null,
+  (select jsonb_build_object('date',current_date-3,'customer','Uli','items',jsonb_build_array(jsonb_build_object('stock_id',id,'quantity',2,'unit_price',36000)))
+   from public.pentol_batch_stock where batch_code='B3' and sku='JM'));
+select pg_temp.expect_error($$select public.pentol_ship_order('cccccccc-0000-0000-0000-000000000003',2,'{}',current_date+1)$$, 'masa depan');
+select pg_temp.expect_error($$select public.pentol_ship_order('cccccccc-0000-0000-0000-000000000003',2,'{}',current_date-10)$$, 'sebelum tanggal pesanan');
+select public.pentol_ship_order('cccccccc-0000-0000-0000-000000000003',2,
+  (select jsonb_build_object('items',jsonb_build_array(jsonb_build_object('stock_id',id,'quantity',2))) from public.pentol_batch_stock where batch_code='B3' and sku='JM'), current_date-2);
+do $$ begin
+  assert (select shipped_on from public.pentol_shipments where order_id='cccccccc-0000-0000-0000-000000000003') = current_date-2, 'catatan antar bertanggal pilihan';
+  assert ((select delivered_at at time zone 'Asia/Jakarta' from public.pentol_orders where id='cccccccc-0000-0000-0000-000000000003')::date) = current_date-2, 'delivered_at ikut tanggal';
+  assert (select delivered from public.pentol_orders where id='cccccccc-0000-0000-0000-000000000003'), 'selesai antar';
+  assert current_setting('pentol.ship_date', true) = '', 'pengaturan tanggal dibersihkan';
+end $$;
+reset role;
 \echo 'SQL: semua pemeriksaan lolos.'

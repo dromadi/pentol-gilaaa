@@ -333,6 +333,56 @@ export function adminTests(browser, devices, baseUrl) {
     await s.close();
   });
 
+  test('tanggal antar: bawaan hari ini; tanggal lain memakai pentol_ship_order; sebelum SQL ada pesan', async () => {
+    const day = shiftDay(-2);
+    const data = defaultData();
+    data.orders = [order('o2', 'Budi Terlambat', { order_date: shiftDay(-5), delivery_on: shiftDay(-2) })];
+    let s = await open(data);
+    await goSub(s.page, 'orders', 'Antar');
+    const row = s.page.locator('#delivery-body .ops-card', { hasText: 'Budi' }).first();
+    await row.locator('button', { hasText: /^Antar$/ }).click();
+    equal(await s.page.inputValue('#ops-form [name=ship_date]'), todayJakarta(), 'bawaan hari ini');
+    await s.page.fill('#ops-form [name=ship_date]', day);
+    await s.page.click('#ops-form > button:not([type])');
+    await s.page.waitForTimeout(500);
+    const late = s.data.writes.find(w => w.fn === 'pentol_ship_order');
+    equal([late?.body.ship_date, late?.body.target, 'date' in (late?.body.payload || {})], [day, 'o2', false], 'antar bertanggal lewat fungsi baru');
+    equal(s.data.writes.filter(w => w.body?.action === 'ship').length, 0, 'tidak lewat aksi lama');
+    await s.close();
+
+    const d2 = defaultData();
+    d2.missingRpc = ['pentol_ship_order'];
+    d2.orders = [order('o2', 'Budi Terlambat', { order_date: shiftDay(-5), delivery_on: shiftDay(-2) })];
+    s = await open(d2);
+    await goSub(s.page, 'orders', 'Antar');
+    await s.page.locator('#delivery-body .ops-card button', { hasText: /^Antar$/ }).first().click();
+    await s.page.fill('#ops-form [name=ship_date]', day);
+    await s.page.click('#ops-form > button:not([type])');
+    await s.page.waitForTimeout(400);
+    assert((await s.page.textContent('#ops-error')).includes('tanggal-antar-2026-11.sql'), 'pesan butuh SQL');
+    await s.page.fill('#ops-form [name=ship_date]', todayJakarta());
+    await s.page.click('#ops-form > button:not([type])');
+    await s.page.waitForTimeout(500);
+    assert(s.data.writes.some(w => w.body?.action === 'ship' && !('date' in w.body.payload)), 'hari ini tetap lewat jalur lama');
+    await s.close();
+  });
+
+  test('Tempel dari GPT: tanggal antar mengisi kotak antar', async () => {
+    const day = shiftDay(-1);
+    const data = defaultData();
+    data.orders = [order('o2', 'Budi Terlambat', { order_date: shiftDay(-5) })];
+    const s = await open(data);
+    await goSub(s.page, 'orders');
+    await s.page.click('#gpt-import');
+    await s.page.fill('#ops-form [name=gpt_text]', '{"aksi":[{"jenis":"antar","pelanggan":"Budi","tanggal":"' + day + '"}]}');
+    await s.page.click('#ops-form > button:not([type])');
+    await s.page.waitForTimeout(300);
+    await s.page.click('#gpt-results >> text=Catat antar');
+    await s.page.waitForTimeout(500);
+    equal(await s.page.inputValue('#ops-form [name=ship_date]'), day, 'tanggal dari GPT');
+    await s.close();
+  });
+
   test('packing dibagi per pesanan menurut jadwal (bug B4)', async () => {
     const data = defaultData();
     data.stock = [{ id:'s1', batch_code:'B1', sku:'UR', received_on:shiftDay(-5), received:4, reserved:5, delivered:0, revision:1 }];

@@ -15,6 +15,7 @@ Katalog pelanggan (`/index.html`) memakai GitHub Pages. Area admin (`/admin/`) m
    8. `stock-integrity-2026-11.sql` – stok hanya berubah lewat PO, pesanan, dan koreksi beralasan (boleh dijalankan ulang). **Wajib setelah no. 5 dan 7**, karena setelah ini barang masuk hanya bisa dicatat lewat Terima barang
    9. `operasional-2026-11.sql` – catatan pengiriman bertanggal, koreksi transaksi (batal bayar, kurangi antar, batal sisa), dan stok opname (boleh dijalankan ulang). Sebelum file ini dijalankan, tombol Koreksi dan Hitung stok tersembunyi dan laporan memakai tanggal pesanan
    10. `ubah-pesanan-2026-11.sql` – ubah pesanan yang sudah dibayar atau sebagian diantar (tambah/kurangi/ganti varian, harga, ongkir), tercatat di Riwayat Perubahan (boleh dijalankan ulang). **Setelah no. 9.** Sebelum file ini dijalankan, pesanan yang belum dibayar & belum diantar tetap bisa diubah; yang sudah dibayar/diantar menampilkan pesan bahwa SQL ini perlu dijalankan
+   11. `tanggal-antar-2026-11.sql` – antar bisa dicatat pada tanggal lain (pencatatan terlambat), memengaruhi laporan menurut tanggal antar (boleh dijalankan ulang). **Setelah no. 9.** Sebelum dijalankan, antar hanya bisa dicatat pada hari ini
 2. Nonaktifkan pendaftaran mandiri di pengaturan Auth. Buat pengguna di **Authentication → Users** dan salin UUID pengguna.
 3. Daftarkan UUID tersebut lewat SQL Editor.
 

@@ -191,6 +191,13 @@ Permintaan pemilik: pisahkan "Perlu tindakan" dari daftar lain, dan pisahkan Pac
 - **Tagihan**: tetap.
 - Di HP kelima sub menu muat satu baris (kelas `.subtabs.many`, teks boleh 2 baris). Membuka form pesanan dari ⋯ / Hari Ini tidak lagi memindahkan Perlu tindakan ↔ Semua pesanan (`toOrders`). Versi `pesanan-21`. Uji: `Pesanan: 5 sub menu…`.
 
+## Tanggal antar yang bisa diatur (14 Nov)
+
+Untuk mencatat antaran yang sudah lewat (misalnya rekap Excel 9–13 Nov) tanpa semuanya tercatat "hari ini".
+- Kotak **Antar** punya kolom **Tanggal antar** (bawaan hari ini, tidak boleh masa depan, tidak boleh sebelum tanggal pesanan). Dari **Tempel dari GPT** kolom `tanggal` mengisinya otomatis.
+- Hari ini: jalur lama (`pentol_order_action` 'ship'), tidak perlu SQL baru. Tanggal lain: `pentol_ship_order` dari **`admin/tanggal-antar-2026-11.sql`** (jalankan setelah operasional): mengatur `pentol.ship_date` selama transaksi sehingga trigger `pentol_log_shipment` menulis `shipped_on` = tanggal itu, dan `delivered_at` = siang WIB tanggal itu. Laporan (per tanggal antar), grafik mingguan, dan Tutup hari ikut tanggal itu. Stok tidak terpengaruh. Sebelum SQL dijalankan: pesan jelas, tidak ada yang tersimpan.
+- Uji: SQL `tanggal antar…`, browser `tanggal antar: bawaan hari ini…` dan `Tempel dari GPT: tanggal antar…`. Versi `tanggal-22`.
+
 ## Input lewat ChatGPT (tahap 1: tempel)
 
 Keputusan: **aplikasi (Supabase) tetap sumber kebenaran**; ChatGPT hanya pintu masuk. Tidak ada data yang tersimpan tanpa konfirmasi admin di form aplikasi, sehingga semua validasi database tetap berlaku.

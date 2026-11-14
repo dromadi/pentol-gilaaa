@@ -95,7 +95,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
   }
 
   function errorMessage(error) {
-    const known = /^(Booking lama |Pesanan |Isi 1|Periksa varian|Gabungkan varian|Varian batch |Pilih jumlah|Jumlah |Stok fisik|Nominal |Pilih 1|Varian tidak|PO tidak |Penerimaan |Nomor invoice |Alasan koreksi |Stok berubah |Teks tidak |Aksi \d|Tidak ada aksi)/;
+    const known = /^(Booking lama |Pesanan |Isi 1|Periksa varian|Gabungkan varian|Varian batch |Pilih jumlah|Jumlah |Stok fisik|Nominal |Pilih 1|Varian tidak|PO tidak |Penerimaan |Tanggal antar |Nomor invoice |Alasan koreksi |Stok berubah |Teks tidak |Aksi \d|Tidak ada aksi)/;
     return known.test(error.message) ? error.message : 'Perubahan belum terkonfirmasi. Muat ulang daftar sebelum mencoba lagi.';
   }
 
@@ -142,7 +142,19 @@ export function initOperations({ $, request, status, products, prices, today, fo
 
   function orderDialog(action, order, title, nodes, payload, onDone) {
     showDialog(title, nodes, async data => {
-      await mutate(action, order.id, order.revision, payload(data));
+      const body = payload(data);
+      const shipDay = action === 'ship' ? body.date : null;
+      if (action === 'ship') delete body.date;
+      if (shipDay && shipDay !== today()) {
+        // Antar bertanggal lain (pencatatan terlambat): butuh tanggal-antar-2026-11.sql.
+        try {
+          await request(root + 'rpc/pentol_ship_order', {method:'POST', body:{
+            target:order.id, expected_revision:order.revision, payload:body, ship_date:shipDay}});
+        } catch (error) {
+          if (error.status === 404) throw new Error('Tanggal antar selain hari ini aktif setelah tanggal-antar-2026-11.sql dijalankan di Supabase. Untuk sekarang pilih hari ini.');
+          throw error;
+        }
+      } else await mutate(action, order.id, order.revision, body);
       onDone?.();
       const mapped = excelInvoices.get(order.id);
       if (mapped?.revision === order.revision && ['pay', 'ship', 'schedule'].includes(action)) mapped.revision++;
@@ -186,8 +198,11 @@ export function initOperations({ $, request, status, products, prices, today, fo
     };
     const fields = pending.map(i => control(label(i), i.stock_id, {type:'number',value:value(i),props:{min:0,max:i.quantity-i.shipped}}));
     for (const [sku, rest] of wanted) if (rest > 0) notes.push(el('p', 'Dari GPT: ' + rest + ' pack ' + (products.get(sku) || sku) + ' tidak ada di sisa pesanan ini.'));
-    orderDialog('ship', order, 'Jumlah yang sudah diantar · ' + order.customer, [...notes, block(fields)],
-      data => ({items:pending.map(i => ({stock_id:i.stock_id,quantity:Number(data.get(i.stock_id))})).filter(i => i.quantity)}), prefill.onDone);
+    const first = order.order_date > today() ? today() : order.order_date;
+    const day = control('Tanggal antar', 'ship_date', {type:'date', value:prefill.date && prefill.date <= today() && prefill.date >= first ? prefill.date : today(),
+      props:{max:today(), min:first}});
+    orderDialog('ship', order, 'Jumlah yang sudah diantar · ' + order.customer, [...notes, day, block(fields)],
+      data => ({date:data.get('ship_date') || today(), items:pending.map(i => ({stock_id:i.stock_id,quantity:Number(data.get(i.stock_id))})).filter(i => i.quantity)}), prefill.onDone);
   }
 
   // ===== Pesan WhatsApp siap kirim. Ubah teks di sini bila perlu. =====
@@ -459,7 +474,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
     if (action.type === 'order') return 'Pesanan baru · ' + action.customer + ' · ' + list(action.items)
       + (action.deliveryOn ? ' · antar ' + action.deliveryOn : '') + (action.location ? ' · ' + action.location : '');
     if (action.type === 'pay') return 'Bayar · ' + (action.customer || 'Invoice ' + action.invoice) + ' · ' + money(action.amount) + ' · ' + action.date;
-    return 'Antar · ' + (action.customer || 'Invoice ' + action.invoice) + ' · ' + (action.items.length ? list(action.items) : 'semua sisa pesanan');
+    return 'Antar · ' + (action.customer || 'Invoice ' + action.invoice) + ' · ' + (action.items.length ? list(action.items) : 'semua sisa pesanan') + ' · ' + action.date;
   }
 
   async function runGptAction(action, row, mark) {
@@ -481,7 +496,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
       : await orderQuery('&delivered=eq.false'), action);
     const open = order => action.type === 'pay'
       ? payDialog(order, {amount:action.amount, date:action.date, onDone:() => mark('✓ Tersimpan')})
-      : shipDialog(order, {items:action.items, onDone:() => mark('✓ Tersimpan')});
+      : shipDialog(order, {items:action.items, date:action.date, onDone:() => mark('✓ Tersimpan')});
     if (!candidates.length) return mark(action.type === 'pay'
       ? 'Tidak ada pesanan belum lunas atas nama ini' : 'Tidak ada pesanan belum diantar atas nama ini', true);
     if (candidates.length === 1) { mark('Periksa lalu Simpan'); return open(candidates[0]); }
