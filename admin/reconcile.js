@@ -142,7 +142,7 @@ export function reconciliationRows(targets, stocks, orders, products, total, pai
     const ref = normalize(target.reference);
     const candidates = byOrder.get(normalize(target.customer)) || [];
     const invoice = /^\d+$/.test(ref) ? Number(ref) : null;
-    const exact = ref ? orders.filter(order => normalize(order.reference_code) === ref
+    const exact = ref ? orders.filter(order => normalize(order.excel_invoice_no) === ref || normalize(order.reference_code) === ref
       || (invoice !== null && Number(order.invoice_no) === invoice)) : [];
     const pool = exact.length ? exact : candidates;
     const matches = pool.filter(order => total(order) === target.amount && target.items.length
@@ -164,7 +164,7 @@ export function reconciliationRows(targets, stocks, orders, products, total, pai
     const app = live ? (live.delivered ? 'Diantar' : 'Belum selesai diantar') + ' · Sisa ' + rupiah(target.amount - received) : '—';
     if (duplicate || exact.length > 1 || (pool.length > 1 && !live)) status = 'Pencocokan ambigu';
     else if (live) {
-      if (ref) invoiceCandidates.push({id:live.id, revision:live.revision, reference:target.reference});
+      if (ref) invoiceCandidates.push({id:live.id, revision:live.revision, reference:target.reference.trim().toUpperCase()});
       const ship = target.delivered && !live.delivered;
       const amount = target.paid === null ? 0 : target.paid - received;
       if (target.paid !== null && (amount < 0 || target.paid > target.amount)) status = 'Kas berbeda · periksa riwayat';

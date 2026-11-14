@@ -1,5 +1,5 @@
 import { invoiceContent, invoicePdf } from './invoice.js?v=1';
-import { openReconciliation, reconciliationRows } from './reconcile.js?v=2';
+import { openReconciliation, reconciliationRows } from './reconcile.js?v=3';
 
 export function initOperations({ $, request, status, products, prices, today, format,
   tableRow, emptyRow, quantities, getRows, getSession, openOrder, refresh, selectView, loadRows }) {
@@ -89,7 +89,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
   }
 
   function errorMessage(error) {
-    const known = /^(Booking lama |Pesanan |Isi 1|Periksa varian|Gabungkan varian|Varian batch |Pilih jumlah|Jumlah |Stok fisik|Nominal |Pilih 1|Varian tidak|PO tidak |Penerimaan )/;
+    const known = /^(Booking lama |Pesanan |Isi 1|Periksa varian|Gabungkan varian|Varian batch |Pilih jumlah|Jumlah |Stok fisik|Nominal |Pilih 1|Varian tidak|PO tidak |Penerimaan |Nomor invoice )/;
     return known.test(error.message) ? error.message : 'Perubahan belum terkonfirmasi. Muat ulang daftar sebelum mencoba lagi.';
   }
 
@@ -247,8 +247,8 @@ export function initOperations({ $, request, status, products, prices, today, fo
       if (!session || getSession() !== session) return;
       if (!fresh) return status('Pesanan aktif tidak ditemukan. Muat ulang daftar.', true);
       const mapped = excelInvoices.get(fresh.id);
-      const number = mapped?.revision === fresh.revision ? mapped.reference
-        : String(fresh.invoice_no).padStart(5, '0');
+      const matched = mapped?.revision === fresh.revision ? mapped.reference : '';
+      const number = fresh.excel_invoice_no || matched || String(fresh.invoice_no).padStart(5, '0');
       const filename = 'Invoice-' + number.replace(/[^A-Za-z0-9_-]/g, '-');
       const {lines, reminder} = invoiceContent({
         number, customer:fresh.customer, shipping:fresh.shipping_charge,
@@ -268,9 +268,35 @@ export function initOperations({ $, request, status, products, prices, today, fo
         button('Unduh PNG', () => png(lines, filename))
       ];
       const nodes = [
-        el('p', mapped?.revision === fresh.revision ? 'Nomor dari Excel' : 'Nomor aplikasi · cocokkan Excel lewat Rekonsiliasi Excel.'),
+        el('p', fresh.excel_invoice_no ? 'Nomor Excel tersimpan'
+          : matched ? 'Nomor Excel untuk sesi ini'
+            : 'Nomor aplikasi · cocokkan Excel lewat Rekonsiliasi Excel.'),
         el('p', lines.join('\n'), 'ops-copy'), block(actions, 'ops-actions'), feedback
       ];
+      if (!fresh.excel_invoice_no && /^PG-[0-9]{8}-[0-9]{3,9}$/i.test(matched)) {
+        if (Object.hasOwn(fresh, 'excel_invoice_no')) {
+          const saveReference = button('Simpan nomor Excel', async () => {
+            saveReference.disabled = true;
+            try {
+              await request(root + 'rpc/pentol_save_excel_invoice', {method:'POST',body:{
+                order_id:fresh.id,expected_revision:fresh.revision,invoice_reference:matched
+              }});
+              if (getSession() !== session) return;
+              nodes[0].textContent = 'Nomor Excel tersimpan';
+              feedback.textContent = 'Nomor ' + matched + ' tersimpan untuk pesanan ini.';
+              saveReference.remove();
+              await refresh('Nomor invoice Excel tersimpan.');
+              if (!$('packing').hidden) open('packing');
+            } catch (error) {
+              feedback.textContent = errorMessage(error);
+              saveReference.disabled = false;
+            }
+          });
+          nodes.push(saveReference);
+        } else {
+          nodes.push(el('p', 'Penyimpanan permanen tersedia setelah migrasi nomor invoice di Supabase.'));
+        }
+      }
       if (reminder && fresh.delivered) {
         const message = el('textarea');
         message.readOnly = true;
