@@ -396,8 +396,36 @@ export function adminTests(browser, devices, baseUrl) {
     const s = await open(data);
     await goSub(s.page, 'finance');
     await s.page.waitForTimeout(500);
-    equal(await s.page.textContent('.report-number'), 'Rp72.000', 'hanya pengiriman dalam rentang tanggal');
+    equal(await s.page.textContent('[data-stat=sales] strong'), 'Rp72.000', 'hanya pengiriman dalam rentang tanggal');
     assert(!(await s.page.textContent('.report-chart h3')).includes('tanggal pesanan'), 'grafik menurut tanggal antar');
+    await s.close();
+  });
+
+  test('laporan: tombol periode, 4 angka, laba per varian; tutup hari langsung tampil + kirim WA', async () => {
+    const data = defaultData();
+    const t = todayJakarta();
+    data.shipments = [{ order_id: 'o6', stock_id: 's1', quantity: 2, unit_price: 36000, shipped_on: t }];
+    data.purchases = [{ batch_code:'BATCH-02', supplier:'', reference:'', ordered_on:shiftDay(-9), expected_on:null, shipping:0, packaging:0, other_cost:0,
+      pentol_purchase_items:[{ batch_code:'BATCH-02', sku:'UR', quantity:30, unit_cost:20000 }] }];
+    data.orders.find(o => o.id === 'o7').pentol_payments = [{ id:'p1', order_id:'o7', amount:50000, paid_on:t }];
+    const s = await open(data);
+    await goSub(s.page, 'finance');
+    await s.page.click('.period-chips >> text=Hari ini');
+    await s.page.waitForTimeout(500);
+    equal(await s.page.getAttribute('.period-chips button:has-text("Hari ini")', 'aria-pressed'), 'true', 'periode hari ini aktif');
+    equal(await s.page.inputValue('#finance [name=first]'), t, 'tanggal dari = hari ini');
+    equal(await s.page.textContent('[data-stat=sales] strong'), 'Rp72.000', 'penjualan');
+    equal(await s.page.textContent('[data-stat=profit] strong'), 'Rp32.000', 'laba = 72.000 − 2×20.000');
+    equal(await s.page.textContent('[data-stat=cash] strong'), 'Rp50.000', 'uang masuk');
+    const row = s.page.locator('#finance-body tr', { hasText: 'Pentol Urat' }).first();
+    assert((await row.textContent()).includes('Rp32.000'), 'laba per varian');
+    await goSub(s.page, 'finance', 'Tutup hari');
+    await s.page.waitForSelector('.close-section');
+    const text = await s.page.textContent('#closeDay-body');
+    for (const part of ['Gina Belum Bayar', 'Rp50.000', '2 pack', 'Dodi Besok']) assert(text.includes(part), 'rekap memuat ' + part);
+    const href = decodeURIComponent(await s.page.getAttribute('.close-wa', 'href'));
+    assert(href.includes('Uang masuk: Rp50.000') && href.includes('Pack keluar: 2') && href.includes('Antar besok: 1'), 'pesan WA');
+    assert(await s.page.isEnabled('text=⬇ Excel'), 'Excel siap tanpa pratinjau');
     await s.close();
   });
 

@@ -142,6 +142,14 @@ Masalah yang ditemukan dan perbaikannya (versi `stok-15`):
 - **Daftar PO campur aduk.** PO yang masih ditunggu tampil di atas (urut estimasi tiba), PO selesai dilipat di "PO selesai (n)". Tanggal ditulis "Sen, 16 Nov".
 - Uji baru: `stok & restok: barang dalam PO, form restok terisi, terima barang = sisa PO`.
 
+## Evaluasi per menu: Laporan (14 Nov)
+
+Perbaikan (versi `laporan-16`):
+- **Laba & harga:** tombol periode Hari ini · Minggu ini · Bulan ini · Bulan lalu (tanggal manual tetap ada). Kartu utama berisi 4 angka: Penjualan (barang diantar), Laba (setelah ongkir; "Belum lengkap" bila harga beli kurang), Uang masuk, Belum dibayar (dari pesanan periode itu). Tabel baru **Laba per varian** (diantar, penjualan, laba). Urutan: angka → laba per varian → grafik → rincian → harga jual → cadangan.
+- **Tutup hari:** langsung tampil tanpa tombol pratinjau dan ikut berganti saat tanggal diubah. Isinya: uang masuk (siapa saja), pack keluar per varian (tanggal antar dari `pentol_shipments` bila ada), sisa stok siap jual (yang habis dijadikan satu baris), siapa yang belum bayar, dan antar besok. Ada tombol **Kirim ke WA** (teks rekap, pilih kontak sendiri) dan **Excel** (isi file sama seperti sebelumnya).
+- Belum dikerjakan (perlu SQL): pencatatan biaya harian (bensin, plastik, es, listrik) supaya laba benar-benar bersih.
+- Uji baru: `laporan: tombol periode, 4 angka, laba per varian; tutup hari langsung tampil + kirim WA`. Mock kini melayani `pentol_payments`.
+
 ## Input lewat ChatGPT (tahap 1: tempel)
 
 Keputusan: **aplikasi (Supabase) tetap sumber kebenaran**; ChatGPT hanya pintu masuk. Tidak ada data yang tersimpan tanpa konfirmasi admin di form aplikasi, sehingga semua validasi database tetap berlaku.

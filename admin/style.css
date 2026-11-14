@@ -408,8 +408,8 @@ body { background: radial-gradient(1100px 480px at 105% -10%, #fbe7d9 0, transpa
 .report-headline .report-label { margin: 0; font-size: 12px; font-weight: 650; color: var(--mint-ink); }
 .report-headline .report-number { display: block; font: 700 clamp(36px, 6vw, 52px)/1.05 "Barlow Condensed", sans-serif; color: #17352f; margin: 6px 0; font-variant-numeric: tabular-nums; }
 .report-headline .report-sub { margin: 2px 0 0; font-size: 12px; color: #435c54; }
-.report-chart { padding: 18px 20px; border-radius: var(--radius); background: var(--paper); border: 1px solid var(--line); box-shadow: var(--shadow); margin-bottom: 14px; }
-.report-chart h3 { font-size: 13px; margin: 0 0 12px; }
+.report-chart, .report-variants { padding: 18px 20px; border-radius: var(--radius); background: var(--paper); border: 1px solid var(--line); box-shadow: var(--shadow); margin-bottom: 14px; }
+.report-chart h3, .report-variants h3 { font-size: 13px; margin: 0 0 12px; }
 .week-chart { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; height: 150px; align-items: end; }
 .week-bar { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; height: 100%; }
 .week-bar span { width: 100%; max-width: 64px; border-radius: 10px 10px 4px 4px; background: #e8d9c8; }
@@ -555,3 +555,30 @@ input[type="file"]::file-selector-button { margin-right: 10px; padding: 8px 14px
 .po-done { margin-top: 14px; }
 .po-done > summary { font-size: 13px; font-weight: 650; color: #80634a; padding: 8px 2px; }
 #purchasing-body > h3 { margin: 18px 0 4px; font-size: 14px; }
+
+/* Laporan: tombol periode, 4 angka utama, Tutup hari */
+.period-chips { display: flex; flex-wrap: wrap; gap: 8px; flex: 1 1 100%; }
+.period-chips button { border-radius: 999px; padding: 7px 14px; min-height: 36px; font-size: 13px; }
+.period-chips button[aria-pressed="true"] { background: var(--wine); color: #fff; border-color: var(--wine); }
+.report-headline .report-label { margin-bottom: 10px; }
+.report-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.report-stat { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line); min-width: 0; }
+.report-stat span { font-size: 12px; font-weight: 650; color: var(--muted, #6b5b55); }
+.report-stat strong { font: 700 clamp(22px, 5vw, 30px)/1.1 "Barlow Condensed", sans-serif; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.report-stat small { font-size: 11px; color: var(--muted, #6b5b55); }
+.report-stat[data-stat="profit"] { background: var(--mint); border-color: #cfe4d7; }
+.report-stat[data-stat="profit"] strong { color: #17352f; }
+@media (min-width: 900px) { .report-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.close-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.close-actions .wa-link, .close-actions button { border-radius: 999px; min-height: 44px; display: inline-flex; align-items: center; padding: 0 16px; }
+.close-summary > .report-stats { margin-bottom: 14px; }
+.close-section { padding: 14px 18px; margin: 0 0 12px; border-radius: var(--radius); background: var(--paper); border: 1px solid var(--line); box-shadow: var(--shadow); }
+.close-section h3 { margin: 0 0 8px; font-size: 14px; }
+.close-section ul { list-style: none; margin: 0; padding: 0; }
+.close-section li { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.close-section li:first-child { border-top: 0; }
+.close-section li strong { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.close-empty { margin: 0; font-size: 13px; color: var(--muted, #6b5b55); }
+.close-section li span { min-width: 0; }
+.period-chips { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); max-width: 520px; }
+.period-chips button { padding: 6px 4px; font-size: 12px; white-space: nowrap; }

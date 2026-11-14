@@ -1039,7 +1039,33 @@ export function initOperations({ $, request, status, products, prices, today, fo
     backupCard.append(el('h3', 'Cadangan data'),
       el('p', 'Semua pesanan, pembayaran, stok, PO, dan riwayat dalam satu file Excel. Simpan di Google Drive.'), backupText,
       button('⬇ Unduh cadangan', event => downloadBackup(event.currentTarget)));
-    target.replaceChildren(block([first,last], 'ops-filters'), out, backupCard, priceList);
+    const periods = el('div', undefined, 'period-chips');
+    const periodRanges = () => {
+      const t = today();
+      const monthStart = t.slice(0, 8) + '01';
+      const prevEnd = new Date(monthStart + 'T00:00:00Z');
+      prevEnd.setUTCDate(0);
+      const prevLast = prevEnd.toISOString().slice(0, 10);
+      return [['Hari ini', t, t], ['Minggu ini', weekStart(t), t], ['Bulan ini', monthStart, t], ['Bulan lalu', prevLast.slice(0, 8) + '01', prevLast]];
+    };
+    function markPeriod() {
+      const ranges = periodRanges();
+      periods.querySelectorAll('button').forEach((chip, index) => {
+        const [, a, b] = ranges[index];
+        chip.setAttribute('aria-pressed', String(first.lastChild.value === a && last.lastChild.value === b));
+      });
+    }
+    for (const [text] of periodRanges()) {
+      periods.append(button(text, () => {
+        const [, a, b] = periodRanges().find(([name]) => name === text);
+        first.lastChild.value = a;
+        last.lastChild.value = b;
+        reload();
+      }));
+    }
+    const filters = block([first,last], 'ops-filters');
+    filters.prepend(periods);
+    target.replaceChildren(filters, out, priceList, backupCard);
     priceList.append(
       ...[...products].map(([sku,name]) => block([
         el('span',name + ' · ' + money(prices[sku])),
@@ -1089,6 +1115,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
     let generation = 0;
     async function render() {
       const current = ++generation;
+      markPeriod();
       const a = first.lastChild.value;
       const b = last.lastChild.value;
       if (!a || !b || a>b) { out.textContent='Pilih rentang tanggal yang valid.'; return; }
@@ -1116,25 +1143,24 @@ export function initOperations({ $, request, status, products, prices, today, fo
       if (generation !== current) return;
       const hpp = costs(data);
       const cash = payments.reduce((sum, payment) => sum + payment.amount, 0);
-      let billed=0, revenue=0, cost=0, shipping=0, missing=0, unsold=0, stockUnknown=0;
-      const byProduct = new Map();
+      let unpaid=0, billed=0, revenue=0, cost=0, shipping=0, missing=0, unsold=0, stockUnknown=0;
+      const byVariant = new Map();
       const addSold = (stockId, qty, price) => {
         const s = stock(stockId);
         const unit = s ? hpp.get(s.batch_code+'|'+s.sku) : undefined;
         revenue += qty*price;
         if (unit === undefined) missing += qty;
         else cost += qty*unit;
-        const metrics = byProduct.get(s?.sku) || [0,0];
-        metrics[1] += qty;
-        byProduct.set(s?.sku, metrics);
+        const v = byVariant.get(s?.sku) || {qty:0, sales:0, cost:0, missing:0};
+        v.qty += qty;
+        v.sales += qty*price;
+        if (unit === undefined) v.missing += qty; else v.cost += qty*unit;
+        byVariant.set(s?.sku, v);
       };
       for (const o of orders) {
         billed += total(o);
+        unpaid += balance(o);
         for (const i of o.pentol_order_items) {
-          const sku = stock(i.stock_id)?.sku;
-          const metrics = byProduct.get(sku) || [0,0];
-          metrics[0] += i.quantity;
-          byProduct.set(sku,metrics);
           if (!byShipDate) addSold(i.stock_id, i.shipped, i.unit_price);
         }
         if (!byShipDate && o.delivered) { revenue += o.shipping_charge; shipping += o.shipping_cost; }
@@ -1156,29 +1182,42 @@ export function initOperations({ $, request, status, products, prices, today, fo
       }
       const gross = revenue-cost;
       const net = gross-shipping;
+      const range = a === b ? dayLabel(a) : dayLabel(a) + ' – ' + dayLabel(b);
       const headline = el('section', undefined, 'report-headline');
-      const range = a.slice(8) + '/' + a.slice(5,7) + ' – ' + b.slice(8) + '/' + b.slice(5,7);
-      headline.append(el('p', missing ? 'Penjualan diantar · ' + range : 'Laba setelah biaya antar · ' + range, 'report-label'),
-        el('strong', money(missing ? revenue : net), 'report-number'),
-        el('p', missing ? 'Laba belum bisa dihitung: HPP ' + missing + ' pack belum ada di data restok.'
-          : 'Penjualan diantar ' + money(revenue) + (revenue ? ' · margin ' + (net/revenue*100).toFixed(1) + '%' : ''), 'report-sub'),
-        el('p', 'Kas diterima ' + money(cash) + ' · Tagihan ' + money(billed), 'report-sub'));
+      const stat = (name, value, note, key) => {
+        const box = el('div', undefined, 'report-stat');
+        box.dataset.stat = key;
+        box.append(el('span', name), el('strong', value), note ? el('small', note) : '');
+        return box;
+      };
+      const grid = el('div', undefined, 'report-stats');
+      grid.append(
+        stat('Penjualan', money(revenue), 'barang yang sudah diantar', 'sales'),
+        stat('Laba', missing ? 'Belum lengkap' : money(net),
+          missing ? 'harga beli ' + missing + ' pack belum ada di restok' : (revenue ? 'margin ' + (net/revenue*100).toFixed(1) + '% · setelah ongkir' : 'setelah ongkir'), 'profit'),
+        stat('Uang masuk', money(cash), 'pembayaran tercatat', 'cash'),
+        stat('Belum dibayar', money(unpaid), 'dari pesanan periode ini', 'unpaid'));
+      headline.append(el('p', range, 'report-label'), grid);
+      const variantBox = el('section', undefined, 'report-variants');
+      const variantRows = [...byVariant].filter(([, v]) => v.qty).sort((x, y) => (y[1].sales - y[1].cost) - (x[1].sales - x[1].cost));
+      variantBox.append(el('h3', 'Laba per varian'), table(['Varian','Diantar','Penjualan','Laba'], variantRows.map(([sku, v]) => [
+        products.get(sku) || 'Varian batch', v.qty + ' pack', money(v.sales), v.missing ? 'harga beli belum ada' : money(v.sales - v.cost)
+      ]), 'Belum ada barang diantar pada periode ini.'));
       const chartBox = el('section', undefined, 'report-chart');
       chartBox.append(el('h3', 'Penjualan diantar per minggu' + (byShipDate ? '' : ' (menurut tanggal pesanan)')), weeklyChart(chartEntries));
       const detail = el('details', undefined, 'report-details');
       detail.append(el('summary', 'Rincian laporan'));
-      out.replaceChildren(headline, chartBox, detail);
+      out.replaceChildren(headline, variantBox, chartBox, detail);
       detail.append(table(['Metrik','Nilai'],[
         ['Tagihan pesanan',money(billed)],['Kas diterima (tanggal bayar tercatat)',money(cash)],
         ['Penjualan yang sudah diantar',money(revenue)],['HPP pack yang diantar',money(cost)],
         ['Laba bruto',missing ? 'HPP belum lengkap' : money(gross)],
         ['Laba setelah biaya antar',missing ? 'HPP belum lengkap' : money(net)],
         ['Margin setelah biaya antar',!missing && revenue ? (net/revenue*100).toFixed(1)+'%' : '—'],
-        ['Nilai stok siap jual (saat ini)',money(unsold)+(stockUnknown ? ' · HPP '+stockUnknown+' pack belum ada' : '')]
+        ['Nilai stok siap jual (saat ini)',money(unsold)+(stockUnknown ? ' · HPP '+stockUnknown+' pack belum ada' : '')],
+        ['Belum dibayar dari pesanan periode ini',money(unpaid)],
       ],''), el('p',(byShipDate ? 'Tagihan mengikuti tanggal pesanan. Penjualan diantar, HPP, dan ongkir mengikuti tanggal antar.'
         : 'Tagihan dan penjualan diantar mengikuti tanggal pesanan.') + ' Kas mengikuti tanggal pembayaran tercatat; status lunas lama tanpa tanggal pembayaran tidak dihitung sebagai kas. HPP mengalokasikan biaya batch merata per pack yang dipesan dari supplier.'),
-      table(['Varian','Terpesan','Diantar'],[...byProduct].sort((a,b)=>b[1][0]-a[1][0])
-        .map(([sku,x])=>[products.get(sku)||'Varian batch',...x]),'Belum ada penjualan.'),
       table(['Batch','Varian','HPP / pack'],[...hpp].map(([key,value])=>{
         const [batch,sku]=key.split('|');
         return [batch,products.get(sku),money(value)];
@@ -1353,14 +1392,14 @@ export function initOperations({ $, request, status, products, prices, today, fo
   }
 
   function closeDay(target) {
-    const dateField = control('Tanggal laporan', 'close_date', {type:'date',value:today(),props:{max:today()}});
+    const dateField = control('Tanggal', 'close_date', {type:'date',value:today(),props:{max:today()}});
     const dateInput = dateField.lastChild;
-    const output = el('div');
+    const output = el('div', undefined, 'close-summary');
     const feedback = el('p');
     feedback.setAttribute('role', 'status');
     let preview;
     let generation = 0;
-    const exportButton = button('Unduh Excel', async () => {
+    const exportButton = button('⬇ Excel', async () => {
       const current = preview;
       const session = getSession();
       if (!current || !session) return;
@@ -1371,7 +1410,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
         const url = URL.createObjectURL(new Blob([bytes], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
         download(url, 'Rekap-Tutup-Hari-' + current.date + '.xlsx');
         setTimeout(() => URL.revokeObjectURL(url), 30_000);
-        feedback.textContent = 'File Excel siap digunakan untuk serah-terima ke Chat 01.';
+        feedback.textContent = 'File Excel diunduh.';
       } catch {
         if (getSession() === session) feedback.textContent = 'File Excel belum bisa dibuat. Coba lagi.';
       } finally {
@@ -1379,47 +1418,115 @@ export function initOperations({ $, request, status, products, prices, today, fo
       }
     });
     exportButton.disabled = true;
-    function clearPreview() {
+    const waButton = el('a', 'Kirim ke WA', 'wa-link close-wa');
+    waButton.target = '_blank';
+    waButton.rel = 'noopener noreferrer';
+    waButton.hidden = true;
+    const nextDay = day => { const d = new Date(day + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); };
+    const jakartaDay = new Intl.DateTimeFormat('sv-SE', {timeZone:'Asia/Jakarta'});
+    function section(title, lines, empty) {
+      const box = el('section', undefined, 'close-section');
+      box.append(el('h3', title));
+      if (!lines.length) box.append(el('p', empty, 'close-empty'));
+      else {
+        const ul = el('ul');
+        for (const [name, value] of lines) {
+          const li = el('li');
+          li.append(el('span', name), el('strong', value));
+          ul.append(li);
+        }
+        box.append(ul);
+      }
+      return box;
+    }
+    async function load() {
       generation++;
+      const id = generation;
       preview = null;
       exportButton.disabled = true;
-      output.replaceChildren();
-      feedback.textContent = '';
-    }
-    dateInput.addEventListener('change', clearPreview);
-    const previewButton = button('Lihat pratinjau', async () => {
-      if (!dateInput.reportValidity()) return;
-      clearPreview();
-      const id = generation;
+      waButton.hidden = true;
+      if (!dateInput.value || !dateInput.checkValidity()) { output.replaceChildren(); feedback.textContent = 'Pilih tanggal yang valid.'; return; }
       const date = dateInput.value;
       const session = getSession();
       feedback.textContent = 'Memuat rekap…';
       try {
-        const [orders] = await Promise.all([
+        const byShipDate = await hasOpsTools();
+        const [orders, ships] = await Promise.all([
           list('pentol_orders?select=' + ordersSelect, '&order=order_date,created_at,id'),
+          byShipDate ? list('pentol_shipments?select=stock_id,quantity', '&shipped_on=eq.' + date + '&order=id') : [],
           loadRows()
         ]);
         if (getSession() !== session || id !== generation || !target.contains(output)) return;
-        const {summary,sheets} = closeDaySheets({
+        const {sheets} = closeDaySheets({
           date, exportedAt:new Date(), orders, stocks:getRows(), reconciliation:lastReconciliation,
           invoiceNumber, productName:sku=>products.get(sku) || sku, total, paid, deliveryLabel
         });
         preview = {date,sheets};
-        output.replaceChildren(table(['Ringkasan','Nilai'],[
-          ['Pesanan dibuat atau selesai diantar',summary.orders],
-          ['Kas masuk pada tanggal pilihan',money(summary.cash)],
-          ['Sisa tagihan saat pratinjau',money(summary.due)],
-          ['Baris stok saat pratinjau',summary.stocks],
-          ['Selisih pada perbandingan Excel terakhir',summary.differences ?? 'Belum dibandingkan di sesi ini']
-        ],''));
+        const active = orders.filter(o => !o.cancelled);
+        // Uang masuk pada tanggal itu.
+        const cashLines = [];
+        for (const o of active) for (const p of o.pentol_payments) {
+          if (p.paid_on === date) cashLines.push([o.customer, Number(p.amount)]);
+        }
+        const cash = cashLines.reduce((sum, [, amount]) => sum + amount, 0);
+        // Pack keluar per varian.
+        const out = new Map();
+        const addOut = (stockId, qty) => { const sku = stock(stockId)?.sku; out.set(sku, (out.get(sku) || 0) + qty); };
+        if (byShipDate) ships.forEach(x => addOut(x.stock_id, x.quantity));
+        else for (const o of active) {
+          if (o.delivered_at && jakartaDay.format(new Date(o.delivered_at)) === date) o.pentol_order_items.forEach(i => addOut(i.stock_id, i.shipped));
+        }
+        const outLines = [...out].filter(([, qty]) => qty).sort((x, y) => y[1] - x[1]);
+        const packs = outLines.reduce((sum, [, qty]) => sum + qty, 0);
+        // Sisa stok siap jual (saat ini).
+        const left = new Map([...products.keys()].map(sku => [sku, 0]));
+        for (const row of getRows()) if (left.has(row.sku)) left.set(row.sku, left.get(row.sku) + quantities(row)[3]);
+        // Belum dibayar per pelanggan.
+        const owed = new Map();
+        for (const o of active) { const due = balance(o); if (due > 0) owed.set(o.customer, (owed.get(o.customer) || 0) + due); }
+        const owedLines = [...owed].sort((x, y) => y[1] - x[1]);
+        const owedTotal = owedLines.reduce((sum, [, due]) => sum + due, 0);
+        // Antar besok.
+        const tomorrow = nextDay(date);
+        const nextLines = active.filter(o => !o.delivered && o.delivery_on === tomorrow).map(o => [o.customer,
+          o.pentol_order_items.reduce((sum, i) => sum + i.quantity - i.shipped, 0) + ' pack']);
+
+        const stats = el('div', undefined, 'report-stats');
+        const stat = (name, value, note) => {
+          const box = el('div', undefined, 'report-stat');
+          box.append(el('span', name), el('strong', value), note ? el('small', note) : '');
+          return box;
+        };
+        stats.append(stat('Uang masuk', money(cash), cashLines.length + ' pembayaran'),
+          stat('Pack keluar', packs + ' pack', 'diantar ' + dayLabel(date)),
+          stat('Belum dibayar', money(owedTotal), owedLines.length + ' pelanggan · saat ini'),
+          stat('Antar besok', nextLines.length + ' pesanan', dayLabel(tomorrow)));
+        output.replaceChildren(stats,
+          section('Uang masuk', cashLines.map(([n, a]) => [n, money(a)]), 'Tidak ada pembayaran tercatat.'),
+          section('Pack keluar', outLines.map(([sku, q]) => [products.get(sku) || 'Varian batch', q + ' pack']), 'Tidak ada pengantaran.'),
+          section('Sisa stok siap jual', [...[...left].filter(([, q]) => q).map(([sku, q]) => [products.get(sku), q + ' pack']),
+            ...([...left].some(([, q]) => !q) ? [['Habis: ' + [...left].filter(([, q]) => !q).map(([sku]) => products.get(sku)).join(', '), '']] : [])], 'Belum ada stok.'),
+          section('Belum dibayar', owedLines.map(([n, d]) => [n, money(d)]), 'Semua sudah lunas.'),
+          section('Antar besok', nextLines, 'Belum ada jadwal antar besok.'));
+        const message = ['*Rekap Pentol Gilaaa · ' + dayLabel(date) + '*', '',
+          'Uang masuk: ' + money(cash), ...cashLines.map(([n, a]) => '- ' + n + ' ' + money(a)), '',
+          'Pack keluar: ' + packs, ...outLines.map(([sku, q]) => '- ' + (products.get(sku) || 'Varian batch') + ' ' + q), '',
+          'Sisa stok: ' + ([...left].filter(([, q]) => q).map(([sku, q]) => products.get(sku).replace(/^Pentol /, '') + ' ' + q).join(', ') || 'habis'), '',
+          'Belum dibayar: ' + money(owedTotal) + ' (' + owedLines.length + ' pelanggan)', ...owedLines.map(([n, d]) => '- ' + n + ' ' + money(d)), '',
+          'Antar besok: ' + nextLines.length + ' pesanan', ...nextLines.map(([n, q]) => '- ' + n + ' (' + q + ')')].join('\n');
+        waButton.href = 'https://wa.me/?text=' + encodeURIComponent(message);
+        waButton.hidden = false;
         feedback.textContent = '';
         exportButton.disabled = false;
       } catch {
         if (id === generation && getSession() === session) feedback.textContent = 'Rekap belum bisa dimuat. Coba lagi.';
       }
-    });
-    previewButton.classList.add('primary-action');
-    target.replaceChildren(block([dateField,previewButton,exportButton], 'ops-filters'), feedback, output);
+    }
+    dateInput.addEventListener('change', load);
+    const actions = el('div', undefined, 'close-actions');
+    actions.append(waButton, exportButton);
+    target.replaceChildren(block([dateField, actions], 'ops-filters'), feedback, output);
+    return load();
   }
 
   const views={today:overview,packing,purchasing,finance,promotions,reconcile,history,receivables,closeDay};

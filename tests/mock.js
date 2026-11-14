@@ -84,6 +84,7 @@ export async function mockSupabase(page, data) {
     if (table === 'pentol_orders') return json(route, data.orders.filter(o => matches(o, url)));
     if (table === 'pentol_purchases') return json(route, data.purchases || []);
     if (table === 'pentol_purchase_receipts') return json(route, data.receipts || []);
+    if (table === 'pentol_payments') return json(route, data.orders.flatMap(o => o.pentol_payments).filter(x => matches(x, url)));
     if (table === 'pentol_shipments') return json(route, (data.shipments || []).filter(x => matches(x, url)));
     if (table === 'pentol_order_items') return json(route, data.orders.flatMap(o => o.cancelled ? [] :
       o.pentol_order_items.map(i => ({ ...i, pentol_orders: { cancelled: o.cancelled } }))));
