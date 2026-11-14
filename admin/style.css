@@ -453,3 +453,5 @@ body { background: radial-gradient(1100px 480px at 105% -10%, #fbe7d9 0, transpa
 #finance-body .report-backup h3 { margin: 0 0 6px; font-size: 14px; }
 .report-backup p { margin: 0 0 6px; font-size: 12px; }
 .report-backup button { margin-top: 6px; border-radius: 999px; }
+
+.brand-logo { flex: 0 0 auto; object-fit: contain; }
