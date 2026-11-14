@@ -112,6 +112,17 @@ Admin: menu "⋯" pesanan → **Koreksi**; Stok → **🧊 Hitung stok**; pengin
 
 Diuji: SQL (`tests/sql/scenario.sql`: catatan pengiriman, alasan & revisi, batal bayar, kurangi antar, batal sisa, opname) + pengisian data lama & jalankan ulang; browser (`tests/admin.test.js`: dialog Koreksi, opname, tersembunyi sebelum SQL, laporan per tanggal antar).
 
+## Evaluasi per menu: Hari Ini (14 Nov)
+
+Temuan & perbaikan:
+- Angka kartu "Perlu diantar" ≠ daftar yang dibuka (daftar ikut memuat jadwal besok) → Packing punya mode `due` (terlambat, hari ini, tanpa jadwal; urutan sama dengan kartu, `dueOrders()`) dan `dueReady` (yang siap dikemas sekarang).
+- Kartu tidak ikut diperbarui saat ada permintaan baru → `refreshBadges()` memuat ulang Hari Ini bila jumlah badge berubah dan Hari Ini sedang terbuka (tidak saat dialog terbuka). Simpan bayar/antar dari mana pun juga memuat ulang Hari Ini.
+- Nama di kartu tidak bisa diketuk → aksi langsung per baris: Permintaan → **Proses**; Perlu diantar → **Antar**; Tagihan → **Bayar** + **WA**.
+- Pengingat cadangan & hitung stok pindah ke bawah kartu, lebih ringkas; tombol "Muat ulang" di halaman disembunyikan (sudah ada ↻ di header).
+- Info tambahan: permintaan menampilkan lama menunggu; "Bisa dikemas" memisahkan siap penuh / sebagian; tagihan diurutkan dari yang paling lama belum dibayar, dengan umur (hari sejak antar).
+
+Diuji (`tests/admin.test.js`): urutan & aksi per baris, jumlah kartu = jumlah daftar, kartu diperbarui saat permintaan baru, Proses membuka form.
+
 ## Input lewat ChatGPT (tahap 1: tempel)
 
 Keputusan: **aplikasi (Supabase) tetap sumber kebenaran**; ChatGPT hanya pintu masuk. Tidak ada data yang tersimpan tanpa konfirmasi admin di form aplikasi, sehingga semua validasi database tetap berlaku.

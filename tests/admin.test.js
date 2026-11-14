@@ -54,6 +54,42 @@ export function adminTests(browser, devices, baseUrl) {
     await s.close();
   });
 
+  test('Hari Ini: daftar kartu = daftar yang dibuka; aksi langsung per baris; urutan tagihan', async () => {
+    const s = await open();
+    const deliverCount = Number(await s.page.textContent('.today-card[data-tone=deliver] .today-number'));
+    const rows = await s.page.$$eval('.today-card[data-tone=deliver] .today-row-text', xs => xs.map(x => x.textContent.split(' · ')[0]));
+    equal(rows, ['Budi Terlambat', 'Eka Antar Sebagian', 'Ani Hari Ini'], 'urutan: terlambat dulu');
+    const requestRow = await s.page.textContent('.today-card[data-tone=request] .today-row-text');
+    assert(/Dewi · \d+ (menit|jam) lalu/.test(requestRow), 'lama menunggu permintaan: ' + requestRow);
+    const owed = await s.page.$$eval('.today-card[data-tone=money] .today-row-text', xs => xs.map(x => x.textContent));
+    assert(owed[0].startsWith('Gina Belum Bayar') && owed[0].includes('4 hari'), 'tagihan tertua di atas: ' + owed[0]);
+    const order = await s.page.$$eval('#today-body > *', xs => xs.map(x => x.classList[0]));
+    equal(order[0], 'today-grid', 'kartu di atas pengingat');
+    await s.page.locator('.today-card[data-tone=deliver] .row-action').first().click();
+    await s.page.waitForTimeout(300);
+    assert((await s.page.textContent('#ops-title')).includes('Budi Terlambat'), 'Antar langsung dari Hari Ini');
+    await s.page.click('#ops-form > button:not([type])');
+    await s.page.waitForTimeout(500);
+    assert(s.data.writes.some(w => w.body.action === 'ship' && w.body.target === 'o2'), 'pengantaran tersimpan');
+    await s.page.click('text=Buka daftar antar');
+    await s.page.waitForTimeout(600);
+    equal(await s.page.locator('#packing-body .ops-card').count(), deliverCount, 'jumlah daftar = angka kartu');
+    await s.close();
+  });
+
+  test('Hari Ini: kartu ikut diperbarui saat ada permintaan baru', async () => {
+    const s = await open();
+    equal(await s.page.textContent('.today-card[data-tone=request] .today-number'), '1', 'awal');
+    s.data.inbox.push({ ...s.data.inbox[0], id: '00000000-0000-0000-0000-00000000abce', customer: 'Eko Baru' });
+    await s.page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    await s.page.waitForTimeout(900);
+    equal(await s.page.textContent('.today-card[data-tone=request] .today-number'), '2', 'kartu diperbarui');
+    await s.page.locator('.today-card[data-tone=request] .row-action').first().click();
+    await s.page.waitForTimeout(300);
+    assert(await s.page.isVisible('#order-form'), 'Proses membuka form pesanan');
+    await s.close();
+  });
+
   test('badge: permintaan baru dan antaran terlambat', async () => {
     const s = await open();
     await s.page.waitForTimeout(400);

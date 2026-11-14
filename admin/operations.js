@@ -146,6 +146,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
         if (!$('packing').hidden) open('packing');
         if (!$('finance').hidden) open('finance');
         if (!$('receivables').hidden) await open('receivables');
+        if (!$('today').hidden) await open('today');
       };
     });
   }
@@ -589,45 +590,59 @@ export function initOperations({ $, request, status, products, prices, today, fo
   const orderQuery = filters => list('pentol_orders?select=' + ordersSelect,
     '&cancelled=eq.false&order=order_date,created_at,id' + filters);
 
+  // Pesanan yang perlu diantar menurut Hari Ini: terlambat, jadwal hari ini, lalu belum dijadwalkan.
+  const dueRank = (order, date) => !order.delivery_on ? 2 : order.delivery_on < date ? 0 : 1;
+  const dueOrders = (open, date) => open.filter(order => !order.delivery_on || order.delivery_on <= date)
+    .sort((a, b) => dueRank(a, date) - dueRank(b, date) || (a.delivery_on || '').localeCompare(b.delivery_on || ''));
+  const sinceText = timestamp => {
+    const minutes = Math.max(0, Math.round((Date.now() - Date.parse(timestamp)) / 60000));
+    return minutes < 60 ? minutes + ' menit lalu' : minutes < 1440 ? Math.round(minutes / 60) + ' jam lalu' : Math.round(minutes / 1440) + ' hari lalu';
+  };
+  const jakartaDate = new Intl.DateTimeFormat('sv-SE', {timeZone:'Asia/Jakarta'});
+  const owedDays = order => order.delivered_at ? daysBetween(jakartaDate.format(new Date(order.delivered_at)), today()) : null;
+
   async function overview(target) {
     const session = getSession();
     const date = today();
     target.textContent = 'Memuat ringkasan…';
-    const [entries, pending, unpaid] = await Promise.all([
-      list('pentol_inbox?select=id,customer,created_at', '&status=eq.pending&order=created_at.desc,id'),
+    const [entries, pending, owed] = await Promise.all([
+      list('pentol_inbox?select=*', '&status=eq.pending&order=created_at.desc,id'),
       orderQuery('&delivered=eq.false'),
       owedQuery()
     ]);
     if (getSession() !== session) return;
-    // Perlu diantar: terlambat dulu, lalu jadwal hari ini, lalu yang belum dijadwalkan.
-    // Jadwal setelah hari ini tidak ditampilkan di sini.
-    const rank = order => !order.delivery_on ? 2 : order.delivery_on < date ? 0 : 1;
-    const deliveries = pending.filter(order => !order.delivery_on || order.delivery_on <= date)
-      .sort((a, b) => rank(a) - rank(b) || (a.delivery_on || '').localeCompare(b.delivery_on || ''));
-    const late = deliveries.filter(order => rank(order) === 0).length;
-    const unscheduled = deliveries.filter(order => rank(order) === 2).length;
+    const deliveries = dueOrders(pending, date);
+    const late = deliveries.filter(order => dueRank(order, date) === 0).length;
+    const unscheduled = deliveries.filter(order => dueRank(order, date) === 2).length;
     const allocation = allocatePacking(pending);
     const ready = deliveries.filter(order => packStatus(order, allocation).ready > 0);
-    const location = order => order.delivery_location || 'Lokasi belum diisi';
+    const fullyReady = ready.filter(order => { const pack = packStatus(order, allocation); return pack.ready === pack.need; }).length;
+    // Tagihan: yang paling lama belum dibayar di atas.
+    const unpaid = [...owed].sort((a, b) => (owedDays(b) ?? -1) - (owedDays(a) ?? -1));
     const when = order => !order.delivery_on ? 'belum dijadwalkan'
       : order.delivery_on < date ? 'terlambat ' + daysBetween(order.delivery_on, date) + ' hari' : 'hari ini';
+    const rowAction = (text, action) => { const node = button(text, action); node.classList.add('row-action'); return node; };
     const sections = [
-      ['Permintaan baru', entries, 'permintaan', entry => entry.customer, 'Buka permintaan', () => {
-        selectView('orders');
-        const inbox = $('checkout-inbox');
-        inbox.open = true;
-        inbox.querySelector('summary').focus();
-      }],
-      ['Bisa dikemas', ready, 'pesanan', order => order.customer + ' · ' + location(order) + ' · ' + when(order),
-        'Buka daftar packing', () => selectView('packing', 'pending'),
-        'stok siap dari ' + deliveries.length + ' yang perlu diantar'],
+      ['Permintaan baru', entries, 'permintaan', entry => entry.customer + ' · ' + sinceText(entry.created_at),
+        'Buka permintaan', () => {
+          selectView('orders');
+          const inbox = $('checkout-inbox');
+          inbox.open = true;
+          inbox.querySelector('summary').focus();
+        }, '', entry => [rowAction('Proses', () => { selectView('orders'); openOrder(null, entry); })]],
+      ['Bisa dikemas', ready, 'pesanan', null,
+        'Buka yang siap dikemas', () => selectView('packing', 'dueReady'),
+        [fullyReady && fullyReady + ' siap penuh', ready.length - fullyReady && (ready.length - fullyReady) + ' sebagian']
+          .filter(Boolean).join(' · ') + ' · dari ' + deliveries.length + ' yang perlu diantar'],
       ['Perlu diantar', deliveries, 'pesanan', order => order.customer + ' · ' + when(order),
-        'Buka daftar antar', () => selectView('packing', 'pending'),
-        [late && late + ' terlambat', unscheduled && unscheduled + ' belum dijadwalkan'].filter(Boolean).join(' · ')],
+        'Buka daftar antar', () => selectView('packing', 'due'),
+        [late && late + ' terlambat', unscheduled && unscheduled + ' belum dijadwalkan'].filter(Boolean).join(' · '),
+        order => [rowAction('Antar', () => shipDialog(order))]],
       ['Diantar, belum lunas', unpaid, 'pesanan', order => order.customer + ' · ' + money(balance(order))
-        + (order.delivered ? '' : ' · antar sebagian'),
+        + (owedDays(order) ? ' · ' + owedDays(order) + ' hari' : '') + (order.delivered ? '' : ' · antar sebagian'),
         'Buka tagihan', () => selectView('receivables'),
-        unpaid.length ? 'Total sisa tagihan ' + money(unpaid.reduce((sum, order) => sum + balance(order), 0)) : '']
+        unpaid.length ? 'Total sisa tagihan ' + money(unpaid.reduce((sum, order) => sum + balance(order), 0)) : '',
+        order => [rowAction('Bayar', () => payDialog(order)), waLink(order, 'remind', 'WA')].filter(Boolean)]
     ];
     $('today-date').dateTime = date;
     $('today-date').textContent = new Intl.DateTimeFormat('id-ID', {weekday:'long', day:'numeric', month:'long', timeZone:'UTC'})
@@ -648,7 +663,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
         button('Hitung stok', () => { selectView('stock'); opnameDialog(); }));
       return box;
     })() : null;
-    target.replaceChildren(...[reminder, opnameReminder].filter(Boolean), block(sections.map(([title, records, unit, describe, action, navigate, note], index) => {
+    target.replaceChildren(block(sections.map(([title, records, unit, describe, action, navigate, note, actions], index) => {
       const card = el('section', undefined, 'ops-card today-card');
       card.dataset.tone = ['request', 'pack', 'deliver', 'money'][index];
       const isMoney = records === unpaid;
@@ -659,12 +674,12 @@ export function initOperations({ $, request, status, products, prices, today, fo
         el('p', isMoney ? format.format(records.length) + ' pesanan masih punya tagihan'
           : records.length ? unit + (note ? ' · ' + note : '') : 'Tidak ada ' + unit + '.', 'today-note'));
       // "Bisa dikemas" tidak mengulang daftar nama dari "Perlu diantar".
-      if (records.length && records !== ready) {
-        const preview = el('ul');
+      if (records.length && describe) {
+        const preview = el('ul', undefined, 'today-list');
         preview.append(...records.slice(0, 3).map(record => {
-          const item = el('li', describe(record));
-          const wa = isMoney ? waLink(record, 'remind', 'Ingatkan WA') : null;
-          if (wa) item.append(' ', wa);
+          const item = el('li');
+          item.append(el('span', describe(record), 'today-row-text'));
+          if (actions) item.append(block(actions(record), 'today-row-actions'));
           return item;
         }));
         if (records.length > 3) preview.append(el('li', '+' + (records.length - 3) + ' lainnya', 'today-more'));
@@ -673,7 +688,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
       const go = button(action + ' →', navigate);
       card.append(go);
       return card;
-    }), 'today-grid'));
+    }), 'today-grid'), ...[reminder, opnameReminder].filter(Boolean));
   }
 
   const deliveryDay = new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Jakarta',year:'numeric',month:'2-digit',day:'2-digit'});
@@ -722,6 +737,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
     const oldFilter = initialMode || target.querySelector('[name=pack_filter]')?.value || 'packing';
     const day = control('Tanggal jadwal antar', 'pack_date', {type:'date', value:old});
     const filter = control('Tampilkan', 'pack_filter', {value:oldFilter, values:[
+      ['due','Perlu diantar (terlambat, hari ini, tanpa jadwal)'],['dueReady','Siap dikemas sekarang'],
       ['packing','Sesuai tanggal jadwal'],['ready','Siap dikemas sesuai tanggal'],['unscheduled','Belum dijadwalkan'],['pending','Semua belum diantar']
     ]});
     const output = el('div');
@@ -734,10 +750,13 @@ export function initOperations({ $, request, status, products, prices, today, fo
       const open = await orderQuery('&delivered=eq.false');
       if ((day.lastChild.value || today()) !== date || filter.lastChild.value !== mode) return;
       const allocation = allocatePacking(open);
-      const listed = mode === 'pending' ? open
+      const due = mode === 'due' || mode === 'dueReady';
+      day.hidden = due;
+      const listed = due ? dueOrders(open, today())
+        : mode === 'pending' ? open
         : mode === 'unscheduled' ? open.filter(order => !order.delivery_on)
         : open.filter(order => order.delivery_on === date);
-      const orders = mode === 'ready' ? listed.filter(order => packStatus(order, allocation).ready > 0) : listed;
+      const orders = mode === 'ready' || mode === 'dueReady' ? listed.filter(order => packStatus(order, allocation).ready > 0) : listed;
       output.replaceChildren();
       const totals = new Map();
       const grouped = mode === 'packing' || mode === 'ready';

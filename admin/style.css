@@ -496,3 +496,19 @@ input[type="file"]::file-selector-button { margin-right: 10px; padding: 8px 14px
 .refresh-button.spinning { animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .refresh-button.spinning { animation: none; } }
+
+/* ===== Hari Ini: baris dengan aksi langsung, pengingat ringkas di bawah ===== */
+.today-card ul.today-list { list-style: none; padding: 0; width: 100%; display: grid; gap: 6px; }
+.today-list li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0; border-top: 1px solid #00000010; margin: 0; }
+.today-list li:first-child { border-top: 0; }
+.today-list li.today-more { justify-content: flex-start; margin: 0; border: 0; padding-top: 2px; }
+.today-row-text { min-width: 0; overflow-wrap: anywhere; }
+.today-row-actions { display: flex; gap: 6px; flex-shrink: 0; margin: 0; }
+.today-card .row-action { min-height: 36px; padding: 4px 14px; font-size: 12px; background: var(--wine); color: #fff; border-color: var(--wine); }
+.today-card[data-tone="request"] .row-action { background: #fff; color: var(--wine-dark); border-color: #fff; }
+.today-row-actions .wa-link { min-height: 36px; padding: 4px 12px; margin: 0; }
+.today-card > button:last-child { margin-top: 6px; }
+#today-body > .backup-reminder { margin: 14px 0 0; padding: 10px 14px; }
+#today-body > .backup-reminder p { font-size: 11px; }
+#today-body > .backup-reminder button { min-height: 36px; padding: 4px 14px; }
+#today-body > .backup-reminder button, .backup-reminder button { color: #fff; }

@@ -1,5 +1,5 @@
 import { supabaseUrl, supabasePublishableKey } from './config.js';
-import { initOperations } from './operations.js?v=ops-10';
+import { initOperations } from './operations.js?v=hari-13';
 
 const products = new Map([
   ['UR','Pentol Urat'], ['PK','Pentol Kecil'], ['TP','Tahu Pentol'],
@@ -205,6 +205,7 @@ function endSession(message) {
   setOrderChip('action');
   clearInterval(badgeTimer);
   badgeTotal = 0;
+  lastCounts = '';
   document.querySelectorAll('.nav-badge').forEach(badge => badge.remove());
   customerBook = null;
   $('customer-list').replaceChildren();
@@ -1011,6 +1012,7 @@ const ops = initOperations({
 // ===== Badge angka di navigasi =====
 let badgeTimer;
 let badgeTotal = 0;
+let lastCounts = '';
 async function refreshBadges() {
   if (!session) return;
   const token = session;
@@ -1033,6 +1035,10 @@ async function refreshBadges() {
   }
   const total = counts.requests + counts.late;
   badgeTotal = total;
+  // Ada perubahan (permintaan baru / antaran jadi terlambat) saat Hari Ini terbuka: muat ulang kartunya.
+  const signature = JSON.stringify(counts);
+  if (lastCounts && signature !== lastCounts && !$('today').hidden && !document.querySelector('#ops-dialog[open]')) ops.open('today');
+  lastCounts = signature;
   document.title = document.title.replace(/^\(\d+\+?\) /, '');
   if (total) document.title = '(' + total + ') ' + document.title;
 }
