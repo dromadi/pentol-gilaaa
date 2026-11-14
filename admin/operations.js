@@ -385,6 +385,9 @@ export function initOperations({ $, request, status, products, prices, today, fo
       orderQuery(unpaidFilter)
     ]);
     if (getSession() !== session) return;
+    $('today-date').dateTime = date;
+    $('today-date').textContent = new Intl.DateTimeFormat('id-ID', { dateStyle:'long', timeZone:'Asia/Jakarta' })
+      .format(new Date(date));
     const ready = deliveries.filter(canPack);
     const location = order => order.delivery_location || 'Lokasi belum diisi';
     const sections = [
@@ -403,10 +406,11 @@ export function initOperations({ $, request, status, products, prices, today, fo
     ];
     target.replaceChildren(block(sections.map(([title, records, describe, action, navigate]) => {
       const card = el('section', undefined, 'ops-card');
-      card.append(el('h3', title), el('strong', format.format(records.length) + ' pesanan'));
-      if (records === unpaid && unpaid.length) {
-        card.append(el('p', 'Total sisa tagihan ' + money(unpaid.reduce((sum, order) => sum + balance(order), 0))));
-      }
+      const isUnpaid = records === unpaid;
+      card.append(el('h3', title), el('strong', isUnpaid
+        ? money(unpaid.reduce((sum, order) => sum + balance(order), 0))
+        : format.format(records.length) + ' pesanan'));
+      if (isUnpaid) card.append(el('p', format.format(records.length) + ' pesanan masih punya tagihan.'));
       const preview = el('ul');
       preview.append(...records.slice(0, 5).map(record => el('li', describe(record))));
       card.append(records.length ? preview : el('p', 'Belum ada pesanan.'), button(action, navigate));
