@@ -15,10 +15,10 @@ user=$( [ "$(id -u)" = 0 ] && echo postgres || id -un )
 psql_run() { "$bin/psql" -h "$dir" -p 5498 -U "$user" -d postgres -q -v ON_ERROR_STOP=1 "$@"; }
 psql_run -f "$here/stub.sql"
 # Urutan migrasi sama dengan admin/README.md; file yang boleh diulang dijalankan dua kali.
-for f in schema orders operations security-2026-11 receipts-2026-11 invoice-reference-2026-11 reconciliation-history-2026-11 stock-integrity-2026-11 operasional-2026-11; do
+for f in schema orders operations security-2026-11 receipts-2026-11 invoice-reference-2026-11 reconciliation-history-2026-11 stock-integrity-2026-11 operasional-2026-11 ubah-pesanan-2026-11; do
   psql_run -f "$admin/$f.sql" 2>&1 | grep -v NOTICE || true
 done
-for f in security-2026-11 receipts-2026-11 invoice-reference-2026-11 reconciliation-history-2026-11 stock-integrity-2026-11 operasional-2026-11; do
+for f in security-2026-11 receipts-2026-11 invoice-reference-2026-11 reconciliation-history-2026-11 stock-integrity-2026-11 operasional-2026-11 ubah-pesanan-2026-11; do
   psql_run -f "$admin/$f.sql" 2>&1 | grep -v NOTICE || true
 done
 # Hanya baris "•", galat, dan hasil akhir yang ditampilkan; status keluar mengikuti psql.

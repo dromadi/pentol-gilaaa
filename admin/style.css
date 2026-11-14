@@ -585,3 +585,7 @@ input[type="file"]::file-selector-button { margin-right: 10px; padding: 8px 14px
 .inbox-archived { margin-top: 12px; }
 .inbox-archived > summary { cursor: pointer; font-size: 13px; font-weight: 650; color: var(--muted); padding: 8px 0; }
 .inbox-archived .ops-card { opacity: .92; }
+
+/* Ubah pesanan yang sudah dibayar / diantar sebagian */
+.order-edit-note { margin: -4px 0 14px; padding: 10px 14px; border-radius: 12px; background: #fff4e0; border: 1px solid #f0d7a8; color: #6b4a12; font-size: 12px; }
+.order-item select:disabled { opacity: .75; }

@@ -261,11 +261,11 @@ export function initOperations({ $, request, status, products, prices, today, fo
     if (owes && !shown.includes(payButton)) rest.push(payButton);
     if (remind && !shown.includes(remind)) rest.push(remind);
     if (notify && !shown.includes(notify)) rest.push(notify);
+    rest.unshift(button('Ubah pesanan', () => {
+      selectView('orders');
+      openOrder(order);
+    }));
     if (!order.paid && !paid(order) && !shipped) {
-      rest.push(button('Edit', () => {
-        selectView('orders');
-        openOrder(order);
-      }));
       rest.push(button('Batalkan', () => orderDialog('cancel', order, 'Batalkan pesanan · ' + order.customer,
         [el('p', 'Stok yang dipesan akan dilepas. Riwayat pesanan tetap tampil dengan status Batal.')], () => ({}))));
     }
@@ -1304,15 +1304,26 @@ export function initOperations({ $, request, status, products, prices, today, fo
     }
     if (getSession() !== session) return;
     const time = new Intl.DateTimeFormat('id-ID',{dateStyle:'medium',timeStyle:'short',timeZone:'Asia/Jakarta'});
+    const itemText = list => list.map(i => {
+      const row = stock(i.stock_id);
+      return (row ? products.get(row.sku) : 'Varian') + ' ' + i.pesan + (i.diantar ? ' (diantar ' + i.diantar + ')' : '');
+    }).join(', ');
     const describe = value => {
+      if (!value) return '—';
+      if (Array.isArray(value)) return itemText(value);
+      if ('items' in value) return itemText(value.items) + ' · total ' + money(value.total);
+      if ('pembayaran_dibatalkan' in value) return 'Dibayar ' + money(value.dibayar) + ' · dibatalkan ' + money(value.pembayaran_dibatalkan);
+      if ('pack_diantar' in value && !('antar_selesai' in value)) return value.pack_diantar + ' pack diantar';
+      if ('dibayar' in value && !('sisa_tagihan' in value)) return 'Dibayar ' + money(value.dibayar);
       if ('booking' in value) return 'Booking ' + value.booking + ' pack · Sisa jual ' + value.sisa_jual + ' pack';
       if ('pack_diantar' in value) return value.pack_diantar + ' pack diantar · ' + (value.antar_selesai ? 'Selesai' : 'Belum selesai');
       return 'Dibayar ' + money(value.dibayar) + ' · Sisa ' + money(value.sisa_tagihan);
     };
-    const actions = {stock:'Stok',ship:'Pengantaran',pay:'Pembayaran'};
+    const actions = {stock:'Stok',ship:'Pengantaran',pay:'Pembayaran',void_pay:'Batal bayar',unship:'Koreksi antar',
+      cancel_rest:'Batal sisa',edit:'Ubah pesanan'};
     target.replaceChildren(table(['Waktu WIB','Admin (ID)','Data','Sebelum','Sesudah','Alasan'],
       entries.map(row => [time.format(new Date(row.changed_at)),row.changed_by,
-        actions[row.action] + ' · ' + row.label,describe(row.before_value),describe(row.after_value),row.reason]),
+        (actions[row.action] || row.action) + ' · ' + row.label,describe(row.before_value),describe(row.after_value),row.reason]),
       'Belum ada koreksi yang tercatat.'));
   }
 

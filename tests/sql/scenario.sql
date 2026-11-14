@@ -94,4 +94,34 @@ insert into public.pentol_inbox(id,customer,phone,area,note,items) select gen_ra
 set role anon;
 select pg_temp.expect_error($$select public.pentol_submit_checkout(gen_random_uuid(),'Z','082222222222','','','[{"sku":"UR","quantity":1}]')$$, 'Antrean pesanan sedang penuh');
 reset role;
+
+\echo '• ubah pesanan setelah bayar & antar sebagian: batas antar, batas bayar, tambah varian'
+set role authenticated;
+select set_config('request.uid','11111111-1111-1111-1111-111111111111',false);
+select public.pentol_receive_purchase('aaaaaaaa-0000-0000-0000-000000000003','B3',current_date,'[{"sku":"JM","quantity":5}]');
+select public.pentol_order_action('create','cccccccc-0000-0000-0000-000000000002',null,
+  (select jsonb_build_object('date',current_date,'customer','Tono','items',jsonb_build_array(jsonb_build_object('stock_id',id,'quantity',2,'unit_price',36000)))
+   from public.pentol_batch_stock where batch_code='B3' and sku='UR'));
+select public.pentol_order_action('ship','cccccccc-0000-0000-0000-000000000002',2,
+  (select jsonb_build_object('items',jsonb_build_array(jsonb_build_object('stock_id',id,'quantity',1))) from public.pentol_batch_stock where batch_code='B3' and sku='UR'));
+select public.pentol_order_action('pay','cccccccc-0000-0000-0000-000000000002',3,'{"payment_id":"dddddddd-0000-0000-0000-000000000009","date":"2026-11-14","amount":30000}');
+-- Hapus varian yang sudah diantar: ditolak.
+select pg_temp.expect_error($$select public.pentol_edit_order('cccccccc-0000-0000-0000-000000000002',4,
+  (select jsonb_build_object('customer','Tono','items',jsonb_build_array(jsonb_build_object('stock_id',id,'quantity',3,'unit_price',36000))) from public.pentol_batch_stock where batch_code='B3' and sku='JM'),'ganti')$$, 'sudah diantar 1 pack');
+-- Total di bawah yang sudah dibayar: ditolak.
+select pg_temp.expect_error($$select public.pentol_edit_order('cccccccc-0000-0000-0000-000000000002',4,
+  (select jsonb_build_object('customer','Tono','items',jsonb_build_array(jsonb_build_object('stock_id',id,'quantity',1,'unit_price',20000))) from public.pentol_batch_stock where batch_code='B3' and sku='UR'),'')$$, 'lebih kecil dari yang sudah dibayar');
+-- Kurangi UR ke 1 (= sudah diantar) dan tambah 3 JM.
+select public.pentol_edit_order('cccccccc-0000-0000-0000-000000000002',4,jsonb_build_object('customer','Tono','delivery_on',current_date+1,'items',
+  (select jsonb_agg(jsonb_build_object('stock_id',id,'quantity',case when sku='UR' then 1 else 3 end,'unit_price',36000)) from public.pentol_batch_stock where batch_code='B3')),'pembeli ganti ke Jamur');
+do $$ begin
+  assert (select reserved from public.pentol_batch_stock where batch_code='B3' and sku='UR') = 0, 'booking UR dilepas';
+  assert (select reserved from public.pentol_batch_stock where batch_code='B3' and sku='JM') = 3, 'booking JM 3';
+  assert (select (paid, delivered, revision) from public.pentol_orders where id='cccccccc-0000-0000-0000-000000000002') = (false, false, 5), 'belum lunas, belum selesai, revisi naik';
+  assert (select count(*) from public.pentol_order_items where order_id='cccccccc-0000-0000-0000-000000000002') = 2, 'dua varian';
+  assert (select count(*) from public.pentol_reconciliation_history where action='edit' and reason='pembeli ganti ke Jamur') = 1, 'perubahan tercatat';
+  assert (select sum(quantity) from public.pentol_shipments where order_id='cccccccc-0000-0000-0000-000000000002') = 1, 'catatan antar tidak berubah';
+end $$;
+select pg_temp.expect_error($$select public.pentol_edit_order('cccccccc-0000-0000-0000-000000000002',4,'{"items":[]}','x')$$, 'sudah berubah');
+reset role;
 \echo 'SQL: semua pemeriksaan lolos.'

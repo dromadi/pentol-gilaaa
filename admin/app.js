@@ -1,5 +1,5 @@
 import { supabaseUrl, supabasePublishableKey } from './config.js';
-import { initOperations } from './operations.js?v=katalog-18';
+import { initOperations } from './operations.js?v=ubah-19';
 
 const products = new Map([
   ['UR','Pentol Urat'], ['PK','Pentol Kecil'], ['TP','Tahu Pentol'],
@@ -626,6 +626,7 @@ function resetOrderForm() {
   draftOrder = null;
   draftInbox = null;
   orderForm.reset();
+  $('order-edit-note').hidden = true;
   orderItems.replaceChildren();
   $('order-quick').replaceChildren();
   $('order-more').open = false;
@@ -657,6 +658,14 @@ function addOrderItem(item) {
     line.querySelector('[name="quantity"]').value = item.quantity;
     line.querySelector('[name="unit_price"]').value = item.unit_price ?? '';
     if (item.sku) line.dataset.sku = item.sku;
+    // Baris dari pesanan yang sedang diubah: jumlah antar menjadi batas bawah, batch & baris dikunci.
+    if (item.shipped) {
+      line.dataset.shipped = item.shipped;
+      line.querySelector('[name="quantity"]').min = item.shipped;
+      select.disabled = true;
+      line.querySelector('button').disabled = true;
+      line.querySelector('button').title = 'Sudah diantar ' + item.shipped + ' pack';
+    }
   }
   select.addEventListener('change', () => {
     const row = rows.find(item => item.id === select.value);
@@ -673,13 +682,21 @@ function addOrderItem(item) {
 // ===== Pilih varian dengan tombol − / +. Baris batch & harga diatur otomatis. =====
 const lineSku = line => rows.find(row => row.id === line.querySelector('select').value)?.sku || line.dataset.sku;
 
+// Booking pesanan yang sedang diubah ikut dihitung sebagai stok yang boleh dipakai lagi.
+const ownBooked = stockId => {
+  const item = draftOrder?.pentol_order_items.find(i => i.stock_id === stockId);
+  return item ? item.quantity - item.shipped : 0;
+};
+const freeFor = row => quantities(row)[3] + ownBooked(row.id);
+const lineShipped = line => Number(line.dataset.shipped || 0);
+
 // Bagi jumlah ke batch: satu batch yang cukup, kalau tidak dibagi; sisa tanpa batch dipilih admin.
-function allocate(sku, quantity, price) {
-  const batches = rows.filter(row => row.sku === sku);
-  const whole = batches.find(row => quantities(row)[3] >= quantity);
+function allocate(sku, quantity, price, skip = new Set()) {
+  const batches = rows.filter(row => row.sku === sku && !skip.has(row.id)).map(row => ({ ...row, free: freeFor(row) }));
+  const whole = batches.find(row => row.free >= quantity);
   let remaining = quantity;
   for (const batch of whole ? [whole] : batches) {
-    const take = Math.min(remaining, quantities(batch)[3]);
+    const take = Math.min(remaining, batch.free);
     if (!take) continue;
     addOrderItem({ stock_id:batch.id, quantity:take, unit_price:price, sku });
     remaining -= take;
@@ -695,9 +712,21 @@ function allocate(sku, quantity, price) {
 function setSkuQuantity(sku, quantity) {
   const lines = Array.from(orderItems.children).filter(line => lineSku(line) === sku);
   const price = Number(lines[0]?.querySelector('[name="unit_price"]').value) || prices[sku];
-  lines.forEach(line => line.remove());
   if ($('status').dataset.error === 'true' && $('status').textContent.startsWith('Stok ')) status('');
-  if (quantity > 0) allocate(sku, quantity, price);
+  // Baris yang sudah diantar tetap di batch-nya; sisanya dibagi ulang.
+  const kept = lines.filter(line => lineShipped(line) > 0);
+  const keptMin = kept.reduce((sum, line) => sum + lineShipped(line), 0);
+  quantity = Math.max(quantity, keptMin);
+  lines.filter(line => !kept.includes(line)).forEach(line => line.remove());
+  let remaining = quantity - keptMin;
+  for (const line of kept) {
+    // Di atas jumlah antar, baris ini boleh memakai booking lamanya + stok bebas batch-nya.
+    const row = rows.find(r => r.id === line.querySelector('select').value);
+    const add = Math.min(remaining, row ? freeFor(row) : 0);
+    line.querySelector('[name="quantity"]').value = lineShipped(line) + add;
+    remaining -= add;
+  }
+  if (remaining > 0) allocate(sku, remaining, price, new Set(kept.map(line => line.querySelector('select').value)));
   renderQuickPick();
   updateOrderEstimate();
 }
@@ -710,7 +739,8 @@ function renderQuickPick() {
   }
   $('order-quick').replaceChildren(...Array.from(products, ([sku, name]) => {
     const count = counts.get(sku) || 0;
-    const free = rows.filter(row => row.sku === sku).reduce((sum, row) => sum + quantities(row)[3], 0);
+    const free = rows.filter(row => row.sku === sku).reduce((sum, row) => sum + freeFor(row), 0);
+    const minimum = Array.from(orderItems.children).filter(line => lineSku(line) === sku).reduce((sum, line) => sum + lineShipped(line), 0);
     const item = document.createElement('div');
     item.className = 'quick-item' + (count ? ' selected' : free ? '' : ' empty');
     const info = document.createElement('div');
@@ -724,7 +754,7 @@ function renderQuickPick() {
     const minus = document.createElement('button');
     minus.type = 'button';
     minus.textContent = '−';
-    minus.disabled = !count;
+    minus.disabled = count <= minimum;
     minus.setAttribute('aria-label', 'Kurangi ' + name);
     minus.addEventListener('click', () => setSkuQuantity(sku, count - 1));
     const value = document.createElement('input');
@@ -982,7 +1012,15 @@ function openOrder(order = null, inboxEntry = null) {
   renderQuickPick();
   if (!customerBook) loadCustomers().catch(() => {});
   orderForm.hidden = false;
-  $('order-editor-title').textContent = order ? 'Edit pesanan · ' + order.customer : 'Catat pesanan';
+  $('order-editor-title').textContent = order ? 'Ubah pesanan · ' + order.customer : 'Catat pesanan';
+  const note = $('order-edit-note');
+  const shippedLines = (order?.pentol_order_items || []).filter(i => i.shipped);
+  const paidSoFar = order ? (order.pentol_payments || []).reduce((sum, p) => sum + Number(p.amount), 0) : 0;
+  note.hidden = !(shippedLines.length || paidSoFar || order?.paid);
+  note.textContent = [
+    shippedLines.length && 'Sudah diantar: ' + shippedLines.map(i => (products.get(rows.find(r => r.id === i.stock_id)?.sku) || 'varian') + ' ' + i.shipped + ' pack').join(', ') + ' (tidak bisa dikurangi di bawah itu).',
+    paidSoFar ? 'Sudah dibayar Rp' + format.format(paidSoFar) + '; sisa tagihan dihitung ulang setelah disimpan.' : order?.paid ? 'Ditandai lunas.' : ''
+  ].filter(Boolean).join(' ');
   updateOrderEstimate();
   $('new-order').setAttribute('aria-expanded', 'true');
   $('save-order').textContent = order ? 'Simpan perubahan' : 'Simpan pesanan';
@@ -1032,14 +1070,26 @@ orderForm.addEventListener('submit', event => {
     const date = orderForm.elements.order_date.value;
     try {
       const e = orderForm.elements;
-      await ops.mutate(draftOrder ? 'edit' : 'create', draftId, draftOrder?.revision, {
+      const payload = {
         date, customer, delivery_on:e.delivery_on.value || null,
         shipping_charge:Number(e.shipping_charge.value), shipping_cost:Number(e.shipping_cost.value),
         contact:e.contact.value.trim(), delivery_location:e.delivery_location.value.trim(),
         delivery_note:e.delivery_note.value.trim(), inbox_id:draftInbox?.id,
         use_existing_booking:e.use_existing_booking.checked, items
-      });
+      };
+      // Sebelum bayar/antar: aturan lama. Sesudahnya: fungsi khusus yang menjaga jumlah antar & pembayaran.
+      const locked = draftOrder && (draftOrder.paid || draftOrder.pentol_payments?.length
+        || draftOrder.pentol_order_items.some(i => i.shipped));
+      if (locked) {
+        await request('/rest/v1/rpc/pentol_edit_order', { method:'POST', body:{
+          target:draftId, expected_revision:draftOrder.revision, payload, change_reason:'Pembeli mengubah pesanan' } });
+      } else {
+        await ops.mutate(draftOrder ? 'edit' : 'create', draftId, draftOrder?.revision, payload);
+      }
     } catch (error) {
+      if (error.status === 404 && draftOrder) {
+        return status('Mengubah pesanan yang sudah dibayar/diantar aktif setelah ubah-pesanan-2026-11.sql dijalankan di Supabase.', true);
+      }
       return status(error.status === 404 ? 'Database pesanan belum diaktifkan.'
         : ops.errorMessage(error), true);
     }

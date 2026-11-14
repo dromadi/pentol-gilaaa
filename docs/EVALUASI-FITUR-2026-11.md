@@ -166,6 +166,17 @@ Masalah dan perbaikan (katalog `v=3`, admin `katalog-18`):
 - WhatsApp tetap disarankan karena toko hanya tahu ada permintaan baru saat admin dibuka.
 - Uji baru: `jadwal terima ikut terkirim; layar selesai menggantikan keranjang kosong` (katalog) dan `permintaan katalog dengan jadwal: tampil "Jadwal", form terisi jadwal antar` (admin).
 
+## Ubah pesanan kapan saja (14 Nov)
+
+Permintaan pemilik: admin bisa mengubah pesanan saat pembeli menambah, mengurangi, atau mengganti varian. Sebelumnya **Edit** tersembunyi di ⋯ dan hanya muncul sebelum ada pembayaran atau pengantaran.
+
+- Tombol **Ubah pesanan** sekarang ada di menu ⋯ setiap pesanan aktif (urutan pertama).
+- Pesanan belum dibayar & belum diantar: memakai aturan lama (`pentol_order_action` 'edit'), langsung jalan tanpa SQL baru.
+- Pesanan sudah dibayar / sebagian diantar: memakai `pentol_edit_order` dari **`admin/ubah-pesanan-2026-11.sql`** (jalankan setelah operasional). Aturan: varian yang sudah diantar tidak bisa dihapus atau dikurangi di bawah jumlah antar; total baru tidak boleh di bawah pembayaran tercatat (batalkan bayar dulu lewat Koreksi); lunas lama tanpa catatan bayar tidak bisa dinaikkan; status lunas & selesai antar dihitung ulang; perubahan tercatat di Riwayat (aksi `edit`, sebelum/sesudah per varian + total). Sebelum SQL dijalankan, aplikasi menampilkan pesan dan tidak menyimpan apa pun.
+- Form: catatan kuning "Sudah diantar … / Sudah dibayar …"; tombol − berhenti di jumlah antar; baris batch yang sudah diantar terkunci; stok "sisa" ikut menghitung booking pesanan itu sendiri sehingga menambah tidak pindah batch tanpa perlu.
+- Riwayat Perubahan kini menampilkan Batal bayar, Koreksi antar, Batal sisa, dan Ubah pesanan dengan benar (sebelumnya terbaca "Dibayar undefined").
+- Uji: SQL `ubah pesanan setelah bayar & antar sebagian`; browser `ubah pesanan setelah bayar & antar sebagian…` dan `ubah pesanan sebelum SQL…`. Versi `ubah-19`.
+
 ## Input lewat ChatGPT (tahap 1: tempel)
 
 Keputusan: **aplikasi (Supabase) tetap sumber kebenaran**; ChatGPT hanya pintu masuk. Tidak ada data yang tersimpan tanpa konfirmasi admin di form aplikasi, sehingga semua validasi database tetap berlaku.

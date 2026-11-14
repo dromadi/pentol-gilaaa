@@ -261,6 +261,50 @@ export function adminTests(browser, devices, baseUrl) {
     await s.close();
   });
 
+  test('ubah pesanan setelah bayar & antar sebagian: batas antar, tambah varian, fungsi khusus', async () => {
+    const data = defaultData();
+    data.stock.push({ id:'s2', batch_code:'BATCH-02', sku:'JM', received_on:shiftDay(-5), received:10, reserved:0, delivered:0, revision:1 });
+    data.orders = [order('o5', 'Eka Antar Sebagian', { delivery_on: shiftDay(1), items: [[4, 2]],
+      pentol_payments: [{ id:'p1', order_id:'o5', amount:50000, paid_on:shiftDay(-1) }] })];
+    const s = await open(data);
+    await goSub(s.page, 'orders');
+    const row = s.page.locator('#order-rows tr', { hasText: 'Eka Antar Sebagian' }).first();
+    await row.locator('.more-actions summary').click();
+    await row.locator('.more-actions button', { hasText: 'Ubah pesanan' }).click();
+    const note = await s.page.textContent('#order-edit-note');
+    assert(note.includes('Sudah diantar') && note.includes('2 pack') && note.includes('Rp50.000'), 'catatan antar & bayar: ' + note);
+    const minus = s.page.locator('[aria-label="Kurangi Pentol Urat"]');
+    await minus.click();
+    await minus.click();
+    assert(await minus.isDisabled(), 'tidak bisa di bawah jumlah antar');
+    await s.page.click('[aria-label="Tambah Pentol Jamur"]');
+    await s.page.click('#save-order');
+    await s.page.waitForTimeout(500);
+    const saved = s.data.writes.find(w => w.fn === 'pentol_edit_order');
+    assert(saved, 'memakai pentol_edit_order');
+    equal(saved.body.payload.items.map(i => [i.stock_id, i.quantity]).sort(), [['s1', 2], ['s2', 1]], 'UR 2 (diantar 2) + JM 1');
+    equal(saved.body.expected_revision, 1, 'revisi dikirim');
+    await s.close();
+  });
+
+  test('ubah pesanan sebelum SQL: pesan jelas, tanpa simpan diam-diam', async () => {
+    const data = defaultData();
+    data.missingRpc = ['pentol_edit_order'];
+    data.orders = [order('o5', 'Eka Antar Sebagian', { items: [[4, 2]] })];
+    const s = await open(data);
+    await goSub(s.page, 'orders');
+    const row = s.page.locator('#order-rows tr', { hasText: 'Eka' }).first();
+    await row.locator('.more-actions summary').click();
+    await row.locator('.more-actions button', { hasText: 'Ubah pesanan' }).click();
+    await s.page.click('[aria-label="Tambah Pentol Urat"]');
+    await s.page.click('#save-order');
+    await s.page.waitForTimeout(500);
+    assert((await s.page.textContent('#status')).includes('ubah-pesanan-2026-11.sql'), 'pesan butuh SQL');
+    assert(await s.page.isVisible('#order-form'), 'form tetap terbuka');
+    equal(s.data.writes.filter(w => w.fn === 'pentol_order_action').length, 0, 'tidak memakai aturan lama');
+    await s.close();
+  });
+
   test('packing dibagi per pesanan menurut jadwal (bug B4)', async () => {
     const data = defaultData();
     data.stock = [{ id:'s1', batch_code:'B1', sku:'UR', received_on:shiftDay(-5), received:4, reserved:5, delivered:0, revision:1 }];
