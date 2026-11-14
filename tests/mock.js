@@ -75,6 +75,7 @@ export async function mockSupabase(page, data) {
     }
     if (request.method() !== 'GET') { data.writes.push({ method: request.method(), path }); return json(route, []); }
     const table = path.split('/').pop();
+    (data.reads ||= []).push(table);
     if (data.missing?.includes(table)) return json(route, { code: 'PGRST205', message: 'table not found' }, 404);
     if (table === 'pentol_admins') return json(route, [{ user_id: 'x' }]);
     if (table === 'pentol_batch_stock') return json(route, data.stock);

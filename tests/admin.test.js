@@ -343,6 +343,23 @@ export function adminTests(browser, devices, baseUrl) {
     await context.close();
   });
 
+  test('refresh browser tetap di halaman yang sama; tombol ↻ memuat ulang data halaman itu', async () => {
+    const s = await open();
+    await goSub(s.page, 'orders', 'Tagihan');
+    await s.page.reload();
+    await s.page.waitForSelector('#dashboard:not([hidden])');
+    await s.page.waitForTimeout(500);
+    assert(await s.page.isVisible('#receivables'), 'setelah refresh tetap di Tagihan');
+    equal(await s.page.textContent('#subtabs [aria-current=page]'), 'Tagihan', 'tab Tagihan aktif');
+    const before = s.data.reads.length;
+    await s.page.click('#refresh-view');
+    await s.page.waitForTimeout(500);
+    const after = s.data.reads.slice(before);
+    assert(after.includes('pentol_batch_stock') && after.includes('pentol_orders'), 'stok dan tagihan dimuat ulang: ' + after.join(','));
+    assert(await s.page.isVisible('#receivables'), 'tetap di Tagihan setelah ↻');
+    await s.close();
+  });
+
   test('HP lama tanpa Map.groupBy: Tagihan tetap tampil', async () => {
     const s = await open(defaultData(), { oldBrowser: true });
     await goSub(s.page, 'orders', 'Tagihan');

@@ -489,3 +489,10 @@ input[type="file"]::file-selector-button { margin-right: 10px; padding: 8px 14px
 .opname-reminder p { color: #2c5257; }
 .opname-reminder button { background: #2f6b72; border-color: #2f6b72; }
 #ops-fields > label:not([hidden]) + label, #ops-fields > label + p, #ops-fields > p + label { margin-top: 14px; }
+
+/* ===== Tombol muat ulang di header ===== */
+.refresh-button { display: inline-grid; place-items: center; width: 40px; min-height: 40px; height: 40px; padding: 0; border-radius: 999px; background: var(--paper); color: var(--wine); border: 1px solid #dcc7b4; font-size: 20px; line-height: 1; box-shadow: none; }
+.refresh-button:hover { background: #f4ece2; box-shadow: none; }
+.refresh-button.spinning { animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .refresh-button.spinning { animation: none; } }

@@ -213,6 +213,7 @@ function endSession(message) {
   setMenuExpanded(false);
   $('dashboard').hidden = true;
   $('logout').hidden = true;
+  $('refresh-view').hidden = true;
   $('stock-rows').replaceChildren();
   stockBatch.replaceChildren(new Option('Semua batch', ''));
   stockSearch.value = '';
@@ -387,6 +388,7 @@ async function showDashboard() {
   $('signin').hidden = true;
   $('dashboard').hidden = false;
   $('logout').hidden = false;
+  $('refresh-view').hidden = false;
   status('');
   selectView(currentView);
   startBadges();
@@ -522,7 +524,12 @@ const viewGroups = {
 };
 const groupOf = view => Object.keys(viewGroups).find(group => viewGroups[group].some(([id]) => id === view));
 const lastInGroup = Object.fromEntries(Object.keys(viewGroups).map(group => [group, group]));
-let currentView = 'today';
+// Halaman terakhir disimpan di alamat (#tagihan dsb.) agar refresh browser membuka halaman yang sama.
+const knownViews = () => Array.from(document.querySelectorAll('.admin-content > .panel'), panel => panel.id);
+let currentView = (() => {
+  const wanted = decodeURIComponent(location.hash.slice(1));
+  return knownViews().includes(wanted) && wanted !== 'signin' ? wanted : 'today';
+})();
 
 function renderSubtabs(group, view) {
   const bar = $('subtabs');
@@ -538,7 +545,7 @@ function renderSubtabs(group, view) {
   }));
 }
 
-function selectView(view, packingMode) {
+function selectView(view, packingMode, { keepScroll = false } = {}) {
   const group = groupOf(view);
   if (group) lastInGroup[group] = view;
   currentView = view;
@@ -551,7 +558,8 @@ function selectView(view, packingMode) {
   $('mobile-view-label').textContent = navLabel;
   document.title = (badgeTotal ? '(' + badgeTotal + ') ' : '') + (subLabel && subLabel !== navLabel ? subLabel + ' · ' : '') + navLabel + ' · Admin Pentol Gilaaa';
   syncQuickNav(navView);
-  if (isMobile()) {
+  try { history.replaceState(null, '', '#' + view); } catch {}
+  if (isMobile() && !keepScroll) {
     setMenuExpanded(false);
     scrollTo({top:0});
     $(view).querySelector('h2').focus({preventScroll:true});
@@ -559,6 +567,21 @@ function selectView(view, packingMode) {
   if (view === 'orders') { loadOrders(); ops.inbox(); }
   else ops.open(view, packingMode);
 }
+
+// Tombol ↻ di header: muat ulang data halaman yang sedang dibuka, tanpa pindah halaman.
+$('refresh-view').addEventListener('click', () => run($('refresh-view'), async () => {
+  $('refresh-view').classList.add('spinning');
+  try {
+    await loadRows();
+    selectView(currentView, undefined, { keepScroll: true });
+    refreshBadges();
+    status('Data diperbarui.');
+  } catch {
+    status('Data belum bisa dimuat. Periksa internet lalu coba lagi.', true);
+  } finally {
+    $('refresh-view').classList.remove('spinning');
+  }
+}));
 
 // Menu utama membuka bagian terakhir yang dipakai di grup itu.
 const openNav = view => selectView(viewGroups[view] ? lastInGroup[view] : view);
