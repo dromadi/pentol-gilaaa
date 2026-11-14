@@ -347,6 +347,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
       target.replaceChildren(...entries.map(entry => {
         const card = el('article', undefined, 'ops-card');
         card.append(el('strong', entry.customer),
+          el('p', 'Kode permintaan: ' + entry.id),
           el('p', [entry.phone,entry.area,entry.note].filter(Boolean).join(' · ')),
           el('p', entry.items.map(i => products.get(i.sku) + ' × ' + i.quantity).join(', ')),
           block([button('Proses pesanan', () => openOrder(null, entry)), button('Arsipkan', () => {
