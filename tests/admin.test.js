@@ -26,7 +26,7 @@ export function adminTests(browser, devices, baseUrl) {
 
   test('semua halaman terbuka tanpa error dan tanpa geser ke samping', async () => {
     const s = await open();
-    const pages = [['today'], ['orders'], ['orders', 'Packing & antar'], ['orders', 'Tagihan'], ['stock'], ['stock', 'Restok & PO'],
+    const pages = [['today'], ['orders'], ['orders', 'Semua pesanan'], ['orders', 'Packing'], ['orders', 'Antar'], ['orders', 'Tagihan'], ['stock'], ['stock', 'Restok & PO'],
       ['finance'], ['finance', 'Tutup hari']];
     for (const [nav, tab] of pages) {
       await goSub(s.page, nav, tab);
@@ -73,7 +73,7 @@ export function adminTests(browser, devices, baseUrl) {
     assert(s.data.writes.some(w => w.body.action === 'ship' && w.body.target === 'o2'), 'pengantaran tersimpan');
     await s.page.click('text=Buka daftar antar');
     await s.page.waitForTimeout(600);
-    equal(await s.page.locator('#packing-body .ops-card').count(), deliverCount, 'jumlah daftar = angka kartu');
+    equal(await s.page.locator('#delivery-body .ops-card').count(), deliverCount, 'jumlah daftar = angka kartu');
     await s.close();
   });
 
@@ -111,6 +111,29 @@ export function adminTests(browser, devices, baseUrl) {
     await s.close();
   });
 
+  test('Pesanan: 5 sub menu, Perlu tindakan vs Semua pesanan, Packing vs Antar', async () => {
+    const s = await open();
+    await goSub(s.page, 'orders');
+    equal(await s.page.$$eval('#subtabs button', b => b.map(x => x.textContent)),
+      ['Perlu tindakan', 'Semua pesanan', 'Packing', 'Antar', 'Tagihan'], 'sub menu');
+    assert(await s.page.isVisible('#checkout-inbox') && await s.page.isVisible('.order-chips'), 'perlu tindakan: permintaan + tombol cepat');
+    assert(await s.page.isHidden('#order-filters'), 'tanpa filter tanggal');
+    await goSub(s.page, 'orders', 'Semua pesanan');
+    assert(await s.page.isHidden('#checkout-inbox') && await s.page.isHidden('.order-chips'), 'semua pesanan: tanpa permintaan & tombol cepat');
+    assert(await s.page.isVisible('#order-filters input[type=date]'), 'filter tanggal terbuka');
+    equal(await s.page.textContent('#orders-title'), 'Semua pesanan', 'judul');
+    assert(s.page.url().endsWith('#orders'), 'alamat #orders');
+    await goSub(s.page, 'orders', 'Packing');
+    equal(await s.page.$eval('#packing [name=pack_filter]', x => x.value), 'dueReady', 'packing: siap dikemas');
+    equal(await s.page.$$eval('#packing [name=pack_filter] option', o => o.map(x => x.value)), ['dueReady', 'ready', 'packing'], 'pilihan packing');
+    await goSub(s.page, 'orders', 'Antar');
+    equal(await s.page.$$eval('#delivery [name=pack_filter] option', o => o.map(x => x.value)), ['due', 'unscheduled', 'pending', 'date'], 'pilihan antar');
+    assert(s.page.url().endsWith('#delivery'), 'alamat #delivery');
+    await s.page.reload(); await s.page.waitForTimeout(800);
+    assert(await s.page.isVisible('#delivery'), 'refresh tetap di Antar');
+    await s.close();
+  });
+
   test('Pesanan: cari nama/WA/invoice; permintaan katalog punya Balas WA', async () => {
     const s = await open();
     await goSub(s.page, 'orders');
@@ -132,9 +155,9 @@ export function adminTests(browser, devices, baseUrl) {
     const data = defaultData();
     data.orders.push(order('o8', 'Gina Belum Bayar', { delivered: true, items: [[3, 3]], delivered_at: shiftDay(-2) + 'T05:00:00Z' }));
     const s = await open(data);
-    await goSub(s.page, 'orders', 'Packing & antar');
-    equal(await s.page.$eval('[name=pack_filter]', select => select.value), 'due', 'mode bawaan');
-    assert(/Antar (Sen|Sel|Rab|Kam|Jum|Sab|Min)/.test(await s.page.textContent('#packing-body')), 'tanggal mudah dibaca');
+    await goSub(s.page, 'orders', 'Antar');
+    equal(await s.page.$eval('#delivery [name=pack_filter]', select => select.value), 'due', 'mode bawaan');
+    assert(/Antar (Sen|Sel|Rab|Kam|Jum|Sab|Min)/.test(await s.page.textContent('#delivery-body')), 'tanggal mudah dibaca');
     await goSub(s.page, 'orders', 'Tagihan');
     const gina = s.page.locator('#receivables-body > .ops-card').filter({ hasText: 'Gina Belum Bayar' });
     const remind = decodeURIComponent(await gina.locator('.wa-link', { hasText: 'Ingatkan semua (2)' }).getAttribute('href'));
@@ -316,10 +339,10 @@ export function adminTests(browser, devices, baseUrl) {
     data.orders = [order('o1', 'Xena Hari Ini', { delivery_on: todayJakarta(), items: [[3, 0]] }),
       order('o2', 'Yuda Kemarin', { delivery_on: shiftDay(-1), items: [[2, 0]] })];
     const s = await open(data);
-    await goSub(s.page, 'orders', 'Packing & antar');
-    await s.page.selectOption('[name=pack_filter]', 'pending');
+    await goSub(s.page, 'orders', 'Antar');
+    await s.page.selectOption('#delivery [name=pack_filter]', 'pending');
     await s.page.waitForTimeout(500);
-    const states = await s.page.$$eval('#packing-body .ops-card', cs => Object.fromEntries(cs.map(c =>
+    const states = await s.page.$$eval('#delivery-body .ops-card', cs => Object.fromEntries(cs.map(c =>
       [c.querySelector('strong').textContent, c.querySelector('.pack-state').textContent])));
     equal(states['Yuda Kemarin'], 'Siap dikemas', 'jadwal paling awal dapat stok dulu');
     assert(states['Xena Hari Ini'].startsWith('Siap sebagian · 2 dari 3 pack'), 'sisa stok untuk pesanan berikutnya: ' + states['Xena Hari Ini']);

@@ -14,9 +14,9 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Pentol Admin">
 <title>Admin · Pentol Gilaaa Surabaya</title>
-<link rel="stylesheet" href="style.css?v=hapus-20">
+<link rel="stylesheet" href="style.css?v=pesanan-21">
 <script defer src="vendor/jszip.min.js"></script>
-<script type="module" src="app.js?v=hapus-20"></script>
+<script type="module" src="app.js?v=pesanan-21"></script>
 </head>
 <body>
 <header class="app-header"><div class="bar">
@@ -94,7 +94,7 @@
 </details>
 </section>
 <section id="orders" class="panel" hidden>
-<div class="section-head"><div><p class="eyebrow">TRANSAKSI</p><h2 tabindex="-1">Pesanan</h2><p>Pantau pesanan dan tindak lanjut pelanggan.</p></div><div class="head-actions"><button type="button" id="gpt-import" class="secondary">✦ Tempel dari GPT</button><button type="button" id="new-order" aria-controls="order-form" aria-expanded="false">+ Catat pesanan</button></div></div>
+<div class="section-head"><div><p class="eyebrow">TRANSAKSI</p><h2 tabindex="-1" id="orders-title">Perlu tindakan</h2><p id="orders-desc">Permintaan baru dan pesanan yang belum dibayar atau belum diantar.</p></div><div class="head-actions"><button type="button" id="gpt-import" class="secondary">✦ Tempel dari GPT</button><button type="button" id="new-order" aria-controls="order-form" aria-expanded="false">+ Catat pesanan</button></div></div>
 <details id="checkout-inbox"><summary>Permintaan dari katalog <span id="inbox-count"></span></summary><div id="inbox-list"></div></details>
 <section id="gpt-results" class="gpt-results" aria-live="polite" hidden></section>
 <form id="order-form" class="editor" hidden>
@@ -126,16 +126,15 @@
 <p class="form-actions"><button id="save-order">Simpan pesanan</button> <button type="button" id="cancel-order">Batal</button></p>
 </form>
 <div class="order-chips" role="group" aria-label="Tampilkan pesanan">
-<button type="button" data-chip="action" aria-pressed="true">Perlu tindakan</button>
+<button type="button" data-chip="action" aria-pressed="true">Semua</button>
 <button type="button" data-chip="unpaid" aria-pressed="false">Belum bayar</button>
 <button type="button" data-chip="pending" aria-pressed="false">Belum antar</button>
-<button type="button" data-chip="all" aria-pressed="false">Per tanggal</button>
 </div>
 <div class="order-search-row">
 <input id="order-search" type="search" placeholder="Cari nama, WA, invoice, atau lokasi…" autocomplete="off" aria-label="Cari pelanggan">
 <button type="button" id="refresh-orders" class="secondary" aria-label="Muat ulang pesanan">↻</button>
 </div>
-<details id="order-filters" class="order-filters"><summary>Filter lain · tanggal &amp; status</summary>
+<details id="order-filters" class="order-filters"><summary>Tanggal &amp; status</summary>
 <div class="order-toolbar">
 <label>Tampilan <select id="order-period"><option value="day">Harian</option><option value="week">Mingguan</option></select></label>
 <label><span id="order-date-label">Tanggal</span> <input type="date" id="order-date" required></label>
@@ -145,7 +144,6 @@
 </div>
 <label>Status <select id="order-status"><option value="all">Semua status</option><option value="unpaid">Belum lunas</option><option value="pending">Belum selesai diantar</option><option value="delivered-unpaid">Diantar, belum lunas</option><option value="cancelled">Dibatalkan</option></select></label>
 </div>
-<p class="order-hint">Tanggal dan status berlaku untuk tampilan "Per tanggal".</p>
 </details>
 <p id="order-metrics" class="order-metrics-line" aria-live="polite"></p>
 <p id="orders-summary" class="result-count" aria-live="polite"></p>
@@ -169,7 +167,8 @@
 <div class="section-head"><div><h2 tabindex="-1">Riwayat Perubahan</h2><p>100 koreksi terakhir: koreksi stok diterima dan koreksi dari Rekonsiliasi Excel.</p></div></div>
 <div id="history-body"></div>
 </section>
-<section id="packing" class="panel" hidden><div class="section-head"><div><h2 tabindex="-1">Packing &amp; antar</h2><p>Siapkan barang dan antar sesuai jadwal.</p></div></div><div id="packing-body"></div></section>
+<section id="packing" class="panel" hidden><div class="section-head"><div><h2 tabindex="-1">Packing</h2><p>Barang yang bisa dikemas dari stok freezer, dengan total per varian.</p></div></div><div id="packing-body"></div></section>
+<section id="delivery" class="panel" hidden><div class="section-head"><div><h2 tabindex="-1">Antar</h2><p>Pesanan yang perlu diantar sesuai jadwal. Catat antar dan kabari pelanggan.</p></div></div><div id="delivery-body"></div></section>
 <section id="purchasing" class="panel" hidden><div class="section-head"><div><h2 tabindex="-1">Restok &amp; Supplier</h2><p>Pantau pembelian, kedatangan barang, dan biaya batch.</p></div></div><div id="purchasing-body"></div></section>
 <section id="finance" class="panel" hidden><div class="section-head"><div><h2 tabindex="-1">Harga &amp; Laba</h2><p>Lihat biaya, penjualan, dan hasil usaha.</p></div></div><div id="finance-body"></div></section>
 <section id="promotions" class="panel" hidden><div class="section-head"><div><h2 tabindex="-1">Promosi</h2><p>Siapkan caption dan gambar dari harga serta stok terbaru.</p></div></div><div id="promotions-body"></div></section>

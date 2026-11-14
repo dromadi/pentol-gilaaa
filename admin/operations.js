@@ -4,7 +4,9 @@ import { openReconciliation, reconciliationRows, groupBy } from './reconcile.js?
 import { parseGptText, gptInstructions } from './gpt.js?v=1';
 
 export function initOperations({ $, request, status, products, prices, today, format,
-  tableRow, emptyRow, quantities, getRows, getSession, openOrder, refresh, selectView, loadRows }) {
+  tableRow, emptyRow, quantities, getRows, getSession, getView, openOrder, refresh, selectView, loadRows }) {
+  // Buka form pesanan tanpa pindah dari "Perlu tindakan" ke "Semua pesanan" (atau sebaliknya).
+  const toOrders = () => { if (!['actions', 'orders'].includes(getView())) selectView('actions'); };
   const root = '/rest/v1/';
   const ordersSelect = '*,pentol_order_items(*),pentol_payments(*)';
   const dialog = $('ops-dialog');
@@ -147,6 +149,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
       return async () => {
         await refresh('Pesanan diperbarui.');
         if (!$('packing').hidden) open('packing');
+        if (!$('delivery').hidden) open('delivery');
         if (!$('finance').hidden) open('finance');
         if (!$('receivables').hidden) await open('receivables');
         if (!$('today').hidden) await open('today');
@@ -265,7 +268,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
     if (remind && !shown.includes(remind)) rest.push(remind);
     if (notify && !shown.includes(notify)) rest.push(notify);
     rest.unshift(button('Ubah pesanan', () => {
-      selectView('orders');
+      toOrders();
       openOrder(order);
     }));
     if (!order.paid && !paid(order) && !shipped) {
@@ -399,6 +402,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
               saveReference.remove();
               await refresh('Nomor invoice Excel tersimpan.');
               if (!$('packing').hidden) open('packing');
+        if (!$('delivery').hidden) open('delivery');
             } catch (error) {
               feedback.textContent = errorMessage(error);
               saveReference.disabled = false;
@@ -460,7 +464,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
 
   async function runGptAction(action, row, mark) {
     if (action.type === 'order') {
-      selectView('orders');
+      toOrders();
       openOrder(null, {customer:action.customer, phone:action.contact, area:action.location, note:action.note, items:action.items});
       const form = $('order-form').elements;
       form.order_date.value = action.date;
@@ -665,17 +669,17 @@ export function initOperations({ $, request, status, products, prices, today, fo
     const sections = [
       ['Permintaan baru', entries, 'permintaan', entry => entry.customer + ' · ' + sinceText(entry.created_at),
         'Buka permintaan', () => {
-          selectView('orders');
+          selectView('actions');
           const inbox = $('checkout-inbox');
           inbox.open = true;
           inbox.querySelector('summary').focus();
-        }, '', entry => [rowAction('Proses', () => { selectView('orders'); openOrder(null, entry); })]],
+        }, '', entry => [rowAction('Proses', () => { toOrders(); openOrder(null, entry); })]],
       ['Bisa dikemas', ready, 'pesanan', null,
         'Buka yang siap dikemas', () => selectView('packing', 'dueReady'),
         [fullyReady && fullyReady + ' siap penuh', ready.length - fullyReady && (ready.length - fullyReady) + ' sebagian']
           .filter(Boolean).join(' · ') + ' · dari ' + deliveries.length + ' yang perlu diantar'],
       ['Perlu diantar', deliveries, 'pesanan', order => order.customer + ' · ' + when(order),
-        'Buka daftar antar', () => selectView('packing', 'due'),
+        'Buka daftar antar', () => selectView('delivery', 'due'),
         [late && late + ' terlambat', unscheduled && unscheduled + ' belum dijadwalkan'].filter(Boolean).join(' · '),
         order => [rowAction('Antar', () => shipDialog(order))]],
       ['Diantar, belum lunas', unpaid, 'pesanan', order => order.customer + ' · ' + money(balance(order))
@@ -811,14 +815,16 @@ export function initOperations({ $, request, status, products, prices, today, fo
     }
   }
 
-  async function packing(target, initialMode) {
+  // kind 'packing': apa yang bisa dikemas (total per varian). kind 'delivery': siapa yang perlu diantar.
+  async function packing(target, initialMode, kind = 'packing') {
+    const modes = kind === 'packing'
+      ? [['dueReady','Siap dikemas sekarang'],['ready','Siap dikemas per tanggal'],['packing','Semua per tanggal jadwal']]
+      : [['due','Perlu diantar'],['unscheduled','Belum dijadwalkan'],['pending','Semua belum diantar'],['date','Per tanggal jadwal']];
+    const valid = mode => modes.some(([id]) => id === mode) ? mode : null;
     const old = initialMode ? today() : target.querySelector('[name=pack_date]')?.value || today();
-    const oldFilter = initialMode || target.querySelector('[name=pack_filter]')?.value || 'due';
+    const oldFilter = valid(initialMode) || valid(target.querySelector('[name=pack_filter]')?.value) || modes[0][0];
     const day = control('Tanggal jadwal antar', 'pack_date', {type:'date', value:old});
-    const filter = control('Tampilkan', 'pack_filter', {value:oldFilter, values:[
-      ['due','Perlu diantar'],['dueReady','Siap dikemas sekarang'],
-      ['packing','Per tanggal jadwal'],['ready','Siap dikemas per tanggal'],['unscheduled','Belum dijadwalkan'],['pending','Semua belum diantar']
-    ]});
+    const filter = control('Tampilkan', 'pack_filter', {value:oldFilter, values:modes});
     const output = el('div');
     target.replaceChildren(block([day,filter], 'ops-filters'), output);
     async function render() {
@@ -830,7 +836,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
       if ((day.lastChild.value || today()) !== date || filter.lastChild.value !== mode) return;
       const allocation = allocatePacking(open);
       const due = mode === 'due' || mode === 'dueReady';
-      day.hidden = due;
+      day.hidden = !['packing', 'ready', 'date'].includes(mode);
       const listed = due ? dueOrders(open, today())
         : mode === 'pending' ? open
         : mode === 'unscheduled' ? open.filter(order => !order.delivery_on)
@@ -867,7 +873,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
         orderButtons(order, card, 'packing');
         output.append(card);
       }
-      if (totals.size) output.prepend(table(['Varian / batch','Pack siap dikemas'],[...totals],''));
+      if (kind === 'packing' && totals.size) output.prepend(table(['Varian / batch','Pack siap dikemas'],[...totals],''));
       if (!orders.length) output.append(el('p', 'Tidak ada pesanan untuk pilihan ini.'));
     }
     const reload = () => render().catch(() => { output.textContent = 'Daftar packing belum bisa dimuat.'; });
@@ -1564,7 +1570,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
     return load();
   }
 
-  const views={today:overview,packing,purchasing,finance,promotions,reconcile,history,receivables,closeDay};
+  const views={today:overview,packing:(t,m)=>packing(t,m,'packing'),delivery:(t,m)=>packing(t,m,'delivery'),purchasing,finance,promotions,reconcile,history,receivables,closeDay};
   async function open(view, packingMode) {
     if (!views[view]) return;
     const token=getSession();
@@ -1646,7 +1652,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
         }
         return async () => {
           await refresh('Koreksi tersimpan dan tercatat di Riwayat Perubahan.');
-          for (const view of ['packing', 'receivables', 'finance']) if (!$(view).hidden) await open(view);
+          for (const view of ['packing', 'delivery', 'receivables', 'finance']) if (!$(view).hidden) await open(view);
         };
       });
     sync();

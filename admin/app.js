@@ -1,5 +1,5 @@
 import { supabaseUrl, supabasePublishableKey } from './config.js';
-import { initOperations } from './operations.js?v=hapus-20';
+import { initOperations } from './operations.js?v=pesanan-21';
 
 const products = new Map([
   ['UR','Pentol Urat'], ['PK','Pentol Kecil'], ['TP','Tahu Pentol'],
@@ -546,14 +546,17 @@ document.addEventListener('keydown', event => {
 
 // Menu utama dengan beberapa bagian ditampilkan sebagai tab di atas halaman.
 const viewGroups = {
-  orders: [['orders', 'Daftar pesanan'], ['packing', 'Packing & antar'], ['receivables', 'Tagihan']],
+  orders: [['actions', 'Perlu tindakan'], ['orders', 'Semua pesanan'], ['packing', 'Packing'], ['delivery', 'Antar'], ['receivables', 'Tagihan']],
   stock: [['stock', 'Stok'], ['purchasing', 'Restok & PO']],
   finance: [['finance', 'Laba & harga'], ['closeDay', 'Tutup hari']]
 };
 const groupOf = view => Object.keys(viewGroups).find(group => viewGroups[group].some(([id]) => id === view));
-const lastInGroup = Object.fromEntries(Object.keys(viewGroups).map(group => [group, group]));
+const lastInGroup = Object.fromEntries(Object.keys(viewGroups).map(group => [group, viewGroups[group][0][0]]));
+// "Perlu tindakan" dan "Semua pesanan" memakai panel yang sama (#orders) dengan tampilan berbeda.
+const panelOf = view => view === 'actions' ? 'orders' : view;
+const deliveryModes = ['due', 'pending', 'unscheduled', 'date'];
 // Halaman terakhir disimpan di alamat (#tagihan dsb.) agar refresh browser membuka halaman yang sama.
-const knownViews = () => Array.from(document.querySelectorAll('.admin-content > .panel'), panel => panel.id);
+const knownViews = () => [...Array.from(document.querySelectorAll('.admin-content > .panel'), panel => panel.id), 'actions'];
 let currentView = (() => {
   const wanted = decodeURIComponent(location.hash.slice(1));
   return knownViews().includes(wanted) && wanted !== 'signin' ? wanted : 'today';
@@ -562,6 +565,7 @@ let currentView = (() => {
 function renderSubtabs(group, view) {
   const bar = $('subtabs');
   bar.hidden = !group;
+  bar.classList.toggle('many', Boolean(group) && viewGroups[group].length > 3);
   if (!group) return bar.replaceChildren();
   bar.replaceChildren(...viewGroups[group].map(([id, label]) => {
     const tab = document.createElement('button');
@@ -571,15 +575,18 @@ function renderSubtabs(group, view) {
     tab.addEventListener('click', () => { if (id !== currentView) selectView(id); });
     return tab;
   }));
+  // 5 sub menu di HP bisa lebih lebar dari layar: geser agar yang aktif terlihat.
+  bar.querySelector('[aria-current]')?.scrollIntoView({ inline:'nearest', block:'nearest' });
 }
 
 function selectView(view, packingMode, { keepScroll = false } = {}) {
+  if (view === 'packing' && deliveryModes.includes(packingMode)) view = 'delivery';
   const group = groupOf(view);
   if (group) lastInGroup[group] = view;
   currentView = view;
   const navView = group || view;
   menuButtons.forEach(tab => tab.setAttribute('aria-pressed', String(tab.dataset.view === navView)));
-  document.querySelectorAll('.admin-content > .panel').forEach(panel => { panel.hidden = panel.id !== view; });
+  document.querySelectorAll('.admin-content > .panel').forEach(panel => { panel.hidden = panel.id !== panelOf(view); });
   renderSubtabs(group, view);
   const navLabel = Array.from(menuButtons).find(tab => tab.dataset.view === navView).querySelector('span:not(.nav-icon):not(.nav-badge)').textContent;
   const subLabel = group ? viewGroups[group].find(([id]) => id === view)[1] : '';
@@ -590,9 +597,9 @@ function selectView(view, packingMode, { keepScroll = false } = {}) {
   if (isMobile() && !keepScroll) {
     setMenuExpanded(false);
     scrollTo({top:0});
-    $(view).querySelector('h2').focus({preventScroll:true});
+    $(panelOf(view)).querySelector('h2').focus({preventScroll:true});
   }
-  if (view === 'orders') { loadOrders(); ops.inbox(); }
+  if (view === 'orders' || view === 'actions') { setOrdersMode(view); loadOrders(); ops.inbox(); }
   else ops.open(view, packingMode);
 }
 
@@ -801,6 +808,23 @@ const chipFilters = {
   pending: '&cancelled=eq.false&delivered=eq.false'
 };
 const chipLabels = { action:'Perlu tindakan', unpaid:'Belum bayar', pending:'Belum antar', all:'Per tanggal' };
+// Perlu tindakan: permintaan katalog + pesanan belum bayar/antar (tombol cepat).
+// Semua pesanan: per tanggal/minggu dengan filter status.
+function setOrdersMode(view) {
+  const actions = view === 'actions';
+  if (actions && orderChip === 'all') setOrderChip('action');
+  if (!actions) setOrderChip('all');
+  $('orders-title').textContent = actions ? 'Perlu tindakan' : 'Semua pesanan';
+  $('orders-desc').textContent = actions ? 'Permintaan baru dan pesanan yang belum dibayar atau belum diantar.'
+    : 'Semua pesanan per tanggal atau minggu, termasuk yang selesai dan dibatalkan.';
+  $('checkout-inbox').hidden = !actions;
+  document.querySelector('.order-chips').hidden = !actions;
+  $('order-filters').hidden = actions;
+  if (!actions) $('order-filters').open = true;
+  // Pertama kali dibuka: minggu ini (harian sering kosong).
+  if (!actions && !ordersModeSeen) { ordersModeSeen = true; orderPeriod.value = 'week'; }
+}
+let ordersModeSeen = false;
 function setOrderChip(chip) {
   orderChip = chip;
   document.querySelectorAll('.order-chips [data-chip]').forEach(button =>
@@ -1104,7 +1128,7 @@ orderForm.addEventListener('submit', event => {
 
 const ops = initOperations({
   $, request, status, products, prices, today, format, tableRow, emptyRow, quantities,
-  getRows:() => rows, getSession:() => session, openOrder,
+  getRows:() => rows, getSession:() => session, getView:() => currentView, openOrder,
   refresh:refreshAfterOrder, selectView, loadRows
 });
 

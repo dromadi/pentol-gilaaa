@@ -181,6 +181,16 @@ Permintaan pemilik: admin bisa mengubah pesanan saat pembeli menambah, mengurang
 
 Kartu permintaan sekarang: **Proses pesanan** · **Ubah** · **Balas WA** · **Hapus**. "Arsipkan" (dengan Batalkan 6 detik) diganti **Hapus** yang memunculkan kotak "Hapus pesanan X? Yakin hapus permintaan ini?" dengan tombol merah **Ya, hapus** / Tutup. Di database tetap status `dismissed` (tidak dihapus permanen) dan tampil di lipatan **Dihapus 14 hari terakhir** dengan tombol Buat pesanan. Form dari katalog berjudul "Pesanan dari katalog · Nama" dengan petunjuk bahwa varian/jumlah/jadwal bisa diubah sebelum disimpan. `showDialog` kini menerima `submitLabel` dan `danger`. Versi `hapus-20`.
 
+## Menu Pesanan: 5 sub menu (14 Nov)
+
+Permintaan pemilik: pisahkan "Perlu tindakan" dari daftar lain, dan pisahkan Packing dari Antar.
+- **Perlu tindakan** (`#actions`, panel `#orders`): permintaan dari katalog + pesanan belum bayar/belum antar, dengan tombol cepat Semua · Belum bayar · Belum antar. Tanpa filter tanggal. Bawaan saat membuka menu Pesanan.
+- **Semua pesanan** (`#orders`): per hari/minggu (bawaan minggu ini) dengan filter status, termasuk yang selesai & batal. Tanpa permintaan katalog dan tombol cepat.
+- **Packing** (`#packing`): Siap dikemas sekarang · Siap dikemas per tanggal · Semua per tanggal jadwal, dengan tabel total pack per varian/batch.
+- **Antar** (`#delivery`, panel baru): Perlu diantar · Belum dijadwalkan · Semua belum diantar · Per tanggal jadwal. "Buka daftar antar" di Hari Ini membuka sub menu ini.
+- **Tagihan**: tetap.
+- Di HP kelima sub menu muat satu baris (kelas `.subtabs.many`, teks boleh 2 baris). Membuka form pesanan dari ⋯ / Hari Ini tidak lagi memindahkan Perlu tindakan ↔ Semua pesanan (`toOrders`). Versi `pesanan-21`. Uji: `Pesanan: 5 sub menu…`.
+
 ## Input lewat ChatGPT (tahap 1: tempel)
 
 Keputusan: **aplikasi (Supabase) tetap sumber kebenaran**; ChatGPT hanya pintu masuk. Tidak ada data yang tersimpan tanpa konfirmasi admin di form aplikasi, sehingga semua validasi database tetap berlaku.
