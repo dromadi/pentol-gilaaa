@@ -219,6 +219,81 @@ export function adminTests(browser, devices, baseUrl) {
     await s.close();
   });
 
+  test('koreksi: batalkan pembayaran dan kurangi jumlah antar (alasan wajib)', async () => {
+    const data = defaultData();
+    data.orders = [order('o9', 'Hana Koreksi', { delivery_on: todayJakarta(), items: [[4, 2]], delivered_at: shiftDay(-1) + 'T05:00:00Z',
+      pentol_payments: [{ id: 'p1', order_id: 'o9', paid_on: shiftDay(-1), amount: 50000 }] })];
+    const s = await open(data);
+    await goSub(s.page, 'orders');
+    const openFix = async () => {
+      await s.page.locator('#order-rows .more-actions summary').first().click();
+      await s.page.locator('#order-rows .more-actions[open] button', { hasText: 'Koreksi' }).click();
+      await s.page.waitForTimeout(200);
+    };
+    await openFix();
+    const kinds = await s.page.$$eval('#ops-fields [name=kind] option', options => options.map(o => o.value));
+    equal(kinds, ['void_pay', 'unship', 'cancel_rest'], 'jenis koreksi yang tersedia');
+    await s.page.click('#ops-form > button:not([type])');
+    assert(await s.page.isVisible('#ops-dialog'), 'tanpa alasan, dialog tidak tersimpan');
+    await s.page.fill('#ops-fields [name=reason]', 'salah ketik nominal');
+    await s.page.click('#ops-form > button:not([type])');
+    await s.page.waitForTimeout(400);
+    let fix = s.data.writes.find(w => w.fn === 'pentol_correct_order');
+    equal([fix?.body.change_type, fix?.body.payload.payment_id, fix?.body.change_reason], ['void_pay', 'p1', 'salah ketik nominal'], 'batal bayar');
+    await openFix();
+    await s.page.selectOption('#ops-fields [name=kind]', 'unship');
+    await s.page.fill('#ops-fields [name=quantity]', '1');
+    await s.page.fill('#ops-fields [name=reason]', 'baru 1 yang diantar');
+    await s.page.click('#ops-form > button:not([type])');
+    await s.page.waitForTimeout(400);
+    fix = s.data.writes.filter(w => w.fn === 'pentol_correct_order')[1];
+    equal([fix?.body.change_type, fix?.body.payload], ['unship', { stock_id: 's1', quantity: 1 }], 'kurangi antar');
+    await s.close();
+  });
+
+  test('stok opname: hanya baris berubah ditandai, semua hitungan dikirim sekali', async () => {
+    const s = await open();
+    await goSub(s.page, 'stock');
+    assert(await s.page.isVisible('#opname-start'), 'tombol Hitung stok tampil');
+    await s.page.click('#opname-start');
+    await s.page.fill('#ops-fields [name=count_s1]', '20');
+    assert(await s.page.$eval('.opname-row', row => row.dataset.diff === 'true'), 'baris berbeda ditandai');
+    await s.page.click('#ops-form > button:not([type])');
+    await s.page.waitForTimeout(400);
+    const opname = s.data.writes.find(w => w.fn === 'pentol_stock_opname');
+    equal(opname?.body.counts, [{ stock_id: 's1', expected_revision: 1, physical: 20 }], 'hitungan terkirim');
+    assert(/^Opname \d\d\/\d\d$/.test(opname.body.change_reason), 'keterangan bawaan Opname dd/mm');
+    await s.close();
+  });
+
+  test('sebelum SQL operasional: Koreksi & Hitung stok tersembunyi, laporan pakai tanggal pesanan', async () => {
+    const data = defaultData();
+    data.missing = ['pentol_shipments'];
+    const s = await open(data);
+    assert(!await s.page.isVisible('.opname-reminder'), 'tanpa pengingat opname');
+    await goSub(s.page, 'stock');
+    assert(await s.page.isHidden('#opname-start'), 'Hitung stok tersembunyi');
+    await goSub(s.page, 'orders');
+    await s.page.locator('#order-rows .more-actions summary').first().click();
+    equal(await s.page.locator('#order-rows .more-actions[open] button:visible', { hasText: 'Koreksi' }).count(), 0, 'Koreksi tersembunyi');
+    await goSub(s.page, 'finance');
+    await s.page.waitForTimeout(400);
+    assert((await s.page.textContent('.report-chart h3')).includes('menurut tanggal pesanan'), 'laporan cara lama');
+    await s.close();
+  });
+
+  test('laporan memakai tanggal antar dari catatan pengiriman', async () => {
+    const data = defaultData();
+    data.shipments = [{ order_id: 'o6', stock_id: 's1', quantity: 2, unit_price: 36000, shipped_on: todayJakarta() },
+      { order_id: 'o7', stock_id: 's1', quantity: 1, unit_price: 36000, shipped_on: '2020-01-01' }];
+    const s = await open(data);
+    await goSub(s.page, 'finance');
+    await s.page.waitForTimeout(500);
+    equal(await s.page.textContent('.report-number'), 'Rp72.000', 'hanya pengiriman dalam rentang tanggal');
+    assert(!(await s.page.textContent('.report-chart h3')).includes('tanggal pesanan'), 'grafik menurut tanggal antar');
+    await s.close();
+  });
+
   test('HP lama tanpa Map.groupBy: Tagihan tetap tampil', async () => {
     const s = await open(defaultData(), { oldBrowser: true });
     await goSub(s.page, 'orders', 'Tagihan');

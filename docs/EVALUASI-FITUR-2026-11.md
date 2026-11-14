@@ -46,7 +46,8 @@ Ukurannya: apakah pekerjaan harian (terima pesanan → kemas & antar → terima 
 | B7 | **Diperbaiki.** Rekonsiliasi tidak lagi bisa menaikkan booking (`pentol_reconcile_with_history` menolak jenis `stock`; UI menampilkan "Excel punya booking N pack yang belum jadi pesanan · catat di menu Pesanan"). Booking lama tanpa pesanan ditampilkan di Stok per Batch dan dibereskan lewat Catat pesanan → Pakai booking lama |
 | B8 | **Diperbaiki.** `Map.groupBy` diganti `groupBy()` di `admin/reconcile.js` (dipakai juga oleh Tagihan), `Object.hasOwn` diganti `hasOwnProperty`. Diuji di Chromium dengan kedua fungsi dihapus (simulasi HP lama): Tagihan tampil normal |
 | B4 | **Diperbaiki.** `allocatePacking()` membagi stok fisik (diterima − diantar) per batch ke pesanan belum diantar menurut jadwal antar paling awal, lalu tanggal pesan; Packing menampilkan "Siap dikemas", "Siap sebagian · X dari Y pack", atau "Tertahan" per pesanan, dan Hari Ini memakai perhitungan yang sama |
-| Lainnya | Belum dikerjakan (B5 menunggu SQL: perlu tanggal per pengantaran) |
+| B5 | **Diperbaiki setelah `operasional-2026-11.sql` dijalankan**: laporan memakai `pentol_shipments` (tanggal antar per pengiriman) |
+| Lainnya | Belum dikerjakan |
 
 Pengujian B6/B7: Postgres lokal (tulis langsung ditolak; rekonsiliasi stok ditolak; koreksi valid/tidak valid; PO, pesanan, antar, bayar tetap jalan) dan Chromium HP (form koreksi hanya memanggil RPC, indikator booking tanpa pesanan, tombol Catat restok).
 
@@ -99,6 +100,17 @@ Diuji di Chromium HP dengan data tiruan (filter URL per tombol, Batalkan/arsip s
 **Admin:** Restok & PO — tabel item jadi kartu bertumpuk di HP (`table()` kini memberi `data-label` per sel), "Terima barang" jadi tombol utama, "Lihat stok batch" dihapus (sudah ada tab Stok). Promosi — pilihan varian berupa chip dua kolom, bawaan hanya varian yang ada stoknya. Tutup hari & Rekonsiliasi — tombol utama ditandai, kolom pilih file lebih rapi.
 
 Uji baru di `tests/catalog.test.js`: urutan varian habis, Diantar mewajibkan alamat, data pembeli terisi otomatis saat kunjungan ulang.
+
+## Operasional: koreksi, opname, tanggal antar (14 Nov)
+
+Migrasi `admin/operasional-2026-11.sql` (jalankan setelah `stock-integrity-2026-11.sql`):
+- **`pentol_shipments`** — satu baris per perubahan jumlah diantar (negatif untuk koreksi), dengan `shipped_on` (WIB) dan harga satuan. Diisi trigger `pentol_log_shipment` pada `pentol_order_items.shipped`, jadi semua jalur (Antar, rekonsiliasi, koreksi) tercatat tanpa mengubah `pentol_order_action`. Data lama diisi sekali (tanggal = `delivered_at` atau tanggal pesan), aman diulang.
+- **`pentol_correct_order(change_type, target, expected_revision, payload, change_reason)`** — `void_pay` (hapus pembayaran salah), `unship` (kurangi jumlah diantar; stok kembali ke terpesan), `cancel_rest` (sisa yang belum diantar dihapus, booking dilepas; perlu minimal satu item sudah diantar). Status lunas dihitung ulang, alasan wajib, revisi dicek, dicatat di `pentol_reconciliation_history` (constraint `action` diperluas).
+- **`pentol_stock_opname(counts, change_reason)`** — hitungan fisik (diterima − diantar) untuk banyak baris dalam satu transaksi, memanggil `pentol_correct_received` hanya untuk baris yang berbeda.
+
+Admin: menu "⋯" pesanan → **Koreksi**; Stok → **🧊 Hitung stok**; pengingat opname mingguan di Hari Ini; laporan (penjualan, HPP, ongkir, grafik) memakai **tanggal antar**. Ketersediaan dicek sekali per sesi lewat `pentol_shipments` (`hasOpsTools()`); sebelum migrasi semua ini tersembunyi dan laporan kembali ke tanggal pesanan. Ini menutup bug B5 dan catatan `delivered_at` antar sebagian.
+
+Diuji: SQL (`tests/sql/scenario.sql`: catatan pengiriman, alasan & revisi, batal bayar, kurangi antar, batal sisa, opname) + pengisian data lama & jalankan ulang; browser (`tests/admin.test.js`: dialog Koreksi, opname, tersembunyi sebelum SQL, laporan per tanggal antar).
 
 ## Input lewat ChatGPT (tahap 1: tempel)
 

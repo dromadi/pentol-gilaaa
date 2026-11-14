@@ -479,3 +479,13 @@ input[type="file"]::file-selector-button { margin-right: 10px; padding: 8px 14px
   #purchasing-body td[colspan] { grid-column: 1 / -1; }
   .promo-chips { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* ===== Koreksi & opname ===== */
+.opname-list { display: grid; gap: 8px; grid-template-columns: 1fr; }
+.opname-row { padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); }
+.opname-row[data-diff="true"] { border-color: #f1d999; background: #fff7e2; }
+.opname-row input { margin-top: 4px; max-width: 160px; font-weight: 700; }
+.opname-reminder { background: #eef7f8; border-color: #c4e0e3; }
+.opname-reminder p { color: #2c5257; }
+.opname-reminder button { background: #2f6b72; border-color: #2f6b72; }
+#ops-fields > label:not([hidden]) + label, #ops-fields > label + p, #ops-fields > p + label { margin-top: 14px; }

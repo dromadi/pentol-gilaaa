@@ -46,6 +46,37 @@ do $$ begin assert (select (reserved, delivered) from public.pentol_batch_stock 
 select public.pentol_correct_received(id,revision,5,current_date,'1 pack rusak') from public.pentol_batch_stock where batch_code='B3' and sku='UR';
 do $$ begin assert (select count(*) from public.pentol_reconciliation_history where reason='1 pack rusak') = 1, 'koreksi tercatat'; end $$;
 
+\echo '• operasional: catatan pengiriman, koreksi bayar/antar, batal sisa, opname'
+-- Pesanan Sari: 4 UR, sudah diantar 2, bayar 50.000 (dari langkah sebelumnya).
+do $$ begin assert (select coalesce(sum(quantity),0) from public.pentol_shipments where order_id='cccccccc-0000-0000-0000-000000000001') = 2, 'pengiriman tercatat 2 pack'; end $$;
+select pg_temp.expect_error($$select public.pentol_correct_order('void_pay','cccccccc-0000-0000-0000-000000000001',4,'{"payment_id":"dddddddd-0000-0000-0000-000000000001"}',' ')$$, 'Alasan koreksi');
+select pg_temp.expect_error($$select public.pentol_correct_order('void_pay','cccccccc-0000-0000-0000-000000000001',3,'{"payment_id":"dddddddd-0000-0000-0000-000000000001"}','salah ketik')$$, 'sudah berubah');
+select public.pentol_correct_order('void_pay','cccccccc-0000-0000-0000-000000000001',4,'{"payment_id":"dddddddd-0000-0000-0000-000000000001"}','salah ketik nominal');
+do $$ begin assert (select count(*) from public.pentol_payments where order_id='cccccccc-0000-0000-0000-000000000001') = 0, 'pembayaran terhapus'; end $$;
+-- Koreksi antar: 2 -> 1; stok diantar turun, terpesan naik; catatan pengiriman -1.
+select pg_temp.expect_error($$select public.pentol_correct_order('unship','cccccccc-0000-0000-0000-000000000001',5,(select jsonb_build_object('stock_id',id,'quantity',3) from public.pentol_batch_stock where batch_code='B3' and sku='UR'),'x')$$, 'harus 1');
+select public.pentol_correct_order('unship','cccccccc-0000-0000-0000-000000000001',5,
+  (select jsonb_build_object('stock_id',id,'quantity',1) from public.pentol_batch_stock where batch_code='B3' and sku='UR'),'baru 1 yang diantar');
+do $$ begin
+  assert (select (reserved, delivered) from public.pentol_batch_stock where batch_code='B3' and sku='UR') = (3, 1), 'stok setelah koreksi antar';
+  assert (select sum(quantity) from public.pentol_shipments where order_id='cccccccc-0000-0000-0000-000000000001') = 1, 'catatan pengiriman bersih 1';
+end $$;
+-- Batal sisa: pesanan 4 pack, diantar 1 -> pesanan jadi 1 pack, booking 3 dilepas, selesai antar.
+select public.pentol_correct_order('cancel_rest','cccccccc-0000-0000-0000-000000000001',6,'{}','pelanggan batal sisa');
+do $$ begin
+  assert (select quantity from public.pentol_order_items where order_id='cccccccc-0000-0000-0000-000000000001') = 1, 'jumlah pesanan jadi 1';
+  assert (select reserved from public.pentol_batch_stock where batch_code='B3' and sku='UR') = 0, 'booking dilepas';
+  assert (select delivered from public.pentol_orders where id='cccccccc-0000-0000-0000-000000000001'), 'pesanan selesai antar';
+  assert (select count(*) from public.pentol_reconciliation_history where action in ('void_pay','unship','cancel_rest')) = 3, 'tiga koreksi tercatat';
+end $$;
+-- Opname: fisik UR = 3 (aplikasi: diterima 5 - diantar 1 = 4) -> diterima jadi 4; JM tetap.
+select public.pentol_stock_opname((select jsonb_agg(jsonb_build_object('stock_id',id,'expected_revision',revision,'physical',case when sku='UR' then 3 else received-delivered end)) from public.pentol_batch_stock where batch_code='B3'), 'Opname 14/11');
+do $$ begin
+  assert (select received from public.pentol_batch_stock where batch_code='B3' and sku='UR') = 4, 'opname menurunkan diterima ke 4';
+  assert (select count(*) from public.pentol_reconciliation_history where reason='Opname 14/11') = 1, 'hanya baris yang berbeda dicatat';
+end $$;
+select pg_temp.expect_error($$select public.pentol_stock_opname('[{"stock_id":"00000000-0000-0000-0000-000000000000","expected_revision":1,"physical":-1}]','x')$$, 'tidak valid');
+
 \echo '• bukan admin ditolak'
 select set_config('request.uid','22222222-2222-2222-2222-222222222222',false);
 select pg_temp.expect_error($$select public.pentol_order_action('pay','cccccccc-0000-0000-0000-000000000001',4,'{}')$$, 'insufficient_privilege');
@@ -53,8 +84,8 @@ reset role;
 
 \echo '• katalog & checkout publik: batas stok, retry, batas global'
 set role anon;
-do $$ begin assert (select max_qty from public.pentol_catalog_v2() where sku='UR') = 1, 'max_qty UR = 1 (5 diterima - 2 terpesan - 2 diantar)'; end $$;
-select pg_temp.expect_error($$select public.pentol_submit_checkout(gen_random_uuid(),'A','081111111111','','','[{"sku":"UR","quantity":2}]')$$, 'tersisa 1 pack');
+do $$ begin assert (select max_qty from public.pentol_catalog_v2() where sku='UR') = 3, 'max_qty UR = 3 (4 diterima - 0 terpesan - 1 diantar)'; end $$;
+select pg_temp.expect_error($$select public.pentol_submit_checkout(gen_random_uuid(),'A','081111111111','','','[{"sku":"UR","quantity":4}]')$$, 'tersisa 3 pack');
 select public.pentol_submit_checkout('eeeeeeee-0000-0000-0000-000000000001','A','081111111111','','','[{"sku":"UR","quantity":1}]');
 select public.pentol_submit_checkout('eeeeeeee-0000-0000-0000-000000000001','A','081111111111','','','[{"sku":"UR","quantity":1}]');
 reset role;

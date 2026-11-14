@@ -251,6 +251,12 @@ export function initOperations({ $, request, status, products, prices, today, fo
       rest.push(button('Batalkan', () => orderDialog('cancel', order, 'Batalkan pesanan · ' + order.customer,
         [el('p', 'Stok yang dipesan akan dilepas. Riwayat pesanan tetap tampil dengan status Batal.')], () => ({}))));
     }
+    if (order.pentol_payments.length || shipped) {
+      const fix = button('Koreksi', () => correctionDialog(order));
+      fix.hidden = true;
+      hasOpsTools().then(ok => { fix.hidden = !ok; });
+      rest.push(fix);
+    }
     extra.append(...rest);
     const more = el('details', undefined, 'action-menu more-actions');
     const summary = el('summary', '⋯');
@@ -633,7 +639,16 @@ export function initOperations({ $, request, status, products, prices, today, fo
         button('Unduh cadangan', event => downloadBackup(event.currentTarget)));
       return box;
     })() : null;
-    target.replaceChildren(...(reminder ? [reminder] : []), block(sections.map(([title, records, unit, describe, action, navigate, note], index) => {
+    const opnameDays = (await hasOpsTools().catch(() => false)) ? opnameAge() : 0;
+    if (getSession() !== session) return;
+    const opnameReminder = opnameDays === null || opnameDays >= 7 ? (() => {
+      const box = el('section', undefined, 'backup-reminder opname-reminder');
+      box.append(el('p', '🧊 ' + (opnameDays === null ? 'Belum pernah hitung stok fisik di perangkat ini.' : 'Hitung stok terakhir ' + opnameDays + ' hari lalu.')
+        + ' Cocokkan isi freezer seminggu sekali agar stok tepat.'),
+        button('Hitung stok', () => { selectView('stock'); opnameDialog(); }));
+      return box;
+    })() : null;
+    target.replaceChildren(...[reminder, opnameReminder].filter(Boolean), block(sections.map(([title, records, unit, describe, action, navigate, note], index) => {
       const card = el('section', undefined, 'ops-card today-card');
       card.dataset.tone = ['request', 'pack', 'deliver', 'money'][index];
       const isMoney = records === unpaid;
@@ -913,7 +928,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
       date.setUTCDate(date.getUTCDate() - (date.getUTCDay() + 6) % 7);
       return date.toISOString().slice(0, 10);
     }
-    function weeklyChart(orders, hpp) {
+    function weeklyChart(entries) {
       const starts = [];
       let cursor = weekStart(today());
       for (let i = 0; i < 4; i++) {
@@ -923,11 +938,9 @@ export function initOperations({ $, request, status, products, prices, today, fo
         cursor = d.toISOString().slice(0, 10);
       }
       const sums = new Map(starts.map(start => [start, 0]));
-      for (const o of orders) {
-        const key = weekStart(o.order_date);
-        if (!sums.has(key)) continue;
-        sums.set(key, sums.get(key) + o.pentol_order_items.reduce((sum, i) => sum + i.shipped * i.unit_price, 0)
-          + (o.delivered ? Number(o.shipping_charge) : 0));
+      for (const entry of entries) {
+        const key = weekStart(entry.date);
+        if (sums.has(key)) sums.set(key, sums.get(key) + entry.amount);
       }
       const max = Math.max(1, ...sums.values());
       const chart = el('div', undefined, 'week-chart');
@@ -953,33 +966,61 @@ export function initOperations({ $, request, status, products, prices, today, fo
       if (!a || !b || a>b) { out.textContent='Pilih rentang tanggal yang valid.'; return; }
       out.textContent='Memuat laporan…';
       const chartFrom = (() => { const d = new Date(weekStart(today()) + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - 21); return d.toISOString().slice(0, 10); })();
-      const [data,orders,payments,recent] = await Promise.all([
+      // Dengan catatan pengiriman (operasional-2026-11.sql): penjualan & HPP menurut tanggal antar.
+      // Tanpa itu: cara lama, menurut tanggal pesanan.
+      const byShipDate = await hasOpsTools();
+      const wib = day => day + 'T00:00:00%2B07:00';
+      const nextDay = day => { const d = new Date(day + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); };
+      const doneIn = (from, to) => list('pentol_orders?select=id,shipping_charge,shipping_cost,delivered_at',
+        '&cancelled=eq.false&delivered=eq.true&delivered_at=gte.' + wib(from) + '&delivered_at=lt.' + wib(nextDay(to)) + '&order=id');
+      const shipsIn = (from, to) => list('pentol_shipments?select=order_id,stock_id,quantity,unit_price,shipped_on',
+        '&shipped_on=gte.' + from + '&shipped_on=lte.' + to + '&order=id');
+      const [data,orders,payments,recent,ships,done,recentShips,recentDone] = await Promise.all([
         purchases(),
         list('pentol_orders?select='+ordersSelect,'&cancelled=eq.false&order_date=gte.'+a+'&order_date=lte.'+b+'&order=order_date,id'),
         list('pentol_payments?select=id,amount','&paid_on=gte.'+a+'&paid_on=lte.'+b+'&order=paid_on,id'),
-        list('pentol_orders?select='+ordersSelect,'&cancelled=eq.false&order_date=gte.'+chartFrom+'&order=order_date,id')
+        byShipDate ? [] : list('pentol_orders?select='+ordersSelect,'&cancelled=eq.false&order_date=gte.'+chartFrom+'&order=order_date,id'),
+        byShipDate ? shipsIn(a, b) : [],
+        byShipDate ? doneIn(a, b) : [],
+        byShipDate ? shipsIn(chartFrom, today()) : [],
+        byShipDate ? doneIn(chartFrom, today()) : []
       ]);
       if (generation !== current) return;
       const hpp = costs(data);
       const cash = payments.reduce((sum, payment) => sum + payment.amount, 0);
       let billed=0, revenue=0, cost=0, shipping=0, missing=0, unsold=0, stockUnknown=0;
       const byProduct = new Map();
+      const addSold = (stockId, qty, price) => {
+        const s = stock(stockId);
+        const unit = s ? hpp.get(s.batch_code+'|'+s.sku) : undefined;
+        revenue += qty*price;
+        if (unit === undefined) missing += qty;
+        else cost += qty*unit;
+        const metrics = byProduct.get(s?.sku) || [0,0];
+        metrics[1] += qty;
+        byProduct.set(s?.sku, metrics);
+      };
       for (const o of orders) {
         billed += total(o);
-        if (o.delivered) { revenue += o.shipping_charge; shipping += o.shipping_cost; }
         for (const i of o.pentol_order_items) {
-          const s = stock(i.stock_id);
-          const sku = s?.sku;
-          const unit = s ? hpp.get(s.batch_code+'|'+sku) : undefined;
-          revenue += i.shipped*i.unit_price;
-          if (unit === undefined) missing += i.shipped;
-          else cost += i.shipped*unit;
+          const sku = stock(i.stock_id)?.sku;
           const metrics = byProduct.get(sku) || [0,0];
           metrics[0] += i.quantity;
-          metrics[1] += i.shipped;
           byProduct.set(sku,metrics);
+          if (!byShipDate) addSold(i.stock_id, i.shipped, i.unit_price);
         }
+        if (!byShipDate && o.delivered) { revenue += o.shipping_charge; shipping += o.shipping_cost; }
       }
+      if (byShipDate) {
+        for (const x of ships) addSold(x.stock_id, x.quantity, x.unit_price);
+        for (const o of done) { revenue += Number(o.shipping_charge); shipping += Number(o.shipping_cost); }
+      }
+      const jakartaDay = new Intl.DateTimeFormat('sv-SE', {timeZone:'Asia/Jakarta'});
+      const chartEntries = byShipDate
+        ? [...recentShips.map(x => ({ date: x.shipped_on, amount: x.quantity * x.unit_price })),
+           ...recentDone.map(o => ({ date: jakartaDay.format(new Date(o.delivered_at)), amount: Number(o.shipping_charge) }))]
+        : recent.map(o => ({ date: o.order_date, amount: o.pentol_order_items.reduce((sum, i) => sum + i.shipped * i.unit_price, 0)
+            + (o.delivered ? Number(o.shipping_charge) : 0) }));
       for (const s of getRows()) {
         const unit = hpp.get(s.batch_code+'|'+s.sku);
         if (unit === undefined) stockUnknown += quantities(s)[3];
@@ -995,7 +1036,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
           : 'Penjualan diantar ' + money(revenue) + (revenue ? ' · margin ' + (net/revenue*100).toFixed(1) + '%' : ''), 'report-sub'),
         el('p', 'Kas diterima ' + money(cash) + ' · Tagihan ' + money(billed), 'report-sub'));
       const chartBox = el('section', undefined, 'report-chart');
-      chartBox.append(el('h3', 'Penjualan diantar per minggu'), weeklyChart(recent, hpp));
+      chartBox.append(el('h3', 'Penjualan diantar per minggu' + (byShipDate ? '' : ' (menurut tanggal pesanan)')), weeklyChart(chartEntries));
       const detail = el('details', undefined, 'report-details');
       detail.append(el('summary', 'Rincian laporan'));
       out.replaceChildren(headline, chartBox, detail);
@@ -1006,7 +1047,8 @@ export function initOperations({ $, request, status, products, prices, today, fo
         ['Laba setelah biaya antar',missing ? 'HPP belum lengkap' : money(net)],
         ['Margin setelah biaya antar',!missing && revenue ? (net/revenue*100).toFixed(1)+'%' : '—'],
         ['Nilai stok siap jual (saat ini)',money(unsold)+(stockUnknown ? ' · HPP '+stockUnknown+' pack belum ada' : '')]
-      ],''), el('p','Tagihan dan penjualan diantar mengikuti tanggal pesanan. Kas mengikuti tanggal pembayaran tercatat; status lunas lama tanpa tanggal pembayaran tidak dihitung sebagai kas. HPP mengalokasikan biaya batch merata per pack yang dipesan dari supplier.'),
+      ],''), el('p',(byShipDate ? 'Tagihan mengikuti tanggal pesanan. Penjualan diantar, HPP, dan ongkir mengikuti tanggal antar.'
+        : 'Tagihan dan penjualan diantar mengikuti tanggal pesanan.') + ' Kas mengikuti tanggal pembayaran tercatat; status lunas lama tanpa tanggal pembayaran tidak dihitung sebagai kas. HPP mengalokasikan biaya batch merata per pack yang dipesan dari supplier.'),
       table(['Varian','Terpesan','Diantar'],[...byProduct].sort((a,b)=>b[1][0]-a[1][0])
         .map(([sku,x])=>[products.get(sku)||'Varian batch',...x]),'Belum ada penjualan.'),
       table(['Batch','Varian','HPP / pack'],[...hpp].map(([key,value])=>{
@@ -1268,12 +1310,114 @@ export function initOperations({ $, request, status, products, prices, today, fo
   }
   function clear() {
     if (dialog.open) dialog.close();
+    opsTools = null;
+    $('opname-start').hidden = true;
     excelInvoices.clear();
     lastReconciliation = null;
     for (const view of Object.keys(views)) $(view+'-body').replaceChildren();
     $('inbox-list').replaceChildren();
     $('inbox-count').textContent='';
   }
+
+  // ===== Operasional: koreksi transaksi & stok opname (aktif setelah operasional-2026-11.sql). =====
+  let opsTools = null;
+  // Cek sekali per sesi lewat tabel pentol_shipments (dibuat oleh migrasi yang sama): ada -> 200, belum -> 404.
+  function hasOpsTools() {
+    if (!opsTools) {
+      const session = getSession();
+      opsTools = request(root + 'pentol_shipments?select=id&limit=1')
+        .then(() => true, error => error.status !== 404)
+        .then(result => {
+          if (getSession() !== session) opsTools = null;
+          $('opname-start').hidden = !result;
+          return result;
+        });
+    }
+    return opsTools;
+  }
+  const correctionKnown = /^(Alasan koreksi|Pesanan sudah berubah|Pesanan aktif|Pembayaran tidak|Item pesanan|Jumlah koreksi|Belum ada yang diantar|Tidak ada sisa|Item .* pernah|Isi hitungan|Jumlah fisik|Baris stok|Stok berubah|Jumlah diterima)/;
+
+  function correctionDialog(order) {
+    const shippedItems = order.pentol_order_items.filter(i => i.shipped > 0);
+    const kinds = [
+      ...(order.pentol_payments.length ? [['void_pay', 'Batalkan pembayaran yang salah']] : []),
+      ...(shippedItems.length ? [['unship', 'Kurangi jumlah yang tercatat diantar']] : []),
+      ...(shippedItems.length && order.pentol_order_items.some(i => i.shipped < i.quantity) ? [['cancel_rest', 'Batalkan sisa pesanan yang belum diantar']] : [])
+    ];
+    if (!kinds.length) return status('Belum ada pembayaran atau pengantaran yang bisa dikoreksi.', true);
+    const kind = control('Jenis koreksi', 'kind', { value: kinds[0][0], values: kinds });
+    const payment = control('Pembayaran', 'payment_id', { required:false, value: order.pentol_payments[0]?.id,
+      values: order.pentol_payments.map(p => [p.id, p.paid_on + ' · ' + money(p.amount)]) });
+    const item = control('Varian / batch', 'stock_id', { required:false, value: shippedItems[0]?.stock_id,
+      values: shippedItems.map(i => [i.stock_id, label(i) + ' · diantar ' + i.shipped]) });
+    const qty = control('Kurangi berapa pack', 'quantity', { type:'number', required:false, value:1, props:{ min:1 } });
+    const rest = el('p', 'Sisa yang belum diantar dihapus dari pesanan dan booking stoknya dilepas. Bagian yang sudah diantar tetap ditagih.');
+    const reason = control('Alasan koreksi', 'reason', { props:{ maxLength:500, placeholder:'Contoh: salah ketik nominal' } });
+    const sync = () => {
+      const k = kind.lastChild.value;
+      payment.hidden = k !== 'void_pay';
+      item.hidden = qty.hidden = k !== 'unship';
+      rest.hidden = k !== 'cancel_rest';
+      const chosen = shippedItems.find(i => i.stock_id === item.lastChild.value);
+      qty.lastChild.max = chosen ? chosen.shipped : 1;
+    };
+    kind.lastChild.addEventListener('change', sync);
+    item.lastChild.addEventListener('change', sync);
+    showDialog('Koreksi · ' + order.customer + ' · Invoice ' + invoiceNumber(order),
+      [el('p', 'Setiap koreksi tercatat di Riwayat Perubahan beserta alasannya.'), kind, payment, item, qty, rest, reason], async data => {
+        const k = data.get('kind');
+        const payload = k === 'void_pay' ? { payment_id: data.get('payment_id') }
+          : k === 'unship' ? { stock_id: data.get('stock_id'), quantity: Number(data.get('quantity')) } : {};
+        try {
+          await request(root + 'rpc/pentol_correct_order', { method:'POST', body:{ change_type:k, target:order.id,
+            expected_revision:order.revision, payload, change_reason:String(data.get('reason') || '').trim() } });
+        } catch (error) {
+          throw new Error(correctionKnown.test(error.message) ? error.message : 'Koreksi belum terkonfirmasi. Muat ulang daftar lalu coba lagi.');
+        }
+        return async () => {
+          await refresh('Koreksi tersimpan dan tercatat di Riwayat Perubahan.');
+          for (const view of ['packing', 'receivables', 'finance']) if (!$(view).hidden) await open(view);
+        };
+      });
+    sync();
+  }
+
+  const opnameKey = 'pentol-opname-at';
+  function opnameAge() {
+    try { const last = localStorage.getItem(opnameKey); return last ? daysBetween(last, today()) : null; } catch { return null; }
+  }
+  function opnameDialog() {
+    const rows = getRows().filter(row => row.received || row.reserved || row.delivered)
+      .sort((a, b) => a.sku.localeCompare(b.sku) || a.batch_code.localeCompare(b.batch_code));
+    if (!rows.length) return status('Belum ada stok batch untuk dihitung.', true);
+    const fields = rows.map(row => {
+      const onHand = row.received - row.delivered;
+      const field = control(products.get(row.sku) + ' · ' + row.batch_code + ' · tercatat ' + onHand, 'count_' + row.id,
+        { type:'number', value:onHand, props:{ min:0, max:1000000, inputMode:'numeric' } });
+      field.className = 'opname-row';
+      field.lastChild.addEventListener('input', () => { field.dataset.diff = String(Number(field.lastChild.value) !== onHand); });
+      return field;
+    });
+    const day = today();
+    const reason = control('Keterangan', 'reason', { value:'Opname ' + day.slice(8) + '/' + day.slice(5, 7), props:{ maxLength:500 } });
+    showDialog('Hitung stok (opname)', [el('p', 'Isi jumlah pack yang benar-benar ada di freezer (belum diantar). '
+      + 'Baris yang angkanya berubah dicatat sebagai koreksi dengan keterangan di bawah.'), block(fields, 'opname-list'), reason], async data => {
+      const counts = rows.map(row => ({ stock_id: row.id, expected_revision: row.revision, physical: Number(data.get('count_' + row.id)) }));
+      let changed;
+      try {
+        changed = await request(root + 'rpc/pentol_stock_opname', { method:'POST', body:{ counts, change_reason:String(data.get('reason') || '').trim() } });
+      } catch (error) {
+        throw new Error(correctionKnown.test(error.message) ? error.message : 'Hitung stok belum tersimpan. Muat ulang daftar stok lalu coba lagi.');
+      }
+      try { localStorage.setItem(opnameKey, today()); } catch {}
+      return async () => {
+        await loadRows();
+        status(changed ? changed + ' baris stok dikoreksi sesuai hitungan fisik.' : 'Hitungan cocok dengan aplikasi. Tidak ada koreksi.');
+        document.querySelectorAll('.opname-reminder').forEach(node => node.remove());
+      };
+    });
+  }
+  $('opname-start').addEventListener('click', () => { if (getSession()) opnameDialog(); });
 
   // ===== Cadangan data: semua tabel ke satu file Excel, diunduh di perangkat ini. =====
   const backupKey = 'pentol-backup-at';

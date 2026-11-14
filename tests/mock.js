@@ -33,21 +33,26 @@ export function defaultData() {
   };
 }
 
+// Filter PostgREST sederhana: kolom=op.nilai (eq, lt, gte, lte, is), plus or=(paid.eq.false,delivered.eq.false).
 function matches(o, url) {
   const q = new URL(url).searchParams;
-  const eq = (key, value) => !q.has(key) || q.getAll(key).every(rule => {
-    const [op, arg] = [rule.slice(0, rule.indexOf('.')), rule.slice(rule.indexOf('.') + 1)];
-    const v = value;
-    if (op === 'eq') return String(v) === arg;
-    if (op === 'lt') return v != null && v < arg;
-    if (op === 'gte') return v != null && v >= arg;
-    if (op === 'lte') return v != null && v <= arg;
-    if (op === 'is') return arg === 'null' ? v == null : String(v) === arg;
-    return true;
-  });
-  if (q.has('or') && q.get('or') === '(paid.eq.false,delivered.eq.false)' && o.paid && o.delivered) return false;
-  return eq('cancelled', o.cancelled) && eq('paid', o.paid) && eq('delivered', o.delivered) && eq('delivery_on', o.delivery_on)
-    && eq('order_date', o.order_date) && eq('id', o.id) && eq('status', o.status);
+  const skip = new Set(['select', 'order', 'limit', 'offset', 'or']);
+  const value = v => typeof v === 'string' && /T\d\d:/.test(v) ? Date.parse(v) : v;
+  for (const key of new Set(q.keys())) {
+    if (skip.has(key)) continue;
+    for (const rule of q.getAll(key)) {
+      const dot = rule.indexOf('.');
+      const op = rule.slice(0, dot), arg = rule.slice(dot + 1), v = o[key];
+      const a = value(arg), b = value(v);
+      if (op === 'eq' && String(v) !== arg) return false;
+      if (op === 'lt' && !(v != null && b < a)) return false;
+      if (op === 'gte' && !(v != null && b >= a)) return false;
+      if (op === 'lte' && !(v != null && b <= a)) return false;
+      if (op === 'is' && (arg === 'null' ? v != null : String(v) !== arg)) return false;
+    }
+  }
+  if (q.get('or') === '(paid.eq.false,delivered.eq.false)' && o.paid && o.delivered) return false;
+  return true;
 }
 
 const json = (route, body, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
@@ -60,8 +65,11 @@ export async function mockSupabase(page, data) {
     const path = new URL(url).pathname;
     if (path.startsWith('/auth/v1/token')) return json(route, { access_token: 'a', refresh_token: 'r', expires_in: 3600 });
     if (path.startsWith('/rest/v1/rpc/')) {
-      data.writes.push({ fn: path.split('/').pop(), body: JSON.parse(request.postData() || '{}') });
-      return route.fulfill({ status: 204 });
+      const fn = path.split('/').pop();
+      if (data.missingRpc?.includes(fn)) return json(route, { code: 'PGRST202', message: 'Could not find the function' }, 404);
+      const body = JSON.parse(request.postData() || '{}');
+      data.writes.push({ fn, body });
+      return fn === 'pentol_stock_opname' ? json(route, 1) : route.fulfill({ status: 204 });
     }
     if (request.method() !== 'GET') { data.writes.push({ method: request.method(), path }); return json(route, []); }
     const table = path.split('/').pop();
@@ -71,6 +79,7 @@ export async function mockSupabase(page, data) {
     if (table === 'pentol_inbox') return json(route, data.inbox.filter(entry => matches(entry, url)));
     if (table === 'pentol_products') return json(route, Object.entries(PRICES).map(([sku, price]) => ({ sku, price })));
     if (table === 'pentol_orders') return json(route, data.orders.filter(o => matches(o, url)));
+    if (table === 'pentol_shipments') return json(route, (data.shipments || []).filter(x => matches(x, url)));
     if (table === 'pentol_order_items') return json(route, data.orders.flatMap(o => o.cancelled ? [] :
       o.pentol_order_items.map(i => ({ ...i, pentol_orders: { cancelled: o.cancelled } }))));
     return json(route, []);
