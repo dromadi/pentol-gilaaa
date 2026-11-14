@@ -14,9 +14,9 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Pentol Admin">
 <title>Admin · Pentol Gilaaa Surabaya</title>
-<link rel="stylesheet" href="style.css?v=hari-13">
+<link rel="stylesheet" href="style.css?v=pesanan-14b">
 <script defer src="vendor/jszip.min.js"></script>
-<script type="module" src="app.js?v=hari-13"></script>
+<script type="module" src="app.js?v=pesanan-14"></script>
 </head>
 <body>
 <header class="app-header"><div class="bar">
@@ -131,7 +131,7 @@
 <button type="button" data-chip="all" aria-pressed="false">Per tanggal</button>
 </div>
 <div class="order-search-row">
-<input id="order-search" type="search" placeholder="Cari nama pelanggan…" autocomplete="off" aria-label="Cari pelanggan">
+<input id="order-search" type="search" placeholder="Cari nama, WA, invoice, atau lokasi…" autocomplete="off" aria-label="Cari pelanggan">
 <button type="button" id="refresh-orders" class="secondary" aria-label="Muat ulang pesanan">↻</button>
 </div>
 <details id="order-filters" class="order-filters"><summary>Filter lain · tanggal &amp; status</summary>
@@ -149,7 +149,7 @@
 <p id="order-metrics" class="order-metrics-line" aria-live="polite"></p>
 <p id="orders-summary" class="result-count" aria-live="polite"></p>
 <div class="table order-table" tabindex="0" role="region" aria-label="Daftar pesanan">
-<table><thead><tr><th id="order-date-column" hidden>Tanggal</th><th>Pelanggan</th><th>Pesanan</th><th>Tagihan</th><th>Pembayaran</th><th>Pengantaran</th><th>Aksi</th></tr></thead><tbody id="order-rows"></tbody></table>
+<table><thead><tr><th id="order-date-column" hidden>Tanggal</th><th>Pelanggan</th><th>Pesanan</th><th>Tagihan</th><th>Status</th><th>Aksi</th></tr></thead><tbody id="order-rows"></tbody></table>
 </div>
 </section>
 <section id="reconcile" class="panel" hidden>

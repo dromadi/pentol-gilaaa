@@ -204,7 +204,7 @@ summary { cursor: pointer; }
   .stock-table thead,.order-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .stock-table tbody tr,.order-table tbody tr { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 18px; margin-bottom: 12px; }
   .stock-table td,.order-table td { min-width: 0; padding: 0; border: 0; overflow-wrap: anywhere; }
-  td[data-label]::before { content: attr(data-label); display: block; font-size: 9px; color: #9b8879; font-weight: 500; margin-bottom: 5px; }
+  .stock-table td[data-label]::before { content: attr(data-label); display: block; font-size: 9px; color: #9b8879; font-weight: 500; margin-bottom: 5px; }
   .stock-table td[data-label="Varian"] { font-size: 15px; }
   .stock-table td:last-child { align-self: end; text-align: right; }
   .order-table td[data-label="Pelanggan"] { font-size: 17px; }
@@ -512,3 +512,26 @@ input[type="file"]::file-selector-button { margin-right: 10px; padding: 8px 14px
 #today-body > .backup-reminder p { font-size: 11px; }
 #today-body > .backup-reminder button { min-height: 36px; padding: 4px 14px; }
 #today-body > .backup-reminder button, .backup-reminder button { color: #fff; }
+
+/* ===== Daftar pesanan ringkas, tagihan & permintaan ===== */
+.order-table td[data-label="Pelanggan"] strong { display: block; font-size: 14px; }
+.order-meta { display: block; margin-top: 3px; font-size: 11px; font-weight: 500; color: #8a786c; overflow-wrap: anywhere; }
+.order-table td[data-label="Status"] { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+.order-when { font-size: 11px; color: #6f5f55; font-weight: 600; }
+.order-table .order-description { white-space: normal; line-height: 1.5; }
+.pay-split { display: grid; gap: 2px; margin-top: 4px; }
+.pay-split p { margin: 0; font-size: 12px; color: #435c54; }
+@media (max-width: 620px) {
+  .order-table tbody tr { grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; padding: 14px; margin-bottom: 10px; }
+  .order-table td[data-label="Pelanggan"] { grid-column: 1; grid-row: 1; font-size: 14px; }
+  .order-table td[data-label="Pelanggan"] strong { font-size: 16px; }
+  .order-table td[data-label="Tagihan"] { grid-column: 2; grid-row: 1; text-align: right; font-size: 15px; }
+  .order-table td[data-label="Pesanan"] { grid-column: 1 / -1; border: 0; padding: 0; font-size: 13px; color: #4a3b34; }
+  .order-table td[data-label="Status"] { grid-column: 1 / -1; }
+  .order-table td[data-label="Tanggal"] { grid-column: 1 / -1; font-size: 10px; }
+  .order-table tr:has(td[data-label="Tanggal"]) td[data-label="Tanggal"] { grid-row: 1; }
+  .order-table tr:has(td[data-label="Tanggal"]) td[data-label="Pelanggan"],
+  .order-table tr:has(td[data-label="Tanggal"]) td[data-label="Tagihan"] { grid-row: 2; }
+  .order-table td[data-label="Aksi"] { grid-column: 1 / -1; padding-top: 2px; }
+}
+.ops-card > .ops-actions .primary-action, .ops-card > .ops-actions .wa-link { min-height: 40px; font-size: 12px; padding-inline: 16px; }

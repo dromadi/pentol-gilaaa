@@ -123,6 +123,16 @@ Temuan & perbaikan:
 
 Diuji (`tests/admin.test.js`): urutan & aksi per baris, jumlah kartu = jumlah daftar, kartu diperbarui saat permintaan baru, Proses membuka form.
 
+## Evaluasi per menu: Pesanan (14 Nov)
+
+- **Daftar pesanan:** kartu ringkas (±510 px dari ±750 px): nama + total, baris info `Invoice · WA · lokasi`, varian tanpa kode batch, status + jadwal antar dalam satu baris (kolom "Status" menggantikan Pembayaran/Pengantaran). Pencarian juga mencocokkan nomor WA (08…/62…), nomor invoice, dan lokasi.
+- **Permintaan katalog:** lama menunggu + tombol **Balas WA** berisi konfirmasi pesanan (`confirmMessage`).
+- **Packing:** dibuka di mode `due` (Perlu diantar), label pilihan dipersingkat, tanggal "Sab, 14 Nov" (`dayLabel`), hanya tombol pertama yang berwarna penuh.
+- **Tagihan:** per pelanggan dengan > 1 invoice: **Ingatkan semua (n)** dalam satu pesan WA (`remindAllMessage`) dan **Bayar sekaligus** (`payTogetherDialog`: nominal dibagi ke invoice tertua lebih dulu, masing-masing lewat `pentol_order_action('pay')`; bila gagal di tengah, pesan menyebut berapa yang sudah tersimpan). Tombol muat ulang ganda dihapus, tanggal mudah dibaca.
+- **Bug:** label kolom ganda di tabel ringkasan (aturan `td[data-label]::before` global) dibatasi ke `.stock-table`.
+
+Diuji: pencarian WA/invoice/nama, Balas WA, mode bawaan Packing, Ingatkan semua, pembagian Bayar sekaligus.
+
 ## Input lewat ChatGPT (tahap 1: tempel)
 
 Keputusan: **aplikasi (Supabase) tetap sumber kebenaran**; ChatGPT hanya pintu masuk. Tidak ada data yang tersimpan tanpa konfirmasi admin di form aplikasi, sehingga semua validasi database tetap berlaku.

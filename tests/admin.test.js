@@ -111,6 +111,43 @@ export function adminTests(browser, devices, baseUrl) {
     await s.close();
   });
 
+  test('Pesanan: cari nama/WA/invoice; permintaan katalog punya Balas WA', async () => {
+    const s = await open();
+    await goSub(s.page, 'orders');
+    const count = () => s.page.$$eval('#order-rows tr', rows => rows.filter(r => !r.querySelector('td[colspan]')).length);
+    await s.page.fill('#order-search', '00002'); await s.page.waitForTimeout(150);
+    equal(await count(), 1, 'cari nomor invoice');
+    await s.page.fill('#order-search', '0812 3456'); await s.page.waitForTimeout(150);
+    equal(await count(), 6, 'cari nomor WA');
+    await s.page.fill('#order-search', 'ani'); await s.page.waitForTimeout(150);
+    equal(await count(), 1, 'cari nama');
+    const meta = await s.page.textContent('#order-rows .order-meta');
+    assert(meta.startsWith('Invoice 00001') && meta.includes('Gedung B'), 'baris info: ' + meta);
+    const reply = decodeURIComponent(await s.page.getAttribute('#inbox-list .wa-link', 'href'));
+    assert(reply.includes('wa.me/6281234567890') && reply.includes('Pentol Urat × 2'), 'Balas WA berisi pesanan');
+    await s.close();
+  });
+
+  test('Packing dibuka di "Perlu diantar"; Tagihan: bayar sekaligus dibagi ke invoice tertua', async () => {
+    const data = defaultData();
+    data.orders.push(order('o8', 'Gina Belum Bayar', { delivered: true, items: [[3, 3]], delivered_at: shiftDay(-2) + 'T05:00:00Z' }));
+    const s = await open(data);
+    await goSub(s.page, 'orders', 'Packing & antar');
+    equal(await s.page.$eval('[name=pack_filter]', select => select.value), 'due', 'mode bawaan');
+    assert(/Antar (Sen|Sel|Rab|Kam|Jum|Sab|Min)/.test(await s.page.textContent('#packing-body')), 'tanggal mudah dibaca');
+    await goSub(s.page, 'orders', 'Tagihan');
+    const gina = s.page.locator('#receivables-body > .ops-card').filter({ hasText: 'Gina Belum Bayar' });
+    const remind = decodeURIComponent(await gina.locator('.wa-link', { hasText: 'Ingatkan semua (2)' }).getAttribute('href'));
+    assert(remind.includes('Invoice 00007') && remind.includes('Invoice 00008') && remind.includes('Total sisa Rp180.000'), 'satu pesan untuk 2 invoice');
+    await gina.locator('button', { hasText: 'Bayar sekaligus' }).click();
+    await s.page.fill('#ops-fields [name=amount]', '100000');
+    await s.page.click('#ops-form > button:not([type])');
+    await s.page.waitForTimeout(500);
+    const pays = s.data.writes.filter(w => w.body.action === 'pay').map(w => [w.body.target, w.body.payload.amount]);
+    equal(pays, [['o7', 72000], ['o8', 28000]], 'invoice tertua dilunasi dulu');
+    await s.close();
+  });
+
   test('aksi langsung dan tautan WhatsApp berisi tagihan', async () => {
     const s = await open();
     await goSub(s.page, 'orders', 'Tagihan');

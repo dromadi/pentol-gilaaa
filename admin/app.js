@@ -1,5 +1,5 @@
 import { supabaseUrl, supabasePublishableKey } from './config.js';
-import { initOperations } from './operations.js?v=hari-13';
+import { initOperations } from './operations.js?v=pesanan-14';
 
 const products = new Map([
   ['UR','Pentol Urat'], ['PK','Pentol Kecil'], ['TP','Tahu Pentol'],
@@ -808,9 +808,15 @@ function renderOrderList() {
   $('order-metrics').textContent = active.length + ' aktif · ' + active.filter(order => !order.paid).length + ' belum bayar · '
     + active.filter(order => !order.delivered).length + ' belum antar · Rp' + format.format(charges) + ' tagihan';
   const query = orderSearch.value.trim().toLocaleLowerCase('id');
+  const digits = query.replace(/\D/g, '');
+  // Cari nama, lokasi, nomor invoice, atau nomor WA (08… / 62…).
+  const matchesQuery = order => !query
+    || [order.customer, order.delivery_location || '', ops.invoiceNumber(order)].some(text => text.toLocaleLowerCase('id').includes(query))
+    || (digits.length >= 3 && [(order.contact || '').replace(/\D/g, ''), String(order.invoice_no)].some(text =>
+      text.includes(digits) || text.includes(digits.replace(/^0/, '62')) || text.replace(/^62/, '0').includes(digits)));
   const selectedStatus = orderStatus.value;
   const visible = loadedOrders.filter(order => {
-    if (!order.customer.toLocaleLowerCase('id').includes(query)) return false;
+    if (!matchesQuery(order)) return false;
     if (orderChip !== 'all') return true;
     switch (selectedStatus) {
       case 'unpaid': return !order.cancelled && !order.paid;
@@ -822,31 +828,43 @@ function renderOrderList() {
   });
   const target = $('order-rows');
   target.replaceChildren(...visible.map(order => {
-    const descriptions = order.pentol_order_items.map(item => {
+    // Ringkas: varian tanpa kode batch; jadwal, lokasi, invoice, dan WA di satu baris info.
+    const items = order.pentol_order_items.map(item => {
       const row = stockById.get(item.stock_id);
-      return (row ? products.get(row.sku) : 'Varian batch') + ' × ' + format.format(item.quantity)
-        + (row ? ' · ' + row.batch_code : '');
-    });
+      return (row ? products.get(row.sku) : 'Varian') + ' × ' + format.format(item.quantity);
+    }).join(', ');
     const dates = weekly ? [displayDate.format(new Date(order.order_date))] : [];
-    const tr = tableRow([...dates, order.customer, descriptions.join('\n'), 'Rp' + format.format(ops.total(order)),
-      ops.paymentLabel(order), ops.deliveryLabel(order)]);
-    const labels = [...(weekly ? ['Tanggal'] : []), 'Pelanggan', 'Pesanan', 'Tagihan', 'Pembayaran', 'Pengantaran'];
+    const tr = tableRow([...dates, '', items, 'Rp' + format.format(ops.total(order)), '']);
+    const labels = [...(weekly ? ['Tanggal'] : []), 'Pelanggan', 'Pesanan', 'Tagihan', 'Status'];
     Array.from(tr.cells).forEach((cell, index) => { cell.dataset.label = labels[index]; });
-    tr.cells[weekly ? 2 : 1].className = 'order-description';
     const offset = weekly ? 1 : 0;
-    for (const [index, complete] of [[3,order.paid],[4,order.delivered]]) {
-      const cell = tr.cells[offset + index];
+    const who = tr.cells[offset];
+    const name = document.createElement('strong');
+    name.textContent = order.customer;
+    const meta = document.createElement('small');
+    meta.className = 'order-meta';
+    meta.textContent = ['Invoice ' + ops.invoiceNumber(order), order.contact, order.delivery_location].filter(Boolean).join(' · ');
+    who.append(name, meta);
+    tr.cells[offset + 1].className = 'order-description';
+    const state = tr.cells[offset + 3];
+    for (const [label, complete] of [[ops.paymentLabel(order), order.paid], [ops.deliveryLabel(order), order.delivered]]) {
       const chip = document.createElement('span');
       chip.className = 'status-chip ' + (order.cancelled ? 'cancelled' : complete ? 'good' : 'waiting');
-      chip.textContent = cell.textContent;
-      cell.replaceChildren(chip);
+      chip.textContent = label;
+      state.append(chip);
+    }
+    if (!order.cancelled && !order.delivered) {
+      const when = document.createElement('span');
+      when.className = 'order-when';
+      when.textContent = order.delivery_on ? 'Antar ' + ops.dayLabel(order.delivery_on) : 'Belum dijadwalkan';
+      state.append(when);
     }
     const actions = tr.insertCell();
     actions.dataset.label = 'Aksi';
     ops.orderButtons(order, actions);
     return tr;
   }));
-  emptyRow(target, weekly ? 7 : 6, loadedOrders.length
+  emptyRow(target, weekly ? 6 : 5, loadedOrders.length
     ? 'Tidak ada pesanan yang cocok dengan pencarian.'
     : orderChip === 'action' ? 'Semua pesanan sudah dibayar dan diantar. 🎉'
     : orderChip === 'unpaid' ? 'Tidak ada pesanan yang belum dibayar.'

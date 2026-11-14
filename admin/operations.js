@@ -203,15 +203,29 @@ export function initOperations({ $, request, status, products, prices, today, fo
     else if (digits.startsWith('8')) digits = '62' + digits;
     return /^62\d{8,13}$/.test(digits) ? digits : null;
   }
-  function waLink(order, kind, text) {
-    const number = waNumber(order.contact);
+  function waAnchor(contact, message, text) {
+    const number = waNumber(contact);
     if (!number) return null;
     const link = el('a', text, 'wa-link');
-    link.href = 'https://wa.me/' + number + '?text=' + encodeURIComponent(waTemplates[kind](order));
+    link.href = 'https://wa.me/' + number + '?text=' + encodeURIComponent(message);
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
     return link;
   }
+  function waLink(order, kind, text) {
+    return waAnchor(order.contact, waTemplates[kind](order), text);
+  }
+  // Konfirmasi permintaan dari katalog dan pengingat beberapa invoice sekaligus.
+  const confirmMessage = entry => 'Halo ' + entry.customer + ', terima kasih sudah pesan di Pentol Gilaaa 🙏\n'
+    + 'Pesananmu:\n' + entry.items.map(i => '• ' + (products.get(i.sku) || i.sku) + ' × ' + i.quantity).join('\n')
+    + '\n\nKami cek stok dan jadwalnya dulu ya, segera kami kabari total dan ongkirnya.';
+  const remindAllMessage = orders => 'Halo ' + orders[0].customer + ', terima kasih sudah langganan Pentol Gilaaa 🙏\n'
+    + 'Ini pengingat tagihan yang masih terbuka:\n'
+    + orders.map(o => '• Invoice ' + invoiceNumber(o) + ' · sisa ' + money(balance(o))).join('\n')
+    + '\nTotal sisa ' + money(orders.reduce((sum, o) => sum + balance(o), 0)) + '\n\nMohon kabari kami bila sudah transfer. Terima kasih!';
+  // "2026-11-14" -> "Sab, 14 Nov"
+  const dayFormat = new Intl.DateTimeFormat('id-ID', { weekday:'short', day:'numeric', month:'short', timeZone:'UTC' });
+  const dayLabel = day => day ? dayFormat.format(new Date(day + 'T00:00:00Z')) : '';
 
   // Aksi utama tampil langsung (Antar / Bayar / WA); aksi jarang dipakai di menu "⋯".
   // context: 'packing' (daftar antar), 'receivables' (tagihan), atau kosong (daftar pesanan).
@@ -232,7 +246,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
     else if (context === 'packing') primary.push(!order.delivered && shipButton, notify, owes && payButton);
     else primary.push(!order.delivered && shipButton, owes && payButton);
     const shown = primary.filter(Boolean);
-    shown.forEach(node => { if (node.tagName === 'BUTTON') node.classList.add('primary-action'); });
+    shown.find(node => node.tagName === 'BUTTON')?.classList.add('primary-action');
     if (!shown.length) shown.push(button('Invoice', () => showInvoice(order)));
     main.append(...shown);
     const rest = [];
@@ -529,11 +543,13 @@ export function initOperations({ $, request, status, products, prices, today, fo
       $('checkout-inbox').open = entries.length > 0;
       target.replaceChildren(...entries.map(entry => {
         const card = el('article', undefined, 'ops-card');
+        const process = button('Proses pesanan', () => openOrder(null, entry));
+        process.classList.add('primary-action');
         card.append(el('strong', entry.customer),
-          el('p', 'Kode permintaan: ' + entry.id),
+          el('p', 'Masuk ' + sinceText(entry.created_at) + ' · Kode ' + entry.id.slice(0, 8)),
           el('p', [entry.phone,entry.area,entry.note].filter(Boolean).join(' · ')),
           el('p', entry.items.map(i => products.get(i.sku) + ' × ' + i.quantity).join(', ')),
-          block([button('Proses pesanan', () => openOrder(null, entry)), button('Arsipkan', () => {
+          block([process, waAnchor(entry.phone, confirmMessage(entry), 'Balas WA') || '', button('Arsipkan', () => {
             // Disimpan setelah 6 detik kecuali dibatalkan.
             card.hidden = true;
             status('Permintaan ' + entry.customer + ' diarsipkan.', false, {
@@ -693,6 +709,40 @@ export function initOperations({ $, request, status, products, prices, today, fo
 
   const deliveryDay = new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Jakarta',year:'numeric',month:'2-digit',day:'2-digit'});
 
+  // Satu pembayaran untuk beberapa invoice: dibagi ke invoice paling lama lebih dulu.
+  function payTogetherDialog(orders) {
+    const due = orders.reduce((sum, o) => sum + balance(o), 0);
+    const amount = control('Nominal diterima (Rp)', 'amount', { type:'number', value:due, props:{ min:1, max:due } });
+    const date = control('Tanggal bayar', 'date', { type:'date', value:today(), props:{ max:today() } });
+    const preview = el('div', undefined, 'pay-split');
+    const split = value => {
+      let left = Math.max(0, Math.min(due, Math.round(Number(value) || 0)));
+      return orders.map(o => { const take = Math.min(left, balance(o)); left -= take; return { order:o, take }; }).filter(x => x.take > 0);
+    };
+    const show = () => preview.replaceChildren(...split(amount.lastChild.value).map(x =>
+      el('p', 'Invoice ' + invoiceNumber(x.order) + ' · ' + money(x.take) + (x.take < balance(x.order) ? ' (sebagian)' : ' (lunas)'))));
+    amount.lastChild.addEventListener('input', show);
+    showDialog('Bayar sekaligus · ' + orders[0].customer, [el('p', 'Sisa ' + money(due) + ' dari ' + orders.length
+      + ' invoice. Nominal dibagi ke invoice yang paling lama lebih dulu.'), block([date, amount]), preview], async data => {
+      const parts = split(data.get('amount'));
+      let saved = 0;
+      for (const { order, take } of parts) {
+        try {
+          await mutate('pay', order.id, order.revision, { payment_id:crypto.randomUUID(), date:data.get('date'), amount:take });
+          saved++;
+        } catch (error) {
+          throw new Error((saved ? saved + ' dari ' + parts.length + ' invoice sudah tersimpan. ' : '') + errorMessage(error));
+        }
+      }
+      return async () => {
+        await refresh('Pembayaran ' + money(parts.reduce((sum, x) => sum + x.take, 0)) + ' dicatat ke ' + parts.length + ' invoice.');
+        if (!$('receivables').hidden) await open('receivables');
+        if (!$('today').hidden) await open('today');
+      };
+    });
+    show();
+  }
+
   async function receivables(target) {
     const session = getSession();
     target.textContent = 'Memuat piutang…';
@@ -711,19 +761,24 @@ export function initOperations({ $, request, status, products, prices, today, fo
     const customers = groupBy(sorted, ({order}) =>
       JSON.stringify([order.customer.trim().replace(/\s+/g,' ').toLocaleLowerCase('id'), (order.contact || '').replace(/\D/g,'')]));
     const summary = el('strong', money(orders.reduce((sum, order) => sum + balance(order), 0)) + ' total sisa tagihan');
-    const reload = button('Muat ulang piutang', () => open('receivables'));
-    target.replaceChildren(block([summary, reload], 'ops-filters'));
+    target.replaceChildren(block([summary], 'ops-filters'));
     if (!orders.length) target.append(el('p', 'Belum ada tagihan untuk pesanan yang sudah diantar.'));
     for (const invoices of customers.values()) {
       const customer = el('section', undefined, 'ops-card');
       const subtotal = invoices.reduce((sum, {order}) => sum + balance(order), 0);
       customer.append(el('h3', invoices[0].order.customer),
         el('p', invoices.length + ' invoice terbuka · Sisa ' + money(subtotal)));
+      if (invoices.length > 1) {
+        const all = invoices.map(x => x.order);
+        const together = button('Bayar sekaligus', () => payTogetherDialog(all));
+        together.classList.add('primary-action');
+        customer.append(block([together, waAnchor(all[0].contact, remindAllMessage(all), 'Ingatkan semua (' + all.length + ')') || ''], 'ops-actions'));
+      }
       for (const {order,days} of invoices) {
         const item = el('article', undefined, 'ops-card');
         item.append(el('strong', 'Invoice ' + invoiceNumber(order)),
           el('p', days === null ? 'Tanggal antar belum tercatat'
-            : 'Antar tercatat ' + deliveryDay.format(new Date(order.delivered_at)) + ' · ' + days + ' hari'),
+            : 'Diantar ' + dayLabel(deliveryDay.format(new Date(order.delivered_at))) + ' · ' + days + ' hari'),
           el('p', 'Total ' + money(total(order)) + ' · Dibayar ' + money(paid(order)) + ' · Sisa ' + money(balance(order))));
         orderButtons(order, item, 'receivables');
         customer.append(item);
@@ -734,11 +789,11 @@ export function initOperations({ $, request, status, products, prices, today, fo
 
   async function packing(target, initialMode) {
     const old = initialMode ? today() : target.querySelector('[name=pack_date]')?.value || today();
-    const oldFilter = initialMode || target.querySelector('[name=pack_filter]')?.value || 'packing';
+    const oldFilter = initialMode || target.querySelector('[name=pack_filter]')?.value || 'due';
     const day = control('Tanggal jadwal antar', 'pack_date', {type:'date', value:old});
     const filter = control('Tampilkan', 'pack_filter', {value:oldFilter, values:[
-      ['due','Perlu diantar (terlambat, hari ini, tanpa jadwal)'],['dueReady','Siap dikemas sekarang'],
-      ['packing','Sesuai tanggal jadwal'],['ready','Siap dikemas sesuai tanggal'],['unscheduled','Belum dijadwalkan'],['pending','Semua belum diantar']
+      ['due','Perlu diantar'],['dueReady','Siap dikemas sekarang'],
+      ['packing','Per tanggal jadwal'],['ready','Siap dikemas per tanggal'],['unscheduled','Belum dijadwalkan'],['pending','Semua belum diantar']
     ]});
     const output = el('div');
     target.replaceChildren(block([day,filter], 'ops-filters'), output);
@@ -771,7 +826,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
         const card = el('article', undefined, 'ops-card');
         const pack = packStatus(order, allocation);
         card.append(el('strong', order.customer), el('p', pack.items.map(x => label(x.item) + ' × ' + x.need).join(', ')),
-          el('p', (order.delivery_on || 'Jadwal belum diisi') + ' · ' + paymentLabel(order)));
+          el('p', (order.delivery_on ? 'Antar ' + dayLabel(order.delivery_on) : 'Jadwal belum diisi') + ' · ' + paymentLabel(order)));
         const details = [order.contact,order.delivery_location,order.delivery_note].filter(Boolean);
         if (details.length) card.append(el('p',details.join(' · ')));
         const short = pack.items.filter(x => x.ready < x.need).map(x => label(x.item) + ' kurang ' + (x.need - x.ready));
@@ -1504,5 +1559,5 @@ export function initOperations({ $, request, status, products, prices, today, fo
     return { requests: requests.length, late: late.length };
   }
 
-  return { badgeCounts, total, paymentLabel, deliveryLabel, orderButtons, mutate, errorMessage, loadPrices, inbox, open, clear };
+  return { badgeCounts, invoiceNumber, dayLabel, total, paymentLabel, deliveryLabel, orderButtons, mutate, errorMessage, loadPrices, inbox, open, clear };
 }
