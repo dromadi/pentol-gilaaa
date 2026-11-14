@@ -1,5 +1,5 @@
 import { supabaseUrl, supabasePublishableKey } from './config.js';
-import { initOperations } from './operations.js?v=stok-1';
+import { initOperations } from './operations.js?v=ui-2';
 
 const products = new Map([
   ['UR','Pentol Urat'], ['PK','Pentol Kecil'], ['TP','Tahu Pentol'],
@@ -391,18 +391,46 @@ $('logout').addEventListener('click', () => {
   if (!busy) endSession('Anda sudah keluar.');
 });
 filter.addEventListener('change', renderAnalytics);
+const isMobile = () => matchMedia('(max-width: 900px)').matches;
+const moreMenu = $('more-menu');
+const quickButtons = document.querySelectorAll('.bottom-nav [data-go]');
+
 function setMenuExpanded(expanded) {
   menuToggle.setAttribute('aria-expanded', String(expanded));
+  moreMenu.setAttribute('aria-expanded', String(expanded));
+  document.body.classList.toggle('menu-open', expanded);
 }
+
+// Navigasi bawah di HP: empat menu harian dan "Lainnya" untuk menu lengkap.
+function syncQuickNav(view) {
+  let matched = false;
+  quickButtons.forEach(button => {
+    const current = button.dataset.go === view;
+    matched ||= current;
+    if (current) button.setAttribute('aria-current', 'page');
+    else button.removeAttribute('aria-current');
+  });
+  if (matched) moreMenu.removeAttribute('aria-current');
+  else moreMenu.setAttribute('aria-current', 'page');
+}
+quickButtons.forEach(button => button.addEventListener('click', () => {
+  setMenuExpanded(false);
+  selectView(button.dataset.go);
+}));
+moreMenu.addEventListener('click', () => setMenuExpanded(moreMenu.getAttribute('aria-expanded') !== 'true'));
+syncQuickNav(Array.from(menuButtons).find(b => b.getAttribute('aria-pressed') === 'true')?.dataset.view);
+document.addEventListener('click', event => {
+  if (document.body.classList.contains('menu-open') && !event.target.closest('.admin-sidebar, .bottom-nav')) setMenuExpanded(false);
+});
 
 menuToggle.addEventListener('click', () => {
   setMenuExpanded(menuToggle.getAttribute('aria-expanded') !== 'true');
 });
-menu.parentElement.addEventListener('keydown', event => {
-  if (event.key !== 'Escape' || !menuToggle.getClientRects().length
+document.addEventListener('keydown', event => {
+  if (event.key !== 'Escape' || !isMobile()
       || menuToggle.getAttribute('aria-expanded') !== 'true') return;
   setMenuExpanded(false);
-  menuToggle.focus();
+  moreMenu.focus();
 });
 
 function selectView(view, packingMode) {
@@ -414,9 +442,11 @@ function selectView(view, packingMode) {
   });
   $('mobile-view-label').textContent = button.querySelector('span:last-child').textContent;
   document.title = $('mobile-view-label').textContent + ' · Admin Pentol Gilaaa';
-  if (menuToggle.getClientRects().length) {
+  syncQuickNav(view);
+  if (isMobile()) {
     setMenuExpanded(false);
-    $(button.dataset.view).querySelector('h2').focus();
+    scrollTo({top:0});
+    $(button.dataset.view).querySelector('h2').focus({preventScroll:true});
   }
   if (button.dataset.view === 'orders') { loadOrders(); ops.inbox(); }
   else ops.open(view, packingMode);

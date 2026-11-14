@@ -61,6 +61,16 @@ Pengujian B1–B3 (Chromium, Pixel 7, data tiruan dengan 8 jenis pesanan): pesan
 | "Riwayat Perubahan" hanya mencatat koreksi Excel, bukan edit stok/pesanan biasa | Ganti nama atau catat semua koreksi |
 | Dua cara menaikkan stok diterima (edit stok & terima PO) | Hanya lewat Terima barang di PO |
 
+## Upgrade UI/UX (tahap 1)
+
+- **Navigasi bawah di HP** (≤900 px): Hari Ini, Pesanan, Antar, Stok, Lainnya. "Lainnya" membuka menu lengkap sebagai lembar bawah (tutup dengan Esc, ketuk di luar, atau pilih menu). Bar menu gelap di atas dihapus.
+- **Menu dikelompokkan:** Harian (Hari Ini, Pesanan, Packing & Antar, Piutang) · Stok (Stok per Batch, Restok & Supplier) · Laporan & Promosi · Pembukuan Excel. Menu **Analitik Stok dihapus dari navigasi** (angka sama dengan Stok per Batch; bagian HTML-nya masih ada untuk sementara).
+- **Hari Ini:** kartu pastel dengan angka besar; "Bisa dikemas" tidak mengulang daftar nama; daftar maksimal 3 nama + "N lainnya"; tanggal di kartu hanya di HP.
+- Kartu, tabel, dan filter lebih lembut (radius 18 px, bayangan tipis), tombol berbentuk pil.
+- Diuji di Chromium HP (Pixel 7) dan desktop 1366 px: 11 menu tanpa error dan tanpa geser ke samping; navigasi bawah, lembar menu, Esc, dan ketuk di luar berfungsi.
+
+Belum: menggabungkan isi halaman (Pesanan + Packing + Piutang jadi satu tempat), dan gaya baru untuk halaman selain Hari Ini.
+
 ## Rekomendasi utama: 11 menu → 5 menu
 
 | Menu baru | Isi (dari menu lama) | Pertanyaan yang dijawab |

@@ -408,7 +408,8 @@ export function initOperations({ $, request, status, products, prices, today, fo
         inbox.querySelector('summary').focus();
       }],
       ['Bisa dikemas', ready, 'pesanan', order => order.customer + ' · ' + location(order) + ' · ' + when(order),
-        'Buka daftar packing', () => selectView('packing', 'pending')],
+        'Buka daftar packing', () => selectView('packing', 'pending'),
+        'stok siap dari ' + deliveries.length + ' yang perlu diantar'],
       ['Perlu diantar', deliveries, 'pesanan', order => order.customer + ' · ' + when(order),
         'Buka daftar antar', () => selectView('packing', 'pending'),
         [late && late + ' terlambat', unscheduled && unscheduled + ' belum dijadwalkan'].filter(Boolean).join(' · ')],
@@ -417,13 +418,28 @@ export function initOperations({ $, request, status, products, prices, today, fo
         'Buka tagihan', () => selectView('receivables'),
         unpaid.length ? 'Total sisa tagihan ' + money(unpaid.reduce((sum, order) => sum + balance(order), 0)) : '']
     ];
-    target.replaceChildren(block(sections.map(([title, records, unit, describe, action, navigate, note]) => {
-      const card = el('section', undefined, 'ops-card');
-      card.append(el('h3', title), el('strong', format.format(records.length) + ' ' + unit));
-      if (note) card.append(el('p', note));
-      const preview = el('ul');
-      preview.append(...records.slice(0, 5).map(record => el('li', describe(record))));
-      card.append(records.length ? preview : el('p', 'Tidak ada ' + unit + '.'), button(action, navigate));
+    $('today-date').dateTime = date;
+    $('today-date').textContent = new Intl.DateTimeFormat('id-ID', {weekday:'long', day:'numeric', month:'long', timeZone:'UTC'})
+      .format(new Date(date + 'T00:00:00Z'));
+    target.replaceChildren(block(sections.map(([title, records, unit, describe, action, navigate, note], index) => {
+      const card = el('section', undefined, 'ops-card today-card');
+      card.dataset.tone = ['request', 'pack', 'deliver', 'money'][index];
+      const isMoney = records === unpaid;
+      const big = isMoney ? money(unpaid.reduce((sum, order) => sum + balance(order), 0)) : format.format(records.length);
+      const head = el('div', undefined, 'today-card-head');
+      head.append(el('h3', title));
+      card.append(head, el('strong', big, 'today-number'),
+        el('p', isMoney ? format.format(records.length) + ' pesanan masih punya tagihan'
+          : records.length ? unit + (note ? ' · ' + note : '') : 'Tidak ada ' + unit + '.', 'today-note'));
+      // "Bisa dikemas" tidak mengulang daftar nama dari "Perlu diantar".
+      if (records.length && records !== ready) {
+        const preview = el('ul');
+        preview.append(...records.slice(0, 3).map(record => el('li', describe(record))));
+        if (records.length > 3) preview.append(el('li', '+' + (records.length - 3) + ' lainnya', 'today-more'));
+        card.append(preview);
+      }
+      const go = button(action + ' →', navigate);
+      card.append(go);
       return card;
     }), 'today-grid'));
   }

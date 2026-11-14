@@ -243,3 +243,60 @@ summary { cursor: pointer; }
 .reconcile-section { margin-top: 22px; }
 .reconcile-section td { min-width: 120px; }
 .reconcile-section td:last-child { min-width: 0; }
+
+/* ===== UI v2: kartu lembut, Hari Ini pastel, navigasi bawah di HP ===== */
+:root { --mint: #dff2e8; --mint-ink: #1f5b49; --peach-1: #ffd9c4; --peach-2: #ffb393; --cream: #fff1da; --radius: 18px; --shadow: 0 6px 22px #3b231a0c; }
+body { background: radial-gradient(1100px 480px at 105% -10%, #fbe7d9 0, transparent 60%), radial-gradient(900px 420px at -10% 0, #e6f2ea 0, transparent 55%), #f7f5ef; background-attachment: fixed; min-height: 100vh; }
+.app-header { background: #fffefaeb; backdrop-filter: blur(12px); }
+.ops-card, .metric, .table, .ops-filters, .stock-controls, .order-toolbar, .editor, #checkout-inbox { border-radius: var(--radius); box-shadow: var(--shadow); }
+.ops-card button, .section-head button, .ops-actions button, .editor button, #ops-dialog button { border-radius: 999px; }
+#admin-menu .sidebar-caption:first-child { margin-top: 0; }
+
+.today-header-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+#today-date { padding: 9px 15px; border-radius: 999px; background: var(--paper); border: 1px solid var(--line); font-size: 12px; font-weight: 650; color: #5b4036; }
+#today-date:empty { display: none; }
+.today-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.today-card { border: 1px solid transparent; padding: 20px; gap: 8px; }
+.today-card[data-tone="request"] { background: linear-gradient(140deg, var(--peach-1), var(--peach-2)); }
+.today-card[data-tone="pack"] { background: var(--mint); }
+.today-card[data-tone="deliver"] { background: var(--cream); }
+.today-card[data-tone="money"] { background: var(--paper); border-color: var(--line); }
+.today-card h3 { font-size: 13px; font-weight: 700; color: #3a2b25; }
+.today-card > .today-number { font: 700 46px/1 "Barlow Condensed", sans-serif; color: #2b1f1b; font-variant-numeric: tabular-nums; letter-spacing: -.5px; overflow-wrap: anywhere; }
+.today-card[data-tone="money"] > .today-number { color: var(--wine); }
+.today-note { font-size: 12px; color: #5f4f46 !important; }
+.today-card ul { font-size: 12px; color: #4a3b34; padding-inline-start: 18px; }
+.today-card li + li { margin-top: 3px; }
+.today-more { list-style: none; margin-left: -18px; color: #7a685e; }
+.today-card button { background: #ffffffc4; color: #3d2a24; border-color: #0000001a; min-height: 44px; font-size: 12px; box-shadow: none; }
+.today-card button:hover { background: #fff; }
+.today-card[data-tone="request"] button { background: var(--wine-dark); color: #fff; border-color: var(--wine-dark); }
+.today-card[data-tone="request"] button:hover { background: #2e1312; }
+
+.bottom-nav { display: none; }
+
+@media (max-width: 1200px) { .today-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 900px) {
+  #menu-toggle { display: none !important; }
+  .admin-sidebar { display: none; position: fixed; top: auto; left: 10px; right: 10px; bottom: calc(80px + env(safe-area-inset-bottom)); width: auto; max-height: 70dvh; padding: 16px 12px; border-radius: 22px; box-shadow: 0 24px 70px #24120d59; z-index: 31; }
+  body.menu-open .admin-sidebar { display: block; }
+  #menu-toggle[aria-expanded="false"] + #admin-menu { display: flex; }
+  #admin-menu { padding: 0; }
+  #admin-menu .sidebar-caption { margin: 14px 14px 6px; }
+  .bottom-nav { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px; position: fixed; left: 10px; right: 10px; bottom: calc(8px + env(safe-area-inset-bottom)); z-index: 30; padding: 6px; background: #fffefaf2; backdrop-filter: blur(14px); border: 1px solid var(--line); border-radius: 24px; box-shadow: 0 10px 32px #3b231a24; }
+  .bottom-nav button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 54px; padding: 6px 2px; border: 0; border-radius: 18px; background: transparent; color: #7a675c; font-size: 11px; font-weight: 650; box-shadow: none; }
+  .bottom-nav .nav-icon { font-size: 19px; width: auto; }
+  .bottom-nav button:hover { background: transparent; box-shadow: none; }
+  .bottom-nav button[aria-current="page"] { background: var(--mint); color: var(--mint-ink); }
+  .bottom-nav button[aria-expanded="true"] { background: #f4e5d8; color: var(--wine); }
+  .admin-main { padding-bottom: 112px; }
+  .today-card > .today-number { font-size: 40px; }
+}
+@media (max-width: 620px) {
+  .today-grid { grid-template-columns: 1fr; gap: 12px; }
+  .today-card[data-tone="pack"], .today-card[data-tone="deliver"] { padding: 18px; }
+  .today-header-actions { width: 100%; }
+  .today-header-actions #refresh-today { margin-left: auto; }
+}
+.today-card[data-tone="money"] > .today-number { font-size: clamp(32px, 2.7vw, 44px); overflow-wrap: normal; white-space: nowrap; }
+@media (min-width: 901px) { #today-date { display: none; } }
