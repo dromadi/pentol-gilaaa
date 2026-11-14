@@ -7,9 +7,9 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src https://gnwzgiiarbxutattxhcy.supabase.co; base-uri 'none'; form-action 'none'; object-src 'none'">
 <meta name="referrer" content="no-referrer">
 <title>Admin · Pentol Gilaaa Surabaya</title>
-<link rel="stylesheet" href="style.css?v=rekonsiliasi-1">
+<link rel="stylesheet" href="style.css?v=ringkasan-1">
 <script defer src="vendor/jszip.min.js"></script>
-<script type="module" src="app.js?v=close-day-1"></script>
+<script type="module" src="app.js?v=ringkasan-1"></script>
 </head>
 <body>
 <header class="app-header"><div class="bar">
@@ -51,7 +51,10 @@
 </aside>
 <div class="admin-content">
 <section id="today" class="panel">
-<div class="section-head"><div><h2 tabindex="-1">Hari Ini</h2><p>Pantau permintaan, packing, pengantaran, dan tagihan.</p></div><button id="refresh-today" type="button" class="secondary">↻ Muat ulang</button></div>
+<div class="section-head">
+  <div><h2 tabindex="-1">Ringkasan operasional</h2><p>Pantau permintaan, packing, pengantaran, dan tagihan.</p></div>
+  <div class="today-header-actions"><time id="today-date"></time><button id="refresh-today" type="button" class="secondary">↻ Muat ulang</button></div>
+</div>
 <div id="today-body" aria-live="polite"></div>
 </section>
 <section id="stock" class="panel" hidden>
