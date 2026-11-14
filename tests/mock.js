@@ -63,6 +63,8 @@ export async function mockSupabase(page, data) {
     const request = route.request();
     const url = request.url();
     const path = new URL(url).pathname;
+    if (path.startsWith('/auth/v1/')) (data.auth ||= []).push(path + new URL(url).search);
+    if (path.startsWith('/auth/v1/logout')) return route.fulfill({ status: 204 });
     if (path.startsWith('/auth/v1/token')) return json(route, { access_token: 'a', refresh_token: 'r', expires_in: 3600 });
     if (path.startsWith('/rest/v1/rpc/')) {
       const fn = path.split('/').pop();

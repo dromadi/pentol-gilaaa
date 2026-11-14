@@ -46,28 +46,57 @@ const base = supabaseUrl.replace(/\/$/, '');
 
 const sessionKey = 'pentol-admin-session:' + base;
 
+// Sesi disimpan di localStorage agar tetap masuk setelah aplikasi/tab ditutup.
+// Sesi hanya berakhir lewat tombol Keluar, atau bila server menolak perpanjangan sesi.
 function saveSession(current) {
   try {
-    if (!current) sessionStorage.removeItem(sessionKey);
+    if (!current) localStorage.removeItem(sessionKey);
     else {
       const { accessToken, refreshToken, expiresAt } = current;
-      sessionStorage.setItem(sessionKey, JSON.stringify({ accessToken, refreshToken, expiresAt }));
+      localStorage.setItem(sessionKey, JSON.stringify({ accessToken, refreshToken, expiresAt }));
     }
+    sessionStorage.removeItem(sessionKey);
   } catch {
     // Login still works in memory when browser storage is disabled.
   }
 }
 
-function readSession() {
+function parseSaved(text) {
   try {
-    const saved = JSON.parse(sessionStorage.getItem(sessionKey));
+    const saved = JSON.parse(text);
     if (typeof saved?.accessToken === 'string' && typeof saved.refreshToken === 'string'
         && Number.isFinite(saved.expiresAt)) return { ...saved, refreshing: null };
   } catch {
-    // Treat unavailable or invalid storage as a fresh visit.
+    // Treat invalid storage as a fresh visit.
   }
   return null;
 }
+
+function readSession() {
+  try {
+    // Sesi lama dari sessionStorage (versi sebelumnya) ikut dipakai sekali.
+    return parseSaved(localStorage.getItem(sessionKey)) || parseSaved(sessionStorage.getItem(sessionKey));
+  } catch {
+    return null;
+  }
+}
+
+// Tab lain sudah memperpanjang sesi? Pakai tokennya, jangan memperpanjang lagi dengan token lama
+// (Supabase bisa mencabut seluruh sesi bila refresh token lama dipakai ulang).
+function adoptStoredSession(current) {
+  const stored = readSession();
+  if (!stored || stored.refreshToken === current.refreshToken || stored.expiresAt - Date.now() < 60_000) return false;
+  current.accessToken = stored.accessToken;
+  current.refreshToken = stored.refreshToken;
+  current.expiresAt = stored.expiresAt;
+  return true;
+}
+
+addEventListener('storage', event => {
+  if (event.key !== sessionKey || !session) return;
+  if (event.newValue === null) endSession('Anda sudah keluar di tab lain.');
+  else adoptStoredSession(session);
+});
 
 // Notifikasi di bawah layar. Pesan sukses hilang sendiri; pesan galat tetap sampai ditutup.
 // action: {label, undo, commit} -> tombol Batalkan; commit dijalankan bila tidak dibatalkan.
@@ -105,6 +134,7 @@ async function refreshSession(current) {
   if (current.refreshing) return current.refreshing;
   current.refreshing = (async () => {
     try {
+      if (adoptStoredSession(current)) return;
       const auth = await request('/auth/v1/token?grant_type=refresh_token', {
         method: 'POST', body: { refresh_token: current.refreshToken }, token: null
       });
@@ -435,7 +465,12 @@ $('cancel').addEventListener('click', () => {
 stockBatch.addEventListener('change', renderStock);
 stockSearch.addEventListener('input', renderStock);
 $('logout').addEventListener('click', () => {
-  if (!busy) endSession('Anda sudah keluar.');
+  if (busy || !session) return;
+  // Cabut sesi di server juga (tanpa menunggu); data di perangkat langsung dihapus.
+  const token = session.accessToken;
+  fetch(base + '/auth/v1/logout?scope=local', { method: 'POST',
+    headers: { apikey: supabasePublishableKey, Authorization: 'Bearer ' + token } }).catch(() => {});
+  endSession('Anda sudah keluar.');
 });
 const isMobile = () => matchMedia('(max-width: 900px)').matches;
 const moreMenu = $('more-menu');
@@ -1026,9 +1061,10 @@ async function restoreSession() {
       endSession('Sesi berakhir. Silakan masuk kembali.');
       return;
     }
+    // Gangguan koneksi: sesi tetap tersimpan, jangan tampilkan form masuk.
     session = null;
-    $('signin').hidden = false;
-    status('Sesi belum bisa dimuat. Periksa koneksi lalu muat ulang halaman.', true);
+    status('Belum tersambung ke server. Periksa internet lalu coba lagi.', true,
+      { label: 'Coba lagi', undo: () => restoreSession() });
   }
 }
 

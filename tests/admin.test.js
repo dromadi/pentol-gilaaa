@@ -294,6 +294,55 @@ export function adminTests(browser, devices, baseUrl) {
     await s.close();
   });
 
+  test('sesi: tetap masuk setelah aplikasi ditutup; Keluar mencabut sesi dan ikut di tab lain', async () => {
+    const context = await browser.newContext(devices['Pixel 7']);
+    const data = defaultData();
+    const page = await context.newPage();
+    await mockSupabase(page, data);
+    await login(page, baseUrl);
+    await page.close();                                  // seperti menutup aplikasi
+    const again = await context.newPage();
+    await mockSupabase(again, data);
+    await again.goto(baseUrl + '/admin/');
+    await again.waitForSelector('#dashboard:not([hidden])', { timeout: 5000 });
+    assert(await again.isHidden('#signin'), 'tidak perlu masuk lagi');
+    const other = await context.newPage();               // tab kedua
+    await mockSupabase(other, data);
+    await other.goto(baseUrl + '/admin/');
+    await other.waitForSelector('#dashboard:not([hidden])');
+    await again.click('#logout');
+    await again.waitForTimeout(400);
+    assert(data.auth.some(call => call.startsWith('/auth/v1/logout')), 'sesi dicabut di server');
+    assert(await again.isVisible('#signin') && await other.isVisible('#signin'), 'kedua tab keluar');
+    const fresh = await context.newPage();
+    await mockSupabase(fresh, data);
+    await fresh.goto(baseUrl + '/admin/');
+    await fresh.waitForTimeout(400);
+    assert(await fresh.isVisible('#signin'), 'setelah Keluar, harus masuk lagi');
+    await context.close();
+  });
+
+  test('sesi: tanpa internet saat dibuka, sesi tidak hilang dan ada tombol Coba lagi', async () => {
+    const context = await browser.newContext(devices['Pixel 7']);
+    const data = defaultData();
+    const page = await context.newPage();
+    await mockSupabase(page, data);
+    await login(page, baseUrl);
+    await page.close();
+    const offline = await context.newPage();
+    await offline.route('https://gnwzgiiarbxutattxhcy.supabase.co/**', route => route.abort());
+    await offline.route('https://fonts.googleapis.com/**', route => route.abort());
+    await offline.goto(baseUrl + '/admin/');
+    await offline.waitForTimeout(500);
+    assert(await offline.isHidden('#signin'), 'form masuk tidak muncul');
+    assert((await offline.textContent('#status')).includes('Coba lagi'), 'ada tombol Coba lagi');
+    await offline.unroute('https://gnwzgiiarbxutattxhcy.supabase.co/**');
+    await mockSupabase(offline, data);
+    await offline.click('#status button');
+    await offline.waitForSelector('#dashboard:not([hidden])', { timeout: 5000 });
+    await context.close();
+  });
+
   test('HP lama tanpa Map.groupBy: Tagihan tetap tampil', async () => {
     const s = await open(defaultData(), { oldBrowser: true });
     await goSub(s.page, 'orders', 'Tagihan');
