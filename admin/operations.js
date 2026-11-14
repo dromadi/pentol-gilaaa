@@ -74,6 +74,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
       const row = tableRow(values.map(value => value instanceof HTMLElement ? '' : value));
       values.forEach((value, index) => {
         if (value instanceof HTMLElement) row.cells[index].append(value);
+        if (row.cells[index]) row.cells[index].dataset.label = headers[index] ?? '';
       });
       return row;
     }));
@@ -851,6 +852,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
       if (!history.length) historyPanel.append(el('p', 'Belum ada penerimaan yang dicatat dari PO.'));
       const receive = button('Terima barang', () => receivePurchase(p, items));
       receive.disabled = !receipts || !items.some(item => item.remaining > 0);
+      if (!receive.disabled) receive.classList.add('primary-action');
       card.append(el('strong', p.batch_code + ' · ' + p.supplier),
         el('p', [p.reference,p.ordered_on,p.expected_on && 'Estimasi tiba ' + p.expected_on].filter(Boolean).join(' · ')),
         el('p','Total biaya batch: ' + money(totalCost)),
@@ -865,11 +867,6 @@ export function initOperations({ $, request, status, products, prices, today, fo
               'Mohon konfirmasi harga, ongkir, styrofoam, dan estimasi tiba. Terima kasih.'];
             try { await navigator.clipboard.writeText(lines.join('\n')); status('Pesan supplier disalin.'); }
             catch { status('Pesan supplier belum bisa disalin.',true); }
-          }),
-          button('Lihat stok batch', () => {
-            selectView('stock');
-            $('stock-batch').value = p.batch_code;
-            $('stock-batch').dispatchEvent(new Event('change'));
           })], 'ops-actions'));
       target.append(card);
     }
@@ -1031,7 +1028,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
     ]});
     const options=[...products].map(([sku,name]) => {
       const wrap=control(name,sku,{type:'checkbox',required:false});
-      wrap.lastChild.checked=true;
+      wrap.lastChild.checked=(sums.get(sku)||0)>0;
       return wrap;
     });
     const preview=el('p',undefined,'ops-copy');
@@ -1055,9 +1052,9 @@ export function initOperations({ $, request, status, products, prices, today, fo
       png(lines,'Pentol-Gilaaa-'+mode,1080,mode==='story'?1920:mode==='instagram'?1350:0);
     }));
     [formatPicker,...options].forEach(o=>o.lastChild.addEventListener('change',render));
-    options.forEach(o=>o.className='order-paid');
+    options.forEach(o=>o.className='promo-chip');
     target.replaceChildren(formatPicker,el('p','Pilih varian untuk brosur. Status WhatsApp memuat tiga pilihan pertama.'),
-      block(options),preview,buttons);
+      block(options,'promo-chips'),preview,buttons);
     render();
   }
 
@@ -1173,6 +1170,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
       }
     }
     const check = button('Bandingkan', () => { if (file.files.length && !saving) compare(); });
+    check.classList.add('primary-action');
     check.disabled = true;
     file.addEventListener('change', () => {
       generation++;
@@ -1250,6 +1248,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
         if (id === generation && getSession() === session) feedback.textContent = 'Rekap belum bisa dimuat. Coba lagi.';
       }
     });
+    previewButton.classList.add('primary-action');
     target.replaceChildren(block([dateField,previewButton,exportButton], 'ops-filters'), feedback, output);
   }
 

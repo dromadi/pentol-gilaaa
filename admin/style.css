@@ -455,3 +455,27 @@ body { background: radial-gradient(1100px 480px at 105% -10%, #fbe7d9 0, transpa
 .report-backup button { margin-top: 6px; border-radius: 999px; }
 
 .brand-logo { flex: 0 0 auto; object-fit: contain; }
+
+/* ===== Perapian halaman Restok, Promosi, Tutup hari, Rekonsiliasi ===== */
+.ops-actions .primary-action, .ops-filters .primary-action { background: var(--wine); color: #fff; border-color: var(--wine); }
+.ops-actions .primary-action:hover, .ops-filters .primary-action:hover { background: #612320; }
+.promo-chips { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 170px), 1fr)); gap: 8px; padding: 0 !important; background: transparent !important; border: 0 !important; box-shadow: none !important; margin-bottom: 14px; }
+.promo-chip { position: relative; display: flex; align-items: center; min-height: 46px; padding: 10px 12px 10px 40px; border: 1px solid var(--line); border-radius: 14px; background: var(--paper); font-size: 12px; font-weight: 650; color: #5f4f46; cursor: pointer; }
+.promo-chip input { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); }
+.promo-chip:has(input:checked) { border-color: #9fcfb6; background: #f1faf4; color: #1f5b49; }
+#promotions-body > label { max-width: 320px; }
+input[type="file"] { padding: 6px; font-size: 12px; }
+input[type="file"]::file-selector-button { margin-right: 10px; padding: 8px 14px; border: 1px solid #dcc7b4; border-radius: 999px; background: var(--paper); color: var(--wine); font: inherit; font-weight: 700; cursor: pointer; }
+@media (max-width: 620px) {
+  /* Tabel di dalam kartu (Restok & PO) jadi baris bertumpuk agar tidak terpotong ke samping. */
+  #purchasing-body .table { border: 0; background: transparent; overflow: visible; box-shadow: none; }
+  #purchasing-body table, #purchasing-body tbody { display: block; }
+  #purchasing-body thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  #purchasing-body tbody tr { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 10px; padding: 12px; margin-bottom: 8px; border: 1px solid var(--line); border-radius: 12px; background: #fffaf2; }
+  #purchasing-body td { padding: 0; border: 0; font-size: 13px; }
+  #purchasing-body td[data-label]::before { content: attr(data-label); display: block; font-size: 9px; color: #9b8879; margin-bottom: 2px; }
+  #purchasing-body td:first-child { grid-column: 1 / -1; font-weight: 700; font-size: 14px; }
+  #purchasing-body td:first-child::before { display: none; }
+  #purchasing-body td[colspan] { grid-column: 1 / -1; }
+  .promo-chips { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

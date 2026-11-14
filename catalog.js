@@ -86,7 +86,8 @@ function renderMenu() {
   const query = search.value.trim().toLocaleLowerCase('id');
   const visible = products.filter(item => (activeCategory === 'Semua' || item.category === activeCategory)
     && (!availableOnly.checked || !item.soldOut)
-    && item.name.toLocaleLowerCase('id').includes(query));
+    && item.name.toLocaleLowerCase('id').includes(query))
+    .sort((a, b) => Number(a.soldOut) - Number(b.soldOut));
   document.querySelector('#menu-count').textContent = visible.length + ' varian';
   menu.innerHTML = visible.length ? visible.map(item => `
     <article class="card" data-product="${item.id}">
@@ -191,7 +192,34 @@ function showCheckoutReceipt() {
     'https://wa.me/628981718578?text=' + encodeURIComponent(message + '\nKode permintaan: ' + id);
 }
 
+// Data pembeli langganan disimpan hanya di HP pembeli (localStorage), bila dicentang.
+const buyerKey = 'pentol-gilaaa-buyer';
+function restoreBuyer() {
+  let saved;
+  try { saved = JSON.parse(localStorage.getItem(buyerKey)); } catch { return; }
+  if (!saved || typeof saved !== 'object') return;
+  const fields = orderForm.elements;
+  for (const name of ['buyer', 'phone', 'location']) {
+    if (!fields[name].value && typeof saved[name] === 'string') fields[name].value = saved[name].slice(0, 200);
+  }
+  if (saved.method === 'Diantar' || saved.method === 'Ambil sendiri') {
+    orderForm.querySelector(`[name="method"][value="${saved.method}"]`).checked = true;
+    syncDeliveryFields();
+  }
+}
+function rememberBuyer() {
+  const fields = orderForm.elements;
+  try {
+    if (!fields.remember.checked) return localStorage.removeItem(buyerKey);
+    localStorage.setItem(buyerKey, JSON.stringify({ buyer: fields.buyer.value.trim(), phone: fields.phone.value.trim(),
+      location: fields.location.value.trim(), method: fields.method.value }));
+  } catch {
+    // Pemesanan tetap berjalan tanpa penyimpanan.
+  }
+}
+
 function setCheckoutStep(buyerStep, focus = true) {
+  if (buyerStep) restoreBuyer();
   document.querySelector('#summary-panel').hidden = buyerStep;
   document.querySelector('#buyer-panel').hidden = !buyerStep;
   document.querySelector('#step-summary').setAttribute('aria-current', buyerStep ? 'false' : 'step');
@@ -257,10 +285,10 @@ function checkoutMessage() {
 orderForm.addEventListener('input', event => {
   if (event.target.matches('input')) event.target.setCustomValidity('');
 });
-orderForm.elements.method.addEventListener('change', () => {
+orderForm.querySelectorAll('[name="method"]').forEach(choice => choice.addEventListener('change', () => {
   orderForm.elements.location.setCustomValidity('');
   syncDeliveryFields();
-});
+}));
 syncDeliveryFields();
 orderForm.addEventListener('submit', async event => {
   event.preventDefault();
@@ -280,6 +308,7 @@ orderForm.addEventListener('submit', async event => {
   }
   const message = checkoutMessage();
   if (!message) return;
+  rememberBuyer();
   const fields = orderForm.elements;
   const payload = {
     customer_name:fields.buyer.value.trim(), contact:fields.phone.value.trim(),

@@ -187,3 +187,58 @@ dialog::backdrop { background:#2516109c; backdrop-filter:blur(4px); }
 @media(prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } * { transition:none!important; } }
 
 .brand-logo { flex: 0 0 auto; object-fit: contain; }
+
+/* ===== Katalog v2: lebih ringkas di HP, checkout lebih cepat ===== */
+.method-choice { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:0; padding:0; border:0; min-width:0; }
+.method-choice legend { grid-column:1/-1; padding:0; margin-bottom:7px; font-size:11px; font-weight:700; }
+.method-choice label { position:relative; display:block; cursor:pointer; }
+.method-choice input { position:absolute; opacity:0; width:1px; height:1px; }
+.method-choice span { display:flex; align-items:center; justify-content:center; min-height:50px; padding:10px; border:1px solid #d6c9b8; border-radius:12px; background:#fffdf8; font-size:14px; font-weight:700; color:var(--ink); }
+.method-choice input:checked + span { border-color:var(--wine); background:var(--wine); color:#fff; }
+.method-choice input:focus-visible + span { outline:3px solid #267b70; outline-offset:3px; }
+.remember { display:flex !important; align-items:center; gap:9px; font-size:12px; font-weight:500; color:var(--muted); }
+.remember input { width:18px; height:18px; min-height:0; margin:0; accent-color:var(--wine); }
+.sticky-foot { position:sticky; bottom:0; z-index:2; margin:16px -28px 0; padding:4px 28px 14px; background:linear-gradient(to bottom, #faf6ec00, var(--cream) 14px); }
+.sticky-foot .cart-total { padding-top:12px; }
+.sticky-foot .cart-actions { margin-top:12px; }
+dialog { max-width:100%; }
+
+@media(max-width:600px) {
+  /* Pembuka ringkas: produk langsung terlihat di layar pertama. */
+  .hero { padding:18px 0 14px; }
+  .hero .wrap { gap:14px; }
+  .hero .eyebrow { font-size:9px; }
+  .hero h1 { font-size:46px; margin:8px 0 10px; }
+  .hero p { display:none; }
+  .hero-actions .btn { min-height:44px; padding-block:9px; }
+  .hero-visual { order:-1; border-radius:14px; }
+  .hero-visual img { aspect-ratio:720/150; }
+  .visual-copy { display:none; }
+  .benefits { display:none; }
+  .menu { padding-block:18px 40px; }
+  .menu h2 { font-size:34px; margin-bottom:0; }
+  .menu-intro p { display:none; }
+  .search { margin-top:10px; }
+  .filters { margin:12px 0 8px; }
+  .menu-count { margin-bottom:8px; }
+  /* Daftar produk satu baris per varian. */
+  .grid { grid-template-columns:1fr; gap:8px; }
+  .card { display:grid; grid-template-columns:minmax(0,1fr) auto; grid-template-areas:"name action" "detail action" "price action"; align-items:center; column-gap:12px; row-gap:1px; padding:11px 12px 11px 14px; border-radius:14px; }
+  .card-top { position:absolute; top:10px; right:12px; margin:0; min-height:0; }
+  .card-top .category { display:none; }
+  .card h3 { grid-area:name; font-size:21px; min-height:0; margin:0; }
+  .card .detail { grid-area:detail; font-size:11px; }
+  .card .bottom { display:contents; }
+  .card .bottom > div:first-child { grid-area:price; display:flex; align-items:baseline; gap:4px; }
+  .card .price { font-size:16px; }
+  .card .price-unit { font-size:10px; }
+  .card .add-control, .card .unavailable { grid-area:action; width:auto; min-width:118px; }
+  .card .add-control > button { min-height:44px; }
+  .card .unavailable { min-width:0; padding:0; text-align:right; }
+  .card:has(.sold) { opacity:.6; }
+  .card:has(.sold) .card-top { top:auto; bottom:12px; }
+  .stock-left { display:inline; margin:0 0 0 6px; }
+  .sticky-foot { margin-inline:-20px; padding-inline:20px; padding-bottom:max(14px, env(safe-area-inset-bottom)); }
+  dialog { width:100%; max-width:100%; }
+}
+.secondary-actions { margin-top:10px; }

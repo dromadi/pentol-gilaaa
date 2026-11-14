@@ -60,6 +60,31 @@ export function catalogTests(browser, devices, baseUrl) {
     await s.close();
   });
 
+  test('varian habis di bawah; Diantar mewajibkan alamat; data pembeli diingat', async () => {
+    const s = await open((route, fn) => fn === 'pentol_submit_checkout' ? route.fulfill({ status: 204 }) : json(route, catalog()));
+    const order = await s.page.$$eval('[data-product]', cards => cards.map(card => card.dataset.product));
+    equal(order.slice(-2), ['PK', 'MZ'], 'varian habis di urutan terakhir');
+    await card(s.page, 'UR').locator('[data-add]').click();
+    await s.page.click('#dock [data-cart]');
+    await s.page.click('#continue-checkout');
+    await s.page.fill('[name=buyer]', 'Budi');
+    await s.page.fill('[name=phone]', '081234567890');
+    await s.page.locator('.method-choice span', { hasText: 'Diantar' }).click();
+    assert(await s.page.$eval('[name=location]', input => input.required), 'alamat wajib saat Diantar');
+    await s.page.fill('[name=location]', 'Gedung B');
+    await s.page.click('#whatsapp');
+    await s.page.waitForTimeout(400);
+    await s.page.reload();
+    await s.page.waitForTimeout(400);
+    await card(s.page, 'TP').locator('[data-add]').click();
+    await s.page.click('#dock [data-cart]');
+    await s.page.click('#continue-checkout');
+    const values = await s.page.evaluate(() => { const e = document.getElementById('order-form').elements;
+      return [e.buyer.value, e.phone.value, e.location.value, e.method.value]; });
+    equal(values, ['Budi', '081234567890', 'Gedung B', 'Diantar'], 'data pembeli terisi otomatis');
+    await s.close();
+  });
+
   test('CSP katalog memblokir skrip sisipan', async () => {
     const s = await open(route => json(route, catalog()));
     const ran = await s.page.evaluate(() => new Promise(resolve => {

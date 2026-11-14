@@ -1,5 +1,5 @@
 import { supabaseUrl, supabasePublishableKey } from './config.js';
-import { initOperations } from './operations.js?v=cadangan-8';
+import { initOperations } from './operations.js?v=rapi-9';
 
 const products = new Map([
   ['UR','Pentol Urat'], ['PK','Pentol Kecil'], ['TP','Tahu Pentol'],

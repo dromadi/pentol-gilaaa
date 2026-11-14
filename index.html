@@ -7,7 +7,7 @@
 <meta name="description" content="Katalog Pentol Gilaaa Surabaya. Pilih pentol dan tahu frozen, lalu siapkan pesanan untuk WhatsApp.">
 <title>Pentol Gilaaa Surabaya · Pesan Pentol & Tahu Frozen</title>
 <meta name="theme-color" content="#57231e">
-<meta name="storefront-version" content="buyer-20261114-1">
+<meta name="storefront-version" content="buyer-20261114-2">
 <link rel="stylesheet" href="catalog.css?v=2">
 </head>
 <body>
@@ -44,22 +44,27 @@
     <section id="summary-panel" class="checkout-section" aria-labelledby="summary-title">
       <h3 id="summary-title" tabindex="-1">Cek pilihanmu</h3>
       <div id="cart-items"></div>
-      <div class="cart-total"><strong>Subtotal produk</strong><strong id="subtotal" aria-live="polite"></strong></div>
       <p class="checkout-note">Setiap pack pentol dan tahu sudah termasuk sambal. Ongkir dikonfirmasi terpisah.</p>
-      <div class="cart-actions"><button class="red" id="continue-checkout" type="button" disabled>Lanjut ke data pemesan →</button><button class="text-button" type="button" data-close-cart>Tambah varian lain</button></div>
+      <div class="sticky-foot"><div class="cart-total"><strong>Subtotal produk</strong><strong id="subtotal" aria-live="polite"></strong></div>
+      <div class="cart-actions"><button class="red" id="continue-checkout" type="button" disabled>Lanjut ke data pemesan →</button><button class="text-button" type="button" data-close-cart>Tambah varian lain</button></div></div>
     </section>
     <section id="buyer-panel" class="checkout-section" aria-labelledby="buyer-title" hidden>
       <h3 id="buyer-title" tabindex="-1">Siapa yang pesan?</h3>
       <div class="checkout-fields">
         <label>Nama lengkap <input name="buyer" autocomplete="name" maxlength="80" required></label>
         <label>Nomor WhatsApp <input name="phone" type="tel" autocomplete="tel" inputmode="tel" placeholder="08…" maxlength="24" required></label>
-        <label class="full">Cara menerima pesanan <select name="method"><option>Ambil sendiri</option><option>Diantar</option></select></label>
+        <fieldset class="full method-choice"><legend>Cara menerima pesanan</legend>
+          <label><input type="radio" name="method" value="Ambil sendiri" checked><span>🏠 Ambil sendiri</span></label>
+          <label><input type="radio" name="method" value="Diantar"><span>🛵 Diantar</span></label>
+        </fieldset>
         <label class="full"><span id="location-label">Lokasi kantor / alamat (opsional)</span><input name="location" placeholder="Nama kantor, lantai, atau alamat" maxlength="200"></label>
         <label class="full">Catatan (opsional) <textarea name="notes" placeholder="Contoh: titip di resepsionis" rows="2" maxlength="250"></textarea></label>
+        <label class="full remember"><input type="checkbox" name="remember" checked> Ingat nama, WhatsApp, dan alamat di HP ini</label>
       </div>
-      <div class="cart-total"><strong id="final-count"></strong><strong id="final-total"></strong></div>
       <p class="checkout-note">Stok, jadwal, ongkir, dan rekening pembayaran dikonfirmasi lewat WhatsApp.</p>
-      <div class="cart-actions"><button class="red" id="whatsapp" type="submit" disabled>Catat permintaan →</button><button class="ghost" id="back-to-cart" type="button">← Ubah pesanan</button><button class="text-button" id="copy" type="button" disabled>Salin rincian pesanan</button></div>
+      <div class="sticky-foot"><div class="cart-total"><strong id="final-count"></strong><strong id="final-total"></strong></div>
+      <div class="cart-actions"><button class="red" id="whatsapp" type="submit" disabled>Catat permintaan →</button></div></div>
+      <div class="cart-actions secondary-actions"><button class="ghost" id="back-to-cart" type="button">← Ubah pesanan</button><button class="text-button" id="copy" type="button" disabled>Salin rincian pesanan</button></div>
       <p class="checkout-note">Setelah pencatatan, buka WhatsApp dari ringkasan untuk mengirim pesan.</p>
     </section>
     <p id="feedback" role="status"></p>
@@ -67,7 +72,7 @@
   </form>
 </dialog>
 <div id="cart-announcement" class="sr-only" aria-live="polite"></div>
-<script type="module" src="catalog.js?v=1"></script>
+<script type="module" src="catalog.js?v=2"></script>
 </body>
 </html>
 

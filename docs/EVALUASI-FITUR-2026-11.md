@@ -92,6 +92,14 @@ Diuji di Chromium HP dengan data tiruan (filter URL per tombol, Batalkan/arsip s
 - Diuji: unduh, isi lembar, tabel 404 dilewati, pengingat hilang; file dibuka dengan openpyxl.
 - **Cadangan otomatis disiapkan**: `.github/workflows/backup.yml` + `scripts/backup.sh` (pg_dump + CSV → 7z AES-256, artifact 90 hari, 02.17 WIB). Aktif setelah pemilik mengisi secret `SUPABASE_DB_URL` dan `BACKUP_PASSWORD` — lihat `docs/CADANGAN-OTOMATIS.md`. Diuji lokal termasuk pemulihan ke database kosong.
 
+## Katalog v2 & perapian admin (14 Nov)
+
+**Katalog (HP):** pembuka ringkas (gambar tipis, judul, tombol; kalimat & baris manfaat disembunyikan) sehingga produk pertama terlihat di layar awal; kartu produk satu baris (nama · isi · harga · tombol, ±92 px, dari ±640 px); varian habis diurutkan ke bawah dan diredupkan; tinggi halaman 2.884 → ±1.900 px. Checkout: cara menerima berupa dua tombol (radio `name="method"`), data pembeli diingat di HP pembeli (`pentol-gilaaa-buyer` di localStorage, bisa dimatikan lewat centang), total + tombol kirim menempel di bawah laci (`.sticky-foot`), laci penuh lebar (`dialog { max-width:100% }`). Desktop tidak berubah selain urutan varian habis.
+
+**Admin:** Restok & PO — tabel item jadi kartu bertumpuk di HP (`table()` kini memberi `data-label` per sel), "Terima barang" jadi tombol utama, "Lihat stok batch" dihapus (sudah ada tab Stok). Promosi — pilihan varian berupa chip dua kolom, bawaan hanya varian yang ada stoknya. Tutup hari & Rekonsiliasi — tombol utama ditandai, kolom pilih file lebih rapi.
+
+Uji baru di `tests/catalog.test.js`: urutan varian habis, Diantar mewajibkan alamat, data pembeli terisi otomatis saat kunjungan ulang.
+
 ## Input lewat ChatGPT (tahap 1: tempel)
 
 Keputusan: **aplikasi (Supabase) tetap sumber kebenaran**; ChatGPT hanya pintu masuk. Tidak ada data yang tersimpan tanpa konfirmasi admin di form aplikasi, sehingga semua validasi database tetap berlaku.
