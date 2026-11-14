@@ -105,8 +105,11 @@ export function initOperations({ $, request, status, products, prices, today, fo
     return request(root + 'rpc/pentol_admin_action', {method:'POST', body:{action,payload}});
   }
 
-  function showDialog(title, nodes, onSubmit) {
+  function showDialog(title, nodes, onSubmit, { submitLabel = 'Simpan', danger = false } = {}) {
     if (dialog.open) return;
+    const save = dialogForm.querySelector('button:not([type])');
+    save.textContent = submitLabel;
+    save.classList.toggle('danger', danger);
     $('ops-title').textContent = title;
     $('ops-error').textContent = '';
     fields.replaceChildren(...nodes);
@@ -553,28 +556,26 @@ export function initOperations({ $, request, status, products, prices, today, fo
         const card = el('article', undefined, 'ops-card');
         const process = button('Proses pesanan', () => openOrder(null, entry));
         process.classList.add('primary-action');
+        const remove = button('Hapus', () => showDialog('Hapus pesanan ' + entry.customer + '?', [
+          el('p', 'Yakin hapus permintaan ini? ' + entry.items.map(i => products.get(i.sku) + ' × ' + i.quantity).join(', ') + '.'),
+          el('p', 'Permintaan hilang dari daftar. Bila keliru, masih bisa dibuat ulang dari bagian "Dihapus" selama 14 hari.')
+        ], async () => {
+          await admin('dismiss', {id:entry.id});
+          return async () => { status('Permintaan ' + entry.customer + ' dihapus.'); await inbox(); };
+        }, { submitLabel:'Ya, hapus', danger:true }));
+        remove.classList.add('danger-text');
         card.append(el('strong', entry.customer),
           el('p', 'Masuk ' + sinceText(entry.created_at) + ' · Kode ' + entry.id.slice(0, 8)),
           el('p', [entry.phone,entry.area,inboxNote(entry.note)].filter(Boolean).join(' · ')),
           el('p', entry.items.map(i => products.get(i.sku) + ' × ' + i.quantity).join(', ')),
-          block([process, waAnchor(entry.phone, confirmMessage(entry), 'Balas WA') || '', button('Arsipkan', () => {
-            // Disimpan setelah 6 detik kecuali dibatalkan.
-            card.hidden = true;
-            status('Permintaan ' + entry.customer + ' diarsipkan. Masih ada di bagian "Diarsipkan".', false, {
-              label:'Batalkan',
-              undo:() => { card.hidden = false; },
-              commit:() => admin('dismiss', {id:entry.id}).then(inbox).catch(() => {
-                card.hidden = false;
-                status('Permintaan ' + entry.customer + ' belum terarsip. Coba lagi.', true);
-              })
-            });
-          })], 'ops-actions'));
+          block([process, button('Ubah', () => openOrder(null, entry)),
+            waAnchor(entry.phone, confirmMessage(entry), 'Balas WA') || '', remove], 'ops-actions'));
         return card;
       }));
       if (!entries.length) target.append(el('p', 'Belum ada permintaan baru.'));
       if (archived.length) {
         const box = el('details', undefined, 'inbox-archived');
-        box.append(el('summary', 'Diarsipkan 14 hari terakhir (' + archived.length + ')'),
+        box.append(el('summary', 'Dihapus 14 hari terakhir (' + archived.length + ')'),
           ...archived.map(entry => {
             const card = el('article', undefined, 'ops-card');
             // Tanpa id permintaan: pesanan dibuat biasa, arsipnya tetap tercatat.

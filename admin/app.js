@@ -1,5 +1,5 @@
 import { supabaseUrl, supabasePublishableKey } from './config.js';
-import { initOperations } from './operations.js?v=ubah-19';
+import { initOperations } from './operations.js?v=hapus-20';
 
 const products = new Map([
   ['UR','Pentol Urat'], ['PK','Pentol Kecil'], ['TP','Tahu Pentol'],
@@ -1012,15 +1012,16 @@ function openOrder(order = null, inboxEntry = null) {
   renderQuickPick();
   if (!customerBook) loadCustomers().catch(() => {});
   orderForm.hidden = false;
-  $('order-editor-title').textContent = order ? 'Ubah pesanan · ' + order.customer : 'Catat pesanan';
+  $('order-editor-title').textContent = order ? 'Ubah pesanan · ' + order.customer
+    : inboxEntry?.customer ? 'Pesanan dari katalog · ' + inboxEntry.customer : 'Catat pesanan';
   const note = $('order-edit-note');
   const shippedLines = (order?.pentol_order_items || []).filter(i => i.shipped);
   const paidSoFar = order ? (order.pentol_payments || []).reduce((sum, p) => sum + Number(p.amount), 0) : 0;
-  note.hidden = !(shippedLines.length || paidSoFar || order?.paid);
+  note.hidden = !(shippedLines.length || paidSoFar || order?.paid || inboxEntry);
   note.textContent = [
     shippedLines.length && 'Sudah diantar: ' + shippedLines.map(i => (products.get(rows.find(r => r.id === i.stock_id)?.sku) || 'varian') + ' ' + i.shipped + ' pack').join(', ') + ' (tidak bisa dikurangi di bawah itu).',
     paidSoFar ? 'Sudah dibayar Rp' + format.format(paidSoFar) + '; sisa tagihan dihitung ulang setelah disimpan.' : order?.paid ? 'Ditandai lunas.' : ''
-  ].filter(Boolean).join(' ');
+  ].filter(Boolean).join(' ') || (inboxEntry ? 'Dari katalog: ubah varian, jumlah, jadwal, atau data pembeli sesuai permintaan terbaru, lalu Simpan pesanan.' : '');
   updateOrderEstimate();
   $('new-order').setAttribute('aria-expanded', 'true');
   $('save-order').textContent = order ? 'Simpan perubahan' : 'Simpan pesanan';

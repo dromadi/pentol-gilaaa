@@ -589,3 +589,8 @@ input[type="file"]::file-selector-button { margin-right: 10px; padding: 8px 14px
 /* Ubah pesanan yang sudah dibayar / diantar sebagian */
 .order-edit-note { margin: -4px 0 14px; padding: 10px 14px; border-radius: 12px; background: #fff4e0; border: 1px solid #f0d7a8; color: #6b4a12; font-size: 12px; }
 .order-item select:disabled { opacity: .75; }
+
+/* Hapus permintaan katalog: konfirmasi merah */
+#ops-form button.danger { background: #a42d23; border-color: #a42d23; color: #fff; }
+.ops-actions button.danger-text { color: #a42d23; }
+#inbox-list .ops-card > .ops-actions button { min-height: 40px; font-size: 12px; padding-inline: 16px; }

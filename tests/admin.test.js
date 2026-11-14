@@ -215,17 +215,22 @@ export function adminTests(browser, devices, baseUrl) {
     await s.close();
   });
 
-  test('arsip permintaan bisa dibatalkan, lalu tersimpan setelah 6 detik', async () => {
+  test('hapus permintaan katalog: kotak konfirmasi, Tutup = batal, Ya = hapus; Ubah membuka form', async () => {
     const s = await open();
     await goSub(s.page, 'orders');
     const card = s.page.locator('#inbox-list .ops-card').first();
-    await card.locator('button', { hasText: 'Arsipkan' }).click();
-    await s.page.click('#status button');
-    assert(await card.isVisible(), 'kartu kembali setelah Batalkan');
-    equal(s.data.writes.filter(w => w.body.action === 'dismiss').length, 0, 'belum ada arsip');
-    await card.locator('button', { hasText: 'Arsipkan' }).click();
-    await s.page.waitForTimeout(6500);
-    equal(s.data.writes.filter(w => w.body.action === 'dismiss').length, 1, 'arsip tersimpan');
+    await card.locator('button', { hasText: 'Hapus' }).click();
+    assert(await s.page.isVisible('#ops-dialog'), 'kotak konfirmasi muncul');
+    assert((await s.page.textContent('#ops-dialog')).includes('Yakin hapus'), 'pertanyaan yakin');
+    await s.page.click('#ops-close');
+    equal(s.data.writes.filter(w => w.body?.action === 'dismiss').length, 0, 'Tutup tidak menghapus');
+    await card.locator('button', { hasText: 'Hapus' }).click();
+    await s.page.click('#ops-form button:has-text("Ya, hapus")');
+    await s.page.waitForTimeout(400);
+    equal(s.data.writes.filter(w => w.body?.action === 'dismiss').length, 1, 'terhapus');
+    await card.locator('button', { hasText: 'Ubah' }).click();
+    assert((await s.page.textContent('#order-editor-title')).includes('Pesanan dari katalog'), 'form ubah terbuka');
+    assert(await s.page.isVisible('#order-edit-note'), 'petunjuk ubah tampil');
     await s.close();
   });
 

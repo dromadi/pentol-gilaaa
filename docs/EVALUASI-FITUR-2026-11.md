@@ -177,6 +177,10 @@ Permintaan pemilik: admin bisa mengubah pesanan saat pembeli menambah, mengurang
 - Riwayat Perubahan kini menampilkan Batal bayar, Koreksi antar, Batal sisa, dan Ubah pesanan dengan benar (sebelumnya terbaca "Dibayar undefined").
 - Uji: SQL `ubah pesanan setelah bayar & antar sebagian`; browser `ubah pesanan setelah bayar & antar sebagian…` dan `ubah pesanan sebelum SQL…`. Versi `ubah-19`.
 
+## Permintaan katalog: tombol Ubah dan Hapus dengan konfirmasi (14 Nov)
+
+Kartu permintaan sekarang: **Proses pesanan** · **Ubah** · **Balas WA** · **Hapus**. "Arsipkan" (dengan Batalkan 6 detik) diganti **Hapus** yang memunculkan kotak "Hapus pesanan X? Yakin hapus permintaan ini?" dengan tombol merah **Ya, hapus** / Tutup. Di database tetap status `dismissed` (tidak dihapus permanen) dan tampil di lipatan **Dihapus 14 hari terakhir** dengan tombol Buat pesanan. Form dari katalog berjudul "Pesanan dari katalog · Nama" dengan petunjuk bahwa varian/jumlah/jadwal bisa diubah sebelum disimpan. `showDialog` kini menerima `submitLabel` dan `danger`. Versi `hapus-20`.
+
 ## Input lewat ChatGPT (tahap 1: tempel)
 
 Keputusan: **aplikasi (Supabase) tetap sumber kebenaran**; ChatGPT hanya pintu masuk. Tidak ada data yang tersimpan tanpa konfirmasi admin di form aplikasi, sehingga semua validasi database tetap berlaku.
