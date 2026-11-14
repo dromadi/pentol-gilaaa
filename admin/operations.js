@@ -370,7 +370,11 @@ export function initOperations({ $, request, status, products, prices, today, fo
   const canPack = order => order.pentol_order_items.some(item =>
     item.shipped < item.quantity && packingReady(item));
 
-  const unpaidFilter = '&paid=eq.false&delivered=eq.true';
+  // Belum lunas setelah ada barang yang diantar, termasuk antar sebagian.
+  const unpaidFilter = '&paid=eq.false';
+  const isOwed = order => balance(order) > 0 && order.pentol_order_items.some(item => item.shipped > 0);
+  const owedQuery = async () => (await orderQuery(unpaidFilter)).filter(isOwed);
+  const daysBetween = (from, to) => Math.round((Date.parse(to) - Date.parse(from)) / 86400000);
   const scheduledFilter = date => '&delivered=eq.false&delivery_on=eq.' + date;
   const orderQuery = filters => list('pentol_orders?select=' + ordersSelect,
     '&cancelled=eq.false&order=order_date,created_at,id' + filters);
@@ -379,37 +383,47 @@ export function initOperations({ $, request, status, products, prices, today, fo
     const session = getSession();
     const date = today();
     target.textContent = 'Memuat ringkasan…';
-    const [entries, deliveries, unpaid] = await Promise.all([
+    const [entries, pending, unpaid] = await Promise.all([
       list('pentol_inbox?select=id,customer,created_at', '&status=eq.pending&order=created_at.desc,id'),
-      orderQuery(scheduledFilter(date)),
-      orderQuery(unpaidFilter)
+      orderQuery('&delivered=eq.false'),
+      owedQuery()
     ]);
     if (getSession() !== session) return;
+    // Perlu diantar: terlambat dulu, lalu jadwal hari ini, lalu yang belum dijadwalkan.
+    // Jadwal setelah hari ini tidak ditampilkan di sini.
+    const rank = order => !order.delivery_on ? 2 : order.delivery_on < date ? 0 : 1;
+    const deliveries = pending.filter(order => !order.delivery_on || order.delivery_on <= date)
+      .sort((a, b) => rank(a) - rank(b) || (a.delivery_on || '').localeCompare(b.delivery_on || ''));
+    const late = deliveries.filter(order => rank(order) === 0).length;
+    const unscheduled = deliveries.filter(order => rank(order) === 2).length;
     const ready = deliveries.filter(canPack);
     const location = order => order.delivery_location || 'Lokasi belum diisi';
+    const when = order => !order.delivery_on ? 'belum dijadwalkan'
+      : order.delivery_on < date ? 'terlambat ' + daysBetween(order.delivery_on, date) + ' hari' : 'hari ini';
     const sections = [
-      ['Permintaan baru', entries, entry => entry.customer, 'Buka permintaan', () => {
+      ['Permintaan baru', entries, 'permintaan', entry => entry.customer, 'Buka permintaan', () => {
         selectView('orders');
         const inbox = $('checkout-inbox');
         inbox.open = true;
         inbox.querySelector('summary').focus();
       }],
-      ['Bisa dikemas hari ini', ready, order => order.customer + ' · ' + location(order),
-        'Buka daftar packing', () => selectView('packing', 'ready')],
-      ['Jadwal antar hari ini', deliveries, order => order.customer + ' · ' + location(order),
-        'Buka jadwal antar', () => selectView('packing', 'packing')],
-      ['Sudah diantar, belum lunas', unpaid, order => order.customer + ' · ' + money(balance(order)),
-        'Buka tagihan', () => selectView('receivables')]
+      ['Bisa dikemas', ready, 'pesanan', order => order.customer + ' · ' + location(order) + ' · ' + when(order),
+        'Buka daftar packing', () => selectView('packing', 'pending')],
+      ['Perlu diantar', deliveries, 'pesanan', order => order.customer + ' · ' + when(order),
+        'Buka daftar antar', () => selectView('packing', 'pending'),
+        [late && late + ' terlambat', unscheduled && unscheduled + ' belum dijadwalkan'].filter(Boolean).join(' · ')],
+      ['Diantar, belum lunas', unpaid, 'pesanan', order => order.customer + ' · ' + money(balance(order))
+        + (order.delivered ? '' : ' · antar sebagian'),
+        'Buka tagihan', () => selectView('receivables'),
+        unpaid.length ? 'Total sisa tagihan ' + money(unpaid.reduce((sum, order) => sum + balance(order), 0)) : '']
     ];
-    target.replaceChildren(block(sections.map(([title, records, describe, action, navigate]) => {
+    target.replaceChildren(block(sections.map(([title, records, unit, describe, action, navigate, note]) => {
       const card = el('section', undefined, 'ops-card');
-      card.append(el('h3', title), el('strong', format.format(records.length) + ' pesanan'));
-      if (records === unpaid && unpaid.length) {
-        card.append(el('p', 'Total sisa tagihan ' + money(unpaid.reduce((sum, order) => sum + balance(order), 0))));
-      }
+      card.append(el('h3', title), el('strong', format.format(records.length) + ' ' + unit));
+      if (note) card.append(el('p', note));
       const preview = el('ul');
       preview.append(...records.slice(0, 5).map(record => el('li', describe(record))));
-      card.append(records.length ? preview : el('p', 'Belum ada pesanan.'), button(action, navigate));
+      card.append(records.length ? preview : el('p', 'Tidak ada ' + unit + '.'), button(action, navigate));
       return card;
     }), 'today-grid'));
   }
@@ -419,7 +433,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
   async function receivables(target) {
     const session = getSession();
     target.textContent = 'Memuat piutang…';
-    const orders = (await orderQuery(unpaidFilter)).filter(order => balance(order) > 0);
+    const orders = await owedQuery();
     if (getSession() !== session) return;
     const date = today();
     const age = order => {
@@ -460,7 +474,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
     const oldFilter = initialMode || target.querySelector('[name=pack_filter]')?.value || 'packing';
     const day = control('Tanggal jadwal antar', 'pack_date', {type:'date', value:old});
     const filter = control('Tampilkan', 'pack_filter', {value:oldFilter, values:[
-      ['packing','Sesuai tanggal jadwal'],['ready','Siap dikemas sesuai tanggal'],['unscheduled','Belum dijadwalkan'],['pending','Semua belum diantar'],['unpaid','Sudah diantar, belum lunas']
+      ['packing','Sesuai tanggal jadwal'],['ready','Siap dikemas sesuai tanggal'],['unscheduled','Belum dijadwalkan'],['pending','Semua belum diantar'],['unpaid','Diantar, belum lunas']
     ]});
     const output = el('div');
     target.replaceChildren(block([day,filter], 'ops-filters'), output);
@@ -468,8 +482,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
       const date = day.lastChild.value || today();
       const mode = filter.lastChild.value;
       output.textContent = 'Memuat pesanan…';
-      const listed = await orderQuery(mode === 'unpaid' ? unpaidFilter
-          : mode === 'pending' ? '&delivered=eq.false'
+      const listed = mode === 'unpaid' ? await owedQuery() : await orderQuery(mode === 'pending' ? '&delivered=eq.false'
             : mode === 'unscheduled' ? '&delivered=eq.false&delivery_on=is.null'
             : scheduledFilter(date));
       if ((day.lastChild.value || today()) !== date || filter.lastChild.value !== mode) return;

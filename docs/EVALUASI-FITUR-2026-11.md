@@ -36,6 +36,16 @@ Ukurannya: apakah pekerjaan harian (terima pesanan → kemas & antar → terima 
 | B9 | Label "Permintaan baru: 1 **pesanan**" padahal belum jadi pesanan | Hari Ini | Membingungkan |
 | B10 | Instal baru: PO contoh BATCH-01/02 tidak punya baris stok, jadi tidak bisa "Terima barang" | Uji `pentol_receive_purchase('BATCH-01')` | Hanya project baru |
 
+### Status perbaikan
+
+| Bug | Status |
+|---|---|
+| B1, B3, B9 | **Diperbaiki.** Kartu "Perlu diantar" di Hari Ini memuat antaran terlambat ("terlambat N hari"), jadwal hari ini, dan pesanan belum dijadwalkan, dengan urutan itu. Jadwal setelah hari ini tidak ditampilkan. Label permintaan kini "N permintaan". Tombol membuka Packing → "Semua belum diantar" |
+| B2 | **Diperbaiki.** "Diantar, belum lunas" berarti belum lunas dan sudah ada pack yang diantar. Definisi yang sama dipakai di Hari Ini, Ringkasan Piutang, dan Packing. Pesanan antar sebagian diberi tanda "antar sebagian". Sisa yang ditampilkan adalah sisa seluruh pesanan |
+| Lainnya | Belum dikerjakan |
+
+Pengujian (Chromium, Pixel 7, data tiruan dengan 8 jenis pesanan): pesanan terlambat, hari ini, dan tanpa jadwal tampil; jadwal besok tidak tampil; pesanan antar sebagian yang belum bayar tampil di ketiga tempat; pesanan lunas tidak tampil; tanpa error.
+
 ## Fitur yang tumpang tindih (bikin ribet, bukan memudahkan)
 
 | Tumpang tindih | Saran |
