@@ -140,6 +140,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
         await refresh('Pesanan diperbarui.');
         if (!$('packing').hidden) open('packing');
         if (!$('finance').hidden) open('finance');
+        if (!$('receivables').hidden) await open('receivables');
       };
     });
   }
@@ -240,6 +241,12 @@ export function initOperations({ $, request, status, products, prices, today, fo
     setTimeout(() => URL.revokeObjectURL(url), 30_000);
   }
 
+  function invoiceNumber(order) {
+    const mapped = excelInvoices.get(order.id);
+    const matched = mapped && mapped.revision === order.revision ? mapped.reference : '';
+    return order.excel_invoice_no || matched || String(order.invoice_no).padStart(5, '0');
+  }
+
   async function showInvoice(order) {
     const session = getSession();
     try {
@@ -247,8 +254,8 @@ export function initOperations({ $, request, status, products, prices, today, fo
       if (!session || getSession() !== session) return;
       if (!fresh) return status('Pesanan aktif tidak ditemukan. Muat ulang daftar.', true);
       const mapped = excelInvoices.get(fresh.id);
-      const matched = mapped?.revision === fresh.revision ? mapped.reference : '';
-      const number = fresh.excel_invoice_no || matched || String(fresh.invoice_no).padStart(5, '0');
+      const matched = mapped && mapped.revision === fresh.revision ? mapped.reference : '';
+      const number = invoiceNumber(fresh);
       const filename = 'Invoice-' + number.replace(/[^A-Za-z0-9_-]/g, '-');
       const {lines, reminder} = invoiceContent({
         number, customer:fresh.customer, shipping:fresh.shipping_charge,
@@ -389,7 +396,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
       ['Jadwal antar hari ini', deliveries, order => order.customer + ' · ' + location(order),
         'Buka jadwal antar', () => selectView('packing', 'packing')],
       ['Sudah diantar, belum lunas', unpaid, order => order.customer + ' · ' + money(balance(order)),
-        'Buka tagihan', () => selectView('packing', 'unpaid')]
+        'Buka tagihan', () => selectView('receivables')]
     ];
     target.replaceChildren(block(sections.map(([title, records, describe, action, navigate]) => {
       const card = el('section', undefined, 'ops-card');
@@ -402,6 +409,47 @@ export function initOperations({ $, request, status, products, prices, today, fo
       card.append(records.length ? preview : el('p', 'Belum ada pesanan.'), button(action, navigate));
       return card;
     }), 'today-grid'));
+  }
+
+  const deliveryDay = new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Jakarta',year:'numeric',month:'2-digit',day:'2-digit'});
+
+  async function receivables(target) {
+    const session = getSession();
+    target.textContent = 'Memuat piutang…';
+    const orders = (await orderQuery(unpaidFilter)).filter(order => balance(order) > 0);
+    if (getSession() !== session) return;
+    const date = today();
+    const age = order => {
+      if (!order.delivered_at) return null;
+      const timestamp = new Date(order.delivered_at);
+      if (!Number.isFinite(timestamp.getTime())) return null;
+      const days = (Date.parse(date) - Date.parse(deliveryDay.format(timestamp))) / 86400000;
+      return days >= 0 ? days : null;
+    };
+    const sorted = orders.map(order => ({order,days:age(order)}))
+      .sort((a,b) => (b.days ?? -1) - (a.days ?? -1));
+    const customers = Map.groupBy(sorted, ({order}) =>
+      JSON.stringify([order.customer.trim().replace(/\s+/g,' ').toLocaleLowerCase('id'), (order.contact || '').replace(/\D/g,'')]));
+    const summary = el('strong', money(orders.reduce((sum, order) => sum + balance(order), 0)) + ' total sisa tagihan');
+    const reload = button('Muat ulang piutang', () => open('receivables'));
+    target.replaceChildren(block([summary, reload], 'ops-filters'));
+    if (!orders.length) target.append(el('p', 'Belum ada tagihan untuk pesanan yang sudah diantar.'));
+    for (const invoices of customers.values()) {
+      const customer = el('section', undefined, 'ops-card');
+      const subtotal = invoices.reduce((sum, {order}) => sum + balance(order), 0);
+      customer.append(el('h3', invoices[0].order.customer),
+        el('p', invoices.length + ' invoice terbuka · Sisa ' + money(subtotal)));
+      for (const {order,days} of invoices) {
+        const item = el('article', undefined, 'ops-card');
+        item.append(el('strong', 'Invoice ' + invoiceNumber(order)),
+          el('p', days === null ? 'Tanggal antar belum tercatat'
+            : 'Antar tercatat ' + deliveryDay.format(new Date(order.delivered_at)) + ' · ' + days + ' hari'),
+          el('p', 'Total ' + money(total(order)) + ' · Dibayar ' + money(paid(order)) + ' · Sisa ' + money(balance(order))));
+        orderButtons(order, item);
+        customer.append(item);
+      }
+      target.append(customer);
+    }
   }
 
   async function packing(target, initialMode) {
@@ -830,7 +878,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
       el('p', 'Gunakan tab Tutup Hari, Pesanan, Packing, dan Booking dan Invoice B2 dari pembukuan Pentol Gilaaa. File dibaca di browser. Periksa pratinjau sebelum menerapkan koreksi.'), feedback, result);
   }
 
-  const views={today:overview,packing,purchasing,finance,promotions,reconcile,history};
+  const views={today:overview,packing,purchasing,finance,promotions,reconcile,history,receivables};
   async function open(view, packingMode) {
     if (!views[view]) return;
     const token=getSession();

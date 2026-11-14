@@ -9,7 +9,7 @@
 <title>Admin · Pentol Gilaaa Surabaya</title>
 <link rel="stylesheet" href="style.css?v=rekonsiliasi-1">
 <script defer src="vendor/jszip.min.js"></script>
-<script type="module" src="app.js?v=reconciliation-history-1"></script>
+<script type="module" src="app.js?v=receivables-1"></script>
 </head>
 <body>
 <header class="app-header"><div class="bar">
@@ -41,6 +41,7 @@
 <button type="button" data-view="packing" aria-controls="packing" aria-pressed="false"><span class="nav-icon" aria-hidden="true">□</span><span>Packing &amp; Tagihan</span></button>
 <button type="button" data-view="purchasing" aria-controls="purchasing" aria-pressed="false"><span class="nav-icon" aria-hidden="true">↙</span><span>Restok &amp; Supplier</span></button>
 <button type="button" data-view="reconcile" aria-controls="reconcile" aria-pressed="false"><span class="nav-icon" aria-hidden="true">≋</span><span>Rekonsiliasi Excel</span></button>
+<button type="button" data-view="receivables" aria-controls="receivables" aria-pressed="false"><span class="nav-icon" aria-hidden="true">≡</span><span>Ringkasan Piutang</span></button>
 <button type="button" data-view="history" aria-controls="history" aria-pressed="false"><span class="nav-icon" aria-hidden="true">◷</span><span>Riwayat Perubahan</span></button>
 <p class="sidebar-caption">LAPORAN &amp; PROMOSI</p><button type="button" data-view="finance" aria-controls="finance" aria-pressed="false"><span class="nav-icon" aria-hidden="true">↗</span><span>Harga &amp; Laba</span></button>
 <button type="button" data-view="promotions" aria-controls="promotions" aria-pressed="false"><span class="nav-icon" aria-hidden="true">✳</span><span>Promosi</span></button>
@@ -117,6 +118,10 @@
 <section id="reconcile" class="panel" hidden>
 <div class="section-head"><div><h2 tabindex="-1">Rekonsiliasi Excel</h2><p>Bandingkan pembukuan dengan data aplikasi saat ini.</p></div></div>
 <div id="reconcile-body"></div>
+</section>
+<section id="receivables" class="panel" hidden>
+<div class="section-head"><div><h2 tabindex="-1">Ringkasan Piutang</h2><p>Pesanan sudah diantar dengan sisa tagihan. Umur dihitung sejak tanggal antar tercatat di aplikasi.</p></div></div>
+<div id="receivables-body"></div>
 </section>
 <section id="history" class="panel" hidden>
 <div class="section-head"><div><h2 tabindex="-1">Riwayat Perubahan</h2><p>100 koreksi terakhir dari Rekonsiliasi Excel.</p></div></div>
