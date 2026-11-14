@@ -526,8 +526,16 @@ export function initOperations({ $, request, status, products, prices, today, fo
           el('p', [entry.phone,entry.area,entry.note].filter(Boolean).join(' · ')),
           el('p', entry.items.map(i => products.get(i.sku) + ' × ' + i.quantity).join(', ')),
           block([button('Proses pesanan', () => openOrder(null, entry)), button('Arsipkan', () => {
-            showDialog('Arsipkan permintaan · ' + entry.customer, [el('p', 'Permintaan ini akan keluar dari daftar masuk.')],
-              async () => { await admin('dismiss',{id:entry.id}); return inbox; });
+            // Disimpan setelah 6 detik kecuali dibatalkan.
+            card.hidden = true;
+            status('Permintaan ' + entry.customer + ' diarsipkan.', false, {
+              label:'Batalkan',
+              undo:() => { card.hidden = false; },
+              commit:() => admin('dismiss', {id:entry.id}).then(inbox).catch(() => {
+                card.hidden = false;
+                status('Permintaan ' + entry.customer + ' belum terarsip. Coba lagi.', true);
+              })
+            });
           })], 'ops-actions'));
         return card;
       }));
@@ -854,8 +862,10 @@ export function initOperations({ $, request, status, products, prices, today, fo
     const first = control('Dari','first',{type:'date',value:target.querySelector('[name=first]')?.value || today().slice(0,8)+'01'});
     const last = control('Sampai','last',{type:'date',value:target.querySelector('[name=last]')?.value || today()});
     const out = el('div');
-    target.replaceChildren(block([first,last], 'ops-filters'), out,
-      el('h3','Harga jual default'),
+    const priceList = el('details', undefined, 'report-details');
+    priceList.append(el('summary', 'Harga jual default'));
+    target.replaceChildren(block([first,last], 'ops-filters'), out, priceList);
+    priceList.append(
       ...[...products].map(([sku,name]) => block([
         el('span',name + ' · ' + money(prices[sku])),
         button('Ubah harga', () => showDialog('Harga jual · ' + name, [
@@ -865,6 +875,44 @@ export function initOperations({ $, request, status, products, prices, today, fo
           return async () => { await loadPrices(); open('finance'); };
         }))
       ], 'ops-actions')));
+    // Penjualan diantar per minggu (Senin–Minggu), 4 minggu terakhir, menurut tanggal pesanan.
+    function weekStart(day) {
+      const date = new Date(day + 'T00:00:00Z');
+      date.setUTCDate(date.getUTCDate() - (date.getUTCDay() + 6) % 7);
+      return date.toISOString().slice(0, 10);
+    }
+    function weeklyChart(orders, hpp) {
+      const starts = [];
+      let cursor = weekStart(today());
+      for (let i = 0; i < 4; i++) {
+        starts.unshift(cursor);
+        const d = new Date(cursor + 'T00:00:00Z');
+        d.setUTCDate(d.getUTCDate() - 7);
+        cursor = d.toISOString().slice(0, 10);
+      }
+      const sums = new Map(starts.map(start => [start, 0]));
+      for (const o of orders) {
+        const key = weekStart(o.order_date);
+        if (!sums.has(key)) continue;
+        sums.set(key, sums.get(key) + o.pentol_order_items.reduce((sum, i) => sum + i.shipped * i.unit_price, 0)
+          + (o.delivered ? Number(o.shipping_charge) : 0));
+      }
+      const max = Math.max(1, ...sums.values());
+      const chart = el('div', undefined, 'week-chart');
+      chart.setAttribute('role', 'img');
+      chart.setAttribute('aria-label', 'Penjualan diantar 4 minggu terakhir: ' + starts.map(start => money(sums.get(start))).join(', '));
+      for (const start of starts) {
+        const bar = el('div', undefined, 'week-bar');
+        const fill = el('span');
+        fill.style.height = Math.max(3, Math.round(sums.get(start) / max * 100)) + '%';
+        if (start === starts[3]) bar.dataset.current = 'true';
+        const d = new Date(start + 'T00:00:00Z');
+        bar.append(el('small', sums.get(start) ? Math.round(sums.get(start) / 1000) + 'rb' : '0'), fill,
+          el('small', start === starts[3] ? 'Minggu ini' : d.getUTCDate() + '/' + (d.getUTCMonth() + 1)));
+        chart.append(bar);
+      }
+      return chart;
+    }
     let generation = 0;
     async function render() {
       const current = ++generation;
@@ -872,10 +920,12 @@ export function initOperations({ $, request, status, products, prices, today, fo
       const b = last.lastChild.value;
       if (!a || !b || a>b) { out.textContent='Pilih rentang tanggal yang valid.'; return; }
       out.textContent='Memuat laporan…';
-      const [data,orders,payments] = await Promise.all([
+      const chartFrom = (() => { const d = new Date(weekStart(today()) + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - 21); return d.toISOString().slice(0, 10); })();
+      const [data,orders,payments,recent] = await Promise.all([
         purchases(),
         list('pentol_orders?select='+ordersSelect,'&cancelled=eq.false&order_date=gte.'+a+'&order_date=lte.'+b+'&order=order_date,id'),
-        list('pentol_payments?select=id,amount','&paid_on=gte.'+a+'&paid_on=lte.'+b+'&order=paid_on,id')
+        list('pentol_payments?select=id,amount','&paid_on=gte.'+a+'&paid_on=lte.'+b+'&order=paid_on,id'),
+        list('pentol_orders?select='+ordersSelect,'&cancelled=eq.false&order_date=gte.'+chartFrom+'&order=order_date,id')
       ]);
       if (generation !== current) return;
       const hpp = costs(data);
@@ -905,7 +955,19 @@ export function initOperations({ $, request, status, products, prices, today, fo
       }
       const gross = revenue-cost;
       const net = gross-shipping;
-      out.replaceChildren(table(['Metrik','Nilai'],[
+      const headline = el('section', undefined, 'report-headline');
+      const range = a.slice(8) + '/' + a.slice(5,7) + ' – ' + b.slice(8) + '/' + b.slice(5,7);
+      headline.append(el('p', missing ? 'Penjualan diantar · ' + range : 'Laba setelah biaya antar · ' + range, 'report-label'),
+        el('strong', money(missing ? revenue : net), 'report-number'),
+        el('p', missing ? 'Laba belum bisa dihitung: HPP ' + missing + ' pack belum ada di data restok.'
+          : 'Penjualan diantar ' + money(revenue) + (revenue ? ' · margin ' + (net/revenue*100).toFixed(1) + '%' : ''), 'report-sub'),
+        el('p', 'Kas diterima ' + money(cash) + ' · Tagihan ' + money(billed), 'report-sub'));
+      const chartBox = el('section', undefined, 'report-chart');
+      chartBox.append(el('h3', 'Penjualan diantar per minggu'), weeklyChart(recent, hpp));
+      const detail = el('details', undefined, 'report-details');
+      detail.append(el('summary', 'Rincian laporan'));
+      out.replaceChildren(headline, chartBox, detail);
+      detail.append(table(['Metrik','Nilai'],[
         ['Tagihan pesanan',money(billed)],['Kas diterima (tanggal bayar tercatat)',money(cash)],
         ['Penjualan yang sudah diantar',money(revenue)],['HPP pack yang diantar',money(cost)],
         ['Laba bruto',missing ? 'HPP belum lengkap' : money(gross)],

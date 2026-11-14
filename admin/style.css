@@ -367,3 +367,68 @@ body { background: radial-gradient(1100px 480px at 105% -10%, #fbe7d9 0, transpa
   .order-action-bar .primary-actions { flex: 1; }
 }
 .quick-item.empty { opacity: .6; }
+
+/* ===== Paket 4–8 ===== */
+.order-chips { display: flex; gap: 6px; overflow-x: auto; margin: 0 0 10px; scrollbar-width: none; }
+.order-chips::-webkit-scrollbar { display: none; }
+.order-chips button { flex: 0 0 auto; min-height: 40px; padding: 8px 16px; border-radius: 999px; background: var(--paper); color: #6f5f55; border: 1px solid var(--line); font-size: 13px; font-weight: 650; box-shadow: none; }
+.order-chips button:hover { background: #f4ece2; color: var(--wine); box-shadow: none; }
+.order-chips button[aria-pressed="true"] { background: var(--wine-dark); color: #fff; border-color: var(--wine-dark); }
+.order-search-row { display: flex; gap: 8px; margin-bottom: 10px; }
+.order-search-row input { flex: 1; min-height: 44px; border-radius: 999px; padding-inline: 18px; }
+.order-search-row button { min-width: 44px; min-height: 44px; padding: 0 14px; border-radius: 999px; }
+.order-filters { margin-bottom: 10px; }
+.order-filters > summary { font-size: 12px; font-weight: 650; color: #80634a; padding: 6px 2px; }
+.order-filters[open] > .order-toolbar { margin-top: 8px; }
+.order-filters .order-hint { margin: 8px 2px 0; }
+.order-metrics-line { font-size: 12px; font-weight: 650; color: #5f4f46; margin: 6px 2px 0; }
+.order-metrics-line:empty { display: none; }
+#status:not(:empty) { position: fixed; top: auto; left: 50%; bottom: 24px; transform: translateX(-50%); width: min(520px, calc(100% - 24px)); z-index: 40; display: flex; align-items: center; gap: 12px; margin: 0; padding: 12px 12px 12px 18px; border-radius: 16px; background: #23302a; border: 0; color: #f2fbf5; font-size: 13px; box-shadow: 0 14px 40px #0000003a; animation: toast-in .18s ease-out; }
+#status:not(:empty) > span { flex: 1; }
+#status[data-error="true"] { background: #fff0ed; color: #a44337; border: 1px solid #e6c2ba; }
+#status button { flex-shrink: 0; min-height: 36px; padding: 6px 14px; border-radius: 999px; background: #ffffff1f; color: inherit; border: 1px solid #ffffff40; font-size: 12px; box-shadow: none; }
+#status[data-error="true"] button { background: transparent; border-color: #e6c2ba; }
+@keyframes toast-in { from { opacity: 0; transform: translate(-50%, 8px); } }
+@media (max-width: 900px) { #status:not(:empty) { top: auto; bottom: calc(86px + env(safe-area-inset-bottom)); } }
+.stock-variants { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: 12px; margin-bottom: 18px; }
+.variant-card { display: flex; flex-direction: column; align-items: start; gap: 4px; padding: 16px 18px; border-radius: var(--radius); background: var(--paper); border: 1px solid var(--line); box-shadow: var(--shadow); }
+.variant-card h3 { margin: 0; font-size: 13px; }
+.variant-card > strong { font: 700 40px/1 "Barlow Condensed", sans-serif; color: #2b1f1b; font-variant-numeric: tabular-nums; }
+.variant-card > p { margin: 0; font-size: 12px; }
+.variant-card .variant-meta { color: #8a786c; font-size: 11px; }
+.variant-card[data-level="low"] { background: #fff4d9; border-color: #f1d999; }
+.variant-card[data-level="low"] > strong { color: #9a6a16; }
+.variant-card[data-level="out"] { background: #fdebe7; border-color: #efc4bb; }
+.variant-card[data-level="out"] > strong { color: #a44337; }
+.variant-card button { margin-top: 8px; min-height: 36px; padding: 6px 16px; border-radius: 999px; font-size: 12px; }
+.stock-batches > summary { font-size: 13px; font-weight: 650; color: #80634a; padding: 10px 2px; }
+.stock-batches[open] > summary { margin-bottom: 10px; }
+@media (max-width: 620px) { .stock-variants { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } .variant-card > strong { font-size: 34px; } }
+.report-headline { padding: 20px 22px; border-radius: var(--radius); background: linear-gradient(140deg, var(--mint), #f3faf5); border: 1px solid #cfe4d7; box-shadow: var(--shadow); margin-bottom: 14px; }
+.report-headline .report-label { margin: 0; font-size: 12px; font-weight: 650; color: var(--mint-ink); }
+.report-headline .report-number { display: block; font: 700 clamp(36px, 6vw, 52px)/1.05 "Barlow Condensed", sans-serif; color: #17352f; margin: 6px 0; font-variant-numeric: tabular-nums; }
+.report-headline .report-sub { margin: 2px 0 0; font-size: 12px; color: #435c54; }
+.report-chart { padding: 18px 20px; border-radius: var(--radius); background: var(--paper); border: 1px solid var(--line); box-shadow: var(--shadow); margin-bottom: 14px; }
+.report-chart h3 { font-size: 13px; margin: 0 0 12px; }
+.week-chart { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; height: 150px; align-items: end; }
+.week-bar { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; height: 100%; }
+.week-bar span { width: 100%; max-width: 64px; border-radius: 10px 10px 4px 4px; background: #e8d9c8; }
+.week-bar[data-current] span { background: var(--wine); }
+.week-bar small { font-size: 11px; color: #7a685e; white-space: nowrap; }
+.report-details { margin: 0 0 14px; padding: 12px 16px; border-radius: var(--radius); background: var(--paper); border: 1px solid var(--line); }
+.report-details > summary { font-size: 13px; font-weight: 650; color: #80634a; }
+.report-details[open] > summary { margin-bottom: 12px; }
+.report-details > .ops-actions { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; margin: 0; border-bottom: 1px solid #eee8de; }
+.report-details > .ops-actions span { font-size: 12px; }
+@media (max-width: 620px) {
+  .admin-content { padding-top: 14px; }
+  .section-head { margin-bottom: 14px; }
+  .section-head .eyebrow, .section-head > div > p:not(.eyebrow) { display: none; }
+  .section-head h2 { font-size: 30px; margin: 0; }
+  .subtabs { margin-bottom: 14px; }
+  .order-chips { gap: 4px; }
+  .order-chips button { padding: 8px 11px; font-size: 12px; }
+  #inbox-list .ops-card { padding: 14px; margin: 10px 0 4px; }
+  #inbox-list .ops-card p { margin: 3px 0; }
+}
+#finance-body .report-chart h3, #finance-body .report-headline h3 { margin-top: 0; }

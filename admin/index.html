@@ -7,9 +7,9 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src https://gnwzgiiarbxutattxhcy.supabase.co; base-uri 'none'; form-action 'none'; object-src 'none'">
 <meta name="referrer" content="no-referrer">
 <title>Admin · Pentol Gilaaa Surabaya</title>
-<link rel="stylesheet" href="style.css?v=aksi-1">
+<link rel="stylesheet" href="style.css?v=ux-5">
 <script defer src="vendor/jszip.min.js"></script>
-<script type="module" src="app.js?v=aksi-1"></script>
+<script type="module" src="app.js?v=ux-5"></script>
 </head>
 <body>
 <header class="app-header"><div class="bar">
@@ -61,7 +61,7 @@
 <div id="today-body" aria-live="polite"></div>
 </section>
 <section id="stock" class="panel" hidden>
-<div class="section-head"><div><p class="eyebrow">INVENTORI</p><h2 tabindex="-1">Stok per Batch</h2><p>Stok bertambah lewat Terima barang di Restok &amp; Supplier, dan berkurang lewat pesanan.</p></div><button type="button" id="new-entry" class="secondary">Catat restok →</button></div>
+<div class="section-head"><div><p class="eyebrow">INVENTORI</p><h2 tabindex="-1">Stok</h2><p>Stok bertambah lewat Terima barang di Restok &amp; Supplier, dan berkurang lewat pesanan.</p></div><button type="button" id="new-entry" class="secondary">Catat restok →</button></div>
 <form id="batch-form" class="editor" hidden>
 <h3 id="editor-title">Koreksi jumlah diterima</h3>
 <p id="editor-target"></p>
@@ -73,6 +73,8 @@
 </div>
 <button id="save">Simpan koreksi</button> <button type="button" id="cancel">Batal</button>
 </form>
+<div id="stock-variants" class="stock-variants" aria-label="Stok per varian"></div>
+<details id="stock-batches" class="stock-batches"><summary>Rincian per batch &amp; koreksi</summary>
 <div id="stock-metrics" class="metrics summary-metrics" aria-label="Ringkasan stok"></div>
 <div class="stock-controls">
 <label>Batch <select id="stock-batch"><option value="">Semua batch</option></select></label>
@@ -82,6 +84,7 @@
 <div class="table stock-table" tabindex="0" role="region" aria-label="Daftar stok per batch">
 <table><thead><tr><th>Batch</th><th>Varian</th><th>Diterima</th><th>Terpesan</th><th>Diantar</th><th>Sisa jual</th><th>Belum terpenuhi</th><th>Aksi</th></tr></thead><tbody id="stock-rows"></tbody></table>
 </div>
+</details>
 </section>
 <section id="orders" class="panel" hidden>
 <div class="section-head"><div><p class="eyebrow">TRANSAKSI</p><h2 tabindex="-1">Pesanan</h2><p>Pantau pesanan dan tindak lanjut pelanggan.</p></div><div class="head-actions"><button type="button" id="gpt-import" class="secondary">✦ Tempel dari GPT</button><button type="button" id="new-order" aria-controls="order-form" aria-expanded="false">+ Catat pesanan</button></div></div>
@@ -90,7 +93,8 @@
 <form id="order-form" class="editor" hidden>
 <h3 id="order-editor-title">Catat pesanan</h3>
 <div class="fields">
-<label>Nama pelanggan <input name="customer" maxlength="120" required></label>
+<label>Nama pelanggan <input name="customer" maxlength="120" required list="customer-list" autocomplete="off"></label>
+<datalist id="customer-list"></datalist>
 <label>WhatsApp <input name="contact" type="tel" maxlength="24" placeholder="08…"></label>
 <label>Jadwal antar <input name="delivery_on" type="date"></label>
 <label>Lokasi / alamat <input name="delivery_location" maxlength="200"></label>
@@ -113,7 +117,17 @@
 </details>
 <p class="form-actions"><button id="save-order">Simpan pesanan</button> <button type="button" id="cancel-order">Batal</button></p>
 </form>
-<div id="order-metrics" class="metrics summary-metrics" aria-label="Ringkasan periode pesanan"></div>
+<div class="order-chips" role="group" aria-label="Tampilkan pesanan">
+<button type="button" data-chip="action" aria-pressed="true">Perlu tindakan</button>
+<button type="button" data-chip="unpaid" aria-pressed="false">Belum bayar</button>
+<button type="button" data-chip="pending" aria-pressed="false">Belum antar</button>
+<button type="button" data-chip="all" aria-pressed="false">Per tanggal</button>
+</div>
+<div class="order-search-row">
+<input id="order-search" type="search" placeholder="Cari nama pelanggan…" autocomplete="off" aria-label="Cari pelanggan">
+<button type="button" id="refresh-orders" class="secondary" aria-label="Muat ulang pesanan">↻</button>
+</div>
+<details id="order-filters" class="order-filters"><summary>Filter lain · tanggal &amp; status</summary>
 <div class="order-toolbar">
 <label>Tampilan <select id="order-period"><option value="day">Harian</option><option value="week">Mingguan</option></select></label>
 <label><span id="order-date-label">Tanggal</span> <input type="date" id="order-date" required></label>
@@ -121,10 +135,11 @@
 <button type="button" class="secondary" id="previous-week">‹ Minggu lalu</button>
 <button type="button" class="secondary" id="next-week">Minggu berikutnya ›</button>
 </div>
-<label>Cari pelanggan <input id="order-search" type="search" placeholder="Nama pelanggan…" autocomplete="off"></label>
 <label>Status <select id="order-status"><option value="all">Semua status</option><option value="unpaid">Belum lunas</option><option value="pending">Belum selesai diantar</option><option value="delivered-unpaid">Diantar, belum lunas</option><option value="cancelled">Dibatalkan</option></select></label>
-<button type="button" id="refresh-orders" class="secondary">↻ Muat ulang</button>
 </div>
+<p class="order-hint">Tanggal dan status berlaku untuk tampilan "Per tanggal".</p>
+</details>
+<p id="order-metrics" class="order-metrics-line" aria-live="polite"></p>
 <p id="orders-summary" class="result-count" aria-live="polite"></p>
 <div class="table order-table" tabindex="0" role="region" aria-label="Daftar pesanan">
 <table><thead><tr><th id="order-date-column" hidden>Tanggal</th><th>Pelanggan</th><th>Pesanan</th><th>Tagihan</th><th>Pembayaran</th><th>Pengantaran</th><th>Aksi</th></tr></thead><tbody id="order-rows"></tbody></table>

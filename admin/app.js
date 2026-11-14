@@ -1,5 +1,5 @@
 import { supabaseUrl, supabasePublishableKey } from './config.js';
-import { initOperations } from './operations.js?v=aksi-1';
+import { initOperations } from './operations.js?v=ux-5';
 
 const products = new Map([
   ['UR','Pentol Urat'], ['PK','Pentol Kecil'], ['TP','Tahu Pentol'],
@@ -70,9 +70,36 @@ function readSession() {
   return null;
 }
 
-function status(message, error = false) {
-  $('status').textContent = message;
-  $('status').dataset.error = String(error);
+// Notifikasi di bawah layar. Pesan sukses hilang sendiri; pesan galat tetap sampai ditutup.
+// action: {label, undo, commit} -> tombol Batalkan; commit dijalankan bila tidak dibatalkan.
+let statusTimer;
+let pendingCommit = null;
+function status(message, error = false, action = null) {
+  const box = $('status');
+  clearTimeout(statusTimer);
+  if (pendingCommit) { const commit = pendingCommit; pendingCommit = null; commit(); }
+  box.replaceChildren();
+  box.dataset.error = String(error);
+  if (!message) return;
+  const text = document.createElement('span');
+  text.textContent = message;
+  box.append(text);
+  if (action) {
+    pendingCommit = action.commit;
+    const undo = document.createElement('button');
+    undo.type = 'button';
+    undo.textContent = action.label;
+    undo.addEventListener('click', () => { pendingCommit = null; action.undo(); status(''); });
+    box.append(undo);
+  } else if (error) {
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.textContent = '×';
+    close.setAttribute('aria-label', 'Tutup pesan');
+    close.addEventListener('click', () => status(''));
+    box.append(close);
+  }
+  if (!error) statusTimer = setTimeout(() => status(''), action ? 6000 : 4000);
 }
 
 async function refreshSession(current) {
@@ -146,6 +173,9 @@ function endSession(message) {
   loadedOrders = [];
   orderSearch.value = '';
   orderStatus.value = 'all';
+  setOrderChip('action');
+  customerBook = null;
+  $('customer-list').replaceChildren();
   $('order-metrics').replaceChildren();
   $('stock-metrics').replaceChildren();
   setMenuExpanded(false);
@@ -231,7 +261,41 @@ function edit(row) {
 let ownedBookings = null;
 const unowned = row => ownedBookings ? Math.max(0, row.reserved - (ownedBookings.get(row.id) || 0)) : 0;
 
+// Kartu per varian: angka besar "siap jual", warna saat menipis/habis, tombol Restok.
+const LOW_STOCK = 5;
+function renderVariants() {
+  $('stock-variants').replaceChildren(...Array.from(products, ([sku, name]) => {
+    const own = rows.filter(row => row.sku === sku);
+    const sums = own.reduce((sum, row) => { quantities(row).forEach((value, i) => { sum[i] += value; }); return sum; }, [0,0,0,0,0]);
+    const ready = sums[3];
+    const card = document.createElement('article');
+    card.className = 'variant-card';
+    card.dataset.level = ready === 0 ? 'out' : ready <= LOW_STOCK ? 'low' : 'ok';
+    const title = document.createElement('h3');
+    title.textContent = name;
+    const number = document.createElement('strong');
+    number.textContent = format.format(ready);
+    const label = document.createElement('p');
+    label.textContent = ready === 0 ? 'habis · siap jual' : ready <= LOW_STOCK ? 'menipis · siap jual' : 'pack siap jual';
+    const meta = document.createElement('p');
+    meta.className = 'variant-meta';
+    meta.textContent = format.format(sums[1]) + ' terpesan · ' + own.length + ' batch'
+      + (sums[4] ? ' · kurang ' + format.format(sums[4]) + ' untuk pesanan' : '');
+    card.append(title, number, label, meta);
+    if (card.dataset.level !== 'ok') {
+      const restock = document.createElement('button');
+      restock.type = 'button';
+      restock.className = 'secondary';
+      restock.textContent = 'Restok';
+      restock.addEventListener('click', () => selectView('purchasing'));
+      card.append(restock);
+    }
+    return card;
+  }));
+}
+
 function renderStock() {
+  renderVariants();
   const target = $('stock-rows');
   const query = stockSearch.value.trim().toLocaleLowerCase('id');
   const visible = rows.filter(row => (!stockBatch.value || stockBatch.value === row.batch_code)
@@ -444,7 +508,7 @@ document.addEventListener('keydown', event => {
 // Menu utama dengan beberapa bagian ditampilkan sebagai tab di atas halaman.
 const viewGroups = {
   orders: [['orders', 'Daftar pesanan'], ['packing', 'Packing & antar'], ['receivables', 'Tagihan']],
-  stock: [['stock', 'Stok per batch'], ['purchasing', 'Restok & PO']],
+  stock: [['stock', 'Stok'], ['purchasing', 'Restok & PO']],
   finance: [['finance', 'Laba & harga'], ['closeDay', 'Tutup hari']]
 };
 const groupOf = view => Object.keys(viewGroups).find(group => viewGroups[group].some(([id]) => id === view));
@@ -635,27 +699,52 @@ function moveOrderWeek(days) {
   const date = new Date((orderDate.value || today()) + 'T00:00:00Z');
   date.setUTCDate(date.getUTCDate() + days);
   orderDate.value = date.toISOString().slice(0, 10);
+  setOrderChip('all');
   loadOrders();
 }
 
+// Tombol cepat: tiga tampilan kerja (tanpa batas tanggal) dan "Semua" yang memakai filter tanggal/status.
+let orderChip = 'action';
+const chipFilters = {
+  action: '&cancelled=eq.false&or=(paid.eq.false,delivered.eq.false)',
+  unpaid: '&cancelled=eq.false&paid=eq.false',
+  pending: '&cancelled=eq.false&delivered=eq.false'
+};
+const chipLabels = { action:'Perlu tindakan', unpaid:'Belum bayar', pending:'Belum antar', all:'Per tanggal' };
+function setOrderChip(chip) {
+  orderChip = chip;
+  document.querySelectorAll('.order-chips [data-chip]').forEach(button =>
+    button.setAttribute('aria-pressed', String(button.dataset.chip === chip)));
+}
+document.querySelectorAll('.order-chips [data-chip]').forEach(button => button.addEventListener('click', () => {
+  setOrderChip(button.dataset.chip);
+  loadOrders();
+}));
+
 async function loadOrders() {
   const generation = ++orderLoad;
-  const weekly = orderPeriod.value === 'week';
+  const chipMode = orderChip !== 'all';
+  const weekly = chipMode || orderPeriod.value === 'week';
   $('order-date-column').hidden = !weekly;
-  $('week-navigation').hidden = !weekly;
-  $('order-date-label').textContent = weekly ? 'Tanggal dalam minggu' : 'Tanggal';
+  $('week-navigation').hidden = orderPeriod.value !== 'week';
+  $('order-date-label').textContent = orderPeriod.value === 'week' ? 'Tanggal dalam minggu' : 'Tanggal';
   const target = $('order-rows');
   const summary = $('orders-summary');
   target.replaceChildren();
   loadedOrders = [];
   $('order-metrics').replaceChildren();
-  if (!orderDate.value) {
+  if (!chipMode && !orderDate.value) {
     summary.textContent = 'Pilih tanggal untuk melihat pesanan.';
     return;
   }
-  const { first, last } = orderRange(orderDate.value, weekly);
-  const rangeFilter = '&order_date=gte.' + first + '&order_date=lte.' + last;
-  const period = weekly ? displayDate.formatRange(new Date(first), new Date(last)) + ' · ' : '';
+  let rangeFilter = chipFilters[orderChip] || '';
+  let period = chipLabels[orderChip] + ' · ';
+  if (!chipMode) {
+    const { first, last } = orderRange(orderDate.value, orderPeriod.value === 'week');
+    rangeFilter = '&order_date=gte.' + first + '&order_date=lte.' + last;
+    period = orderPeriod.value === 'week' ? displayDate.formatRange(new Date(first), new Date(last)) + ' · '
+      : displayDate.format(new Date(orderDate.value)) + ' · ';
+  }
   summary.textContent = period + 'Memuat pesanan…';
   try {
     const orders = [];
@@ -683,16 +772,13 @@ function renderOrderList() {
   const active = loadedOrders.filter(order => !order.cancelled);
   const charges = active.reduce((sum, order) => sum + ops.total(order), 0);
   const packs = active.reduce((sum, order) => sum + order.pentol_order_items.reduce((qty, item) => qty + item.quantity, 0), 0);
-  metricCards($('order-metrics'), [
-    ['Total tagihan periode', 'Rp' + format.format(charges)],
-    ['Pesanan aktif', active.length],
-    ['Belum lunas', active.filter(order => !order.paid).length],
-    ['Belum selesai diantar', active.filter(order => !order.delivered).length]
-  ]);
+  $('order-metrics').textContent = active.length + ' aktif · ' + active.filter(order => !order.paid).length + ' belum bayar · '
+    + active.filter(order => !order.delivered).length + ' belum antar · Rp' + format.format(charges) + ' tagihan';
   const query = orderSearch.value.trim().toLocaleLowerCase('id');
   const selectedStatus = orderStatus.value;
   const visible = loadedOrders.filter(order => {
     if (!order.customer.toLocaleLowerCase('id').includes(query)) return false;
+    if (orderChip !== 'all') return true;
     switch (selectedStatus) {
       case 'unpaid': return !order.cancelled && !order.paid;
       case 'pending': return !order.cancelled && !order.delivered;
@@ -728,10 +814,13 @@ function renderOrderList() {
     return tr;
   }));
   emptyRow(target, weekly ? 7 : 6, loadedOrders.length
-    ? 'Tidak ada pesanan yang cocok. Ubah pencarian atau filter status.'
-    : weekly ? 'Belum ada pesanan pada minggu ini.' : 'Belum ada pesanan pada tanggal ini.');
+    ? 'Tidak ada pesanan yang cocok dengan pencarian.'
+    : orderChip === 'action' ? 'Semua pesanan sudah dibayar dan diantar. 🎉'
+    : orderChip === 'unpaid' ? 'Tidak ada pesanan yang belum dibayar.'
+    : orderChip === 'pending' ? 'Tidak ada pesanan yang belum diantar.'
+    : orderPeriod.value === 'week' ? 'Belum ada pesanan pada minggu ini.' : 'Belum ada pesanan pada tanggal ini.');
   $('orders-summary').textContent = period + visible.length + ' dari ' + loadedOrders.length
-    + ' pesanan ditampilkan · ' + format.format(packs) + ' pack dalam periode ini';
+    + ' pesanan · ' + format.format(packs) + ' pack';
 }
 
 function updateOrderEstimate() {
@@ -750,6 +839,42 @@ async function refreshAfterOrder(message) {
     status('Perubahan tersimpan. Masuk kembali untuk memuat stok terbaru.', true);
   }
 }
+
+// Pelanggan langganan: saran nama, lalu isi WhatsApp dan lokasi terakhir bila masih kosong.
+let customerBook = null;
+const customerKey = name => String(name ?? '').trim().toLocaleLowerCase('id').replace(/\s+/g, ' ');
+async function loadCustomers() {
+  const token = session;
+  const recent = await request('/rest/v1/pentol_orders?select=customer,contact,delivery_location&order=created_at.desc&limit=500');
+  if (session !== token) return;
+  customerBook = new Map();
+  for (const entry of recent) {
+    const key = customerKey(entry.customer);
+    const known = customerBook.get(key);
+    if (!known) customerBook.set(key, { ...entry });
+    else {
+      known.contact ||= entry.contact;
+      known.delivery_location ||= entry.delivery_location;
+    }
+  }
+  $('customer-list').replaceChildren(...Array.from(customerBook.values(), entry => {
+    const option = document.createElement('option');
+    option.value = entry.customer;
+    option.label = [entry.contact, entry.delivery_location].filter(Boolean).join(' · ');
+    return option;
+  }));
+}
+function fillKnownCustomer() {
+  const known = customerBook?.get(customerKey(orderForm.elements.customer.value));
+  if (!known) return;
+  const e = orderForm.elements;
+  if (!e.contact.value && known.contact) e.contact.value = known.contact;
+  if (!e.delivery_location.value && known.delivery_location) e.delivery_location.value = known.delivery_location;
+}
+orderForm.elements.customer.addEventListener('change', fillKnownCustomer);
+orderForm.elements.customer.addEventListener('input', () => {
+  if (customerBook?.has(customerKey(orderForm.elements.customer.value))) fillKnownCustomer();
+});
 
 function openOrder(order = null, inboxEntry = null) {
   if (busy) return;
@@ -773,6 +898,7 @@ function openOrder(order = null, inboxEntry = null) {
     for (const item of inboxEntry.items) allocate(item.sku, item.quantity, prices[item.sku]);
   }
   renderQuickPick();
+  if (!customerBook) loadCustomers().catch(() => {});
   orderForm.hidden = false;
   $('order-editor-title').textContent = order ? 'Edit pesanan · ' + order.customer : 'Catat pesanan';
   updateOrderEstimate();
@@ -788,7 +914,9 @@ $('cancel-order').addEventListener('click', () => {
   $('new-order').focus();
 });
 orderSearch.addEventListener('input', renderOrderList);
-orderStatus.addEventListener('change', renderOrderList);
+orderStatus.addEventListener('change', () => {
+  if (orderChip !== 'all') { setOrderChip('all'); loadOrders(); } else renderOrderList();
+});
 $('refresh-orders').addEventListener('click', () => run($('refresh-orders'), async () => {
   await loadOrders();
   await ops.inbox();
@@ -800,8 +928,8 @@ orderForm.addEventListener('input', event => {
 orderForm.addEventListener('change', event => { if (orderItems.contains(event.target)) renderQuickPick(); });
 // Isian wajib di "Detail lain" yang tertutup: buka supaya browser bisa menunjukkan kesalahannya.
 orderForm.addEventListener('invalid', event => { if ($('order-more').contains(event.target)) $('order-more').open = true; }, true);
-orderDate.addEventListener('change', loadOrders);
-orderPeriod.addEventListener('change', loadOrders);
+orderDate.addEventListener('change', () => { setOrderChip('all'); loadOrders(); });
+orderPeriod.addEventListener('change', () => { setOrderChip('all'); loadOrders(); });
 $('previous-week').addEventListener('click', () => moveOrderWeek(-7));
 $('next-week').addEventListener('click', () => moveOrderWeek(7));
 
@@ -835,6 +963,7 @@ orderForm.addEventListener('submit', event => {
     }
     resetOrderForm();
     orderDate.value = date;
+    customerBook = null;
     await refreshAfterOrder('Pesanan tersimpan dan stok batch diperbarui.');
     ops.inbox();
   });

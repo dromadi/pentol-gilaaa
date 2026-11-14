@@ -62,6 +62,16 @@ Sampai `stock-integrity-2026-11.sql` dijalankan di produksi, tombol **Koreksi** 
 
 Diuji di Chromium HP dengan data tiruan: aksi utama per konteks, isi tautan WA, bayar 1 ketukan, − / + dan ketik jumlah, kekurangan stok, simpan pesanan (payload benar), edit pesanan lama, Tempel dari GPT, dan 11 halaman tanpa error.
 
+## Upgrade UI/UX (paket 4–8)
+
+4. **Pesanan: tombol cepat** Perlu tindakan (bawaan) · Belum bayar · Belum antar · Per tanggal (`orderChip`, `chipFilters` di `admin/app.js`). Tiga tombol pertama memuat semua tanggal; "Per tanggal" memakai tanggal/status di "Filter lain". Empat kartu angka diganti satu baris ringkasan. Di HP, label kecil dan kalimat penjelasan judul halaman disembunyikan supaya isi naik.
+5. **Notifikasi di bawah layar** (`status(message, error, action)`): sukses hilang setelah 4 detik, galat tetap sampai ditutup (×). "Arsipkan" permintaan katalog memakai tombol **Batalkan** 6 detik; penyimpanan ke database baru terjadi setelah itu (atau saat notifikasi berikutnya muncul). Bayar dan antar tidak punya Batalkan.
+6. **Stok per varian** (`renderVariants`): kartu "siap jual" per varian; kuning ≤ 5 pack (`LOW_STOCK`), merah habis, tombol Restok. Tabel per batch dan Koreksi ada di "Rincian per batch & koreksi".
+7. **Laporan**: angka utama (laba setelah biaya antar, atau penjualan diantar bila HPP belum lengkap) dan grafik batang penjualan diantar 4 minggu terakhir (menurut tanggal pesanan). Tabel di "Rincian laporan", harga jual di "Harga jual default".
+8. **Saran pelanggan langganan** (`loadCustomers`, `<datalist id="customer-list">`): 500 pesanan terakhir; memilih nama mengisi WhatsApp dan lokasi bila masih kosong.
+
+Diuji di Chromium HP dengan data tiruan (filter URL per tombol, Batalkan/arsip setelah 6 detik, isi otomatis pelanggan, warna stok, navigasi Restok, laporan & grafik) plus seluruh uji sebelumnya (11 halaman, Tempel dari GPT, aksi & form − / +, navigasi tab) tanpa error.
+
 ## Input lewat ChatGPT (tahap 1: tempel)
 
 Keputusan: **aplikasi (Supabase) tetap sumber kebenaran**; ChatGPT hanya pintu masuk. Tidak ada data yang tersimpan tanpa konfirmasi admin di form aplikasi, sehingga semua validasi database tetap berlaku.
