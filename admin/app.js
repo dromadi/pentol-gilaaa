@@ -1,5 +1,5 @@
 import { supabaseUrl, supabasePublishableKey } from './config.js';
-import { initOperations } from './operations.js?v=pesanan-14';
+import { initOperations } from './operations.js?v=stok-15';
 
 const products = new Map([
   ['UR','Pentol Urat'], ['PK','Pentol Kecil'], ['TP','Tahu Pentol'],
@@ -272,26 +272,50 @@ const unowned = row => ownedBookings ? Math.max(0, row.reserved - (ownedBookings
 
 // Kartu per varian: angka besar "siap jual", warna saat menipis/habis, tombol Restok.
 const LOW_STOCK = 5;
+let openPurchases = [];
+// Barang yang sudah dipesan ke supplier tapi belum diterima, per varian, dengan estimasi tiba terdekat.
+function incomingStock() {
+  const incoming = new Map();
+  for (const purchase of openPurchases || []) {
+    for (const item of purchase.pentol_purchase_items || []) {
+      const row = rows.find(r => r.batch_code === purchase.batch_code && r.sku === item.sku);
+      const left = item.quantity - (row?.received || 0);
+      if (left <= 0) continue;
+      const known = incoming.get(item.sku) || { quantity: 0, eta: '' };
+      known.quantity += left;
+      if (purchase.expected_on && (!known.eta || purchase.expected_on < known.eta)) known.eta = purchase.expected_on;
+      incoming.set(item.sku, known);
+    }
+  }
+  return incoming;
+}
 function renderVariants() {
+  const incoming = incomingStock();
   $('stock-variants').replaceChildren(...Array.from(products, ([sku, name]) => {
     const own = rows.filter(row => row.sku === sku);
     const sums = own.reduce((sum, row) => { quantities(row).forEach((value, i) => { sum[i] += value; }); return sum; }, [0,0,0,0,0]);
     const ready = sums[3];
     const card = document.createElement('article');
     card.className = 'variant-card';
-    card.dataset.level = ready === 0 ? 'out' : ready <= LOW_STOCK ? 'low' : 'ok';
+    const coming = incoming.get(sku);
+    const needs = ready === 0 ? 'out' : ready <= LOW_STOCK ? 'low' : 'ok';
+    // Sudah dipesan ke supplier: jangan minta restok lagi.
+    card.dataset.level = needs !== 'ok' && coming ? 'incoming' : needs;
     const title = document.createElement('h3');
     title.textContent = name;
     const number = document.createElement('strong');
     number.textContent = format.format(ready);
     const label = document.createElement('p');
-    label.textContent = ready === 0 ? 'habis · siap jual' : ready <= LOW_STOCK ? 'menipis · siap jual' : 'pack siap jual';
+    label.textContent = card.dataset.level === 'incoming' ? (ready === 0 ? 'habis' : 'menipis') + ' · menunggu kiriman'
+      : ready === 0 ? 'habis · siap jual' : ready <= LOW_STOCK ? 'menipis · siap jual' : 'pack siap jual';
     const meta = document.createElement('p');
     meta.className = 'variant-meta';
     meta.textContent = format.format(sums[1]) + ' terpesan · ' + own.length + ' batch'
       + (sums[4] ? ' · kurang ' + format.format(sums[4]) + ' untuk pesanan' : '');
     card.append(title, number, label, meta);
-    if (card.dataset.level !== 'ok') {
+    if (coming) card.append(Object.assign(document.createElement('p'), { className: 'variant-incoming',
+      textContent: '+' + format.format(coming.quantity) + ' dalam PO' + (coming.eta ? ' · tiba ' + ops.dayLabel(coming.eta) : '') }));
+    if (card.dataset.level === 'out' || card.dataset.level === 'low') {
       const restock = document.createElement('button');
       restock.type = 'button';
       restock.className = 'secondary';
@@ -360,7 +384,10 @@ async function loadRows() {
     if (page.length < pageSize) break;
   }
   rows = loaded;
-  ownedBookings = await loadOwnedBookings().catch(() => null);
+  [ownedBookings, openPurchases] = await Promise.all([
+    loadOwnedBookings().catch(() => null),
+    request('/rest/v1/pentol_purchases?select=batch_code,expected_on,pentol_purchase_items(sku,quantity)&order=batch_code').catch(() => [])
+  ]);
   if (session !== token) return;
   renderRows();
 }

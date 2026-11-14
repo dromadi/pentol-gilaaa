@@ -133,6 +133,15 @@ Diuji (`tests/admin.test.js`): urutan & aksi per baris, jumlah kartu = jumlah da
 
 Diuji: pencarian WA/invoice/nama, Balas WA, mode bawaan Packing, Ingatkan semua, pembagian Bayar sekaligus.
 
+## Evaluasi per menu: Stok (14 Nov)
+
+Masalah yang ditemukan dan perbaikannya (versi `stok-15`):
+- **Kartu varian merah + "Restok" walau barang sudah dipesan ke supplier.** Sekarang kartu yang tertutup PO aktif berwarna biru "menunggu kiriman" dengan keterangan "+N dalam PO · tiba <tanggal>", dan tombol Restok hanya muncul bila memang belum dipesan.
+- **Form restok panjang dan harus diketik dari nol.** Kode batch disarankan otomatis (BATCH-NN berikutnya), tanggal pesan = hari ini, jumlah pakai tombol − / +, harga beli/pack terisi dari harga terakhir varian itu, dan biaya tambahan (supplier, ongkir, kemasan, lain-lain) dilipat.
+- **Terima barang mulai dari 0.** Sekarang langsung terisi sisa PO; cukup ubah bila datangnya kurang.
+- **Daftar PO campur aduk.** PO yang masih ditunggu tampil di atas (urut estimasi tiba), PO selesai dilipat di "PO selesai (n)". Tanggal ditulis "Sen, 16 Nov".
+- Uji baru: `stok & restok: barang dalam PO, form restok terisi, terima barang = sisa PO`.
+
 ## Input lewat ChatGPT (tahap 1: tempel)
 
 Keputusan: **aplikasi (Supabase) tetap sumber kebenaran**; ChatGPT hanya pintu masuk. Tidak ada data yang tersimpan tanpa konfirmasi admin di form aplikasi, sehingga semua validasi database tetap berlaku.

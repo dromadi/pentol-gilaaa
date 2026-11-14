@@ -264,6 +264,40 @@ export function adminTests(browser, devices, baseUrl) {
     await s.close();
   });
 
+  test('stok & restok: barang dalam PO, form restok terisi, terima barang = sisa PO', async () => {
+    const data = defaultData();
+    data.stock.push({ id:'s3', batch_code:'BATCH-03', sku:'JM', received_on:null, received:0, reserved:0, delivered:0, revision:1 });
+    data.purchases = [
+      { batch_code:'BATCH-02', supplier:'Pusat', reference:'', ordered_on:shiftDay(-10), expected_on:null, shipping:0, packaging:0, other_cost:0,
+        pentol_purchase_items:[{ batch_code:'BATCH-02', sku:'UR', quantity:30, unit_cost:23200 }] },
+      { batch_code:'BATCH-03', supplier:'Pusat', reference:'PO-8', ordered_on:shiftDay(-1), expected_on:shiftDay(2), shipping:0, packaging:0, other_cost:0,
+        pentol_purchase_items:[{ batch_code:'BATCH-03', sku:'JM', quantity:10, unit_cost:24000 }] }];
+    const s = await open(data);
+    await goSub(s.page, 'stock');
+    const jamur = s.page.locator('.variant-card').filter({ hasText: 'Pentol Jamur' });
+    equal(await jamur.getAttribute('data-level'), 'incoming', 'Jamur menunggu kiriman, bukan merah');
+    assert((await jamur.textContent()).includes('+10 dalam PO · tiba'), 'jumlah dalam PO dan estimasi tiba');
+    equal(await jamur.locator('button', { hasText: 'Restok' }).count(), 0, 'tanpa tombol Restok');
+    await s.page.click('#subtabs >> text=Restok & PO');
+    await s.page.waitForTimeout(500);
+    const pos = await s.page.$$eval('#purchasing-body > article.ops-card > strong', xs => xs.map(x => x.textContent));
+    equal(pos, ['BATCH-03 · Pusat'], 'hanya PO yang menunggu kiriman di atas');
+    assert((await s.page.textContent('.po-done summary')).includes('PO selesai (1)'), 'PO selesai dilipat');
+    await s.page.locator('#purchasing-body article.ops-card', { hasText: 'BATCH-03' }).locator('button', { hasText: 'Terima barang' }).click();
+    equal(await s.page.inputValue('#ops-fields input[name=JM]'), '10', 'terima barang terisi sisa PO');
+    await s.page.click('#ops-close');
+    await s.page.click('text=+ Catat restok');
+    equal(await s.page.inputValue('#ops-fields [name=batch_code]'), 'BATCH-04', 'kode batch disarankan');
+    equal(await s.page.inputValue('#ops-fields [name=cost_JM]'), '24000', 'harga beli dari PO terakhir');
+    const jm = s.page.locator('.restock-row').filter({ hasText: 'Pentol Jamur' });
+    for (let i = 0; i < 3; i++) await jm.locator('button[aria-label^=Tambah]').click();
+    await s.page.click('#ops-form > button:not([type])');
+    await s.page.waitForTimeout(400);
+    const saved = s.data.writes.find(w => w.body.action === 'purchase');
+    equal([saved?.body.payload.batch_code, saved?.body.payload.items], ['BATCH-04', [{ sku:'JM', quantity:3, unit_cost:24000 }]], 'restok tersimpan');
+    await s.close();
+  });
+
   test('laporan: angka utama dan grafik 4 minggu', async () => {
     const s = await open();
     await goSub(s.page, 'finance');

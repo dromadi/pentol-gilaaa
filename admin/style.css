@@ -535,3 +535,23 @@ input[type="file"]::file-selector-button { margin-right: 10px; padding: 8px 14px
   .order-table td[data-label="Aksi"] { grid-column: 1 / -1; padding-top: 2px; }
 }
 .ops-card > .ops-actions .primary-action, .ops-card > .ops-actions .wa-link { min-height: 40px; font-size: 12px; padding-inline: 16px; }
+
+/* ===== Stok & restok ===== */
+.variant-card[data-level="incoming"] { background: #eef3fb; border-color: #cbd8ee; }
+.variant-card[data-level="incoming"] > strong { color: #2e4a73; }
+.variant-incoming { font-size: 11px !important; font-weight: 700; color: #2e4a73 !important; }
+.restock-list { display: grid; gap: 8px; grid-template-columns: 1fr; }
+.restock-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name stepper" "price price"; gap: 6px 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--paper); }
+.restock-row.selected { border-color: #9fcfb6; background: #f1faf4; }
+.restock-row > strong { grid-area: name; font-size: 13px; }
+.restock-stepper { grid-area: stepper; display: flex; align-items: center; gap: 4px; margin: 0; }
+.restock-stepper button { width: 38px; min-height: 38px; padding: 0; border-radius: 999px; background: var(--paper); color: var(--wine); border-color: #dcc7b4; font-size: 18px; }
+.restock-stepper input { width: 52px; min-height: 38px; padding: 4px; text-align: center; font-weight: 700; }
+.restock-row > label { grid-area: price; display: none; grid-template-columns: auto 130px; align-items: center; justify-content: end; gap: 8px; font-size: 11px; }
+.restock-row.selected > label { display: grid; }
+.restock-row > label input { min-height: 36px; }
+.restock-costs { margin-top: 12px; }
+.restock-costs > summary { font-size: 12px; font-weight: 650; color: #80634a; padding: 6px 0; }
+.po-done { margin-top: 14px; }
+.po-done > summary { font-size: 13px; font-weight: 650; color: #80634a; padding: 8px 2px; }
+#purchasing-body > h3 { margin: 18px 0 4px; font-size: 14px; }

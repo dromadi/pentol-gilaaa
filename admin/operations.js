@@ -856,32 +856,72 @@ export function initOperations({ $, request, status, products, prices, today, fo
     return list('pentol_purchases?select=*,pentol_purchase_items(*)', '&order=batch_code');
   }
 
+  let knownPurchases = [];
+  // Kode batch berikutnya: BATCH-NN tertinggi + 1.
+  function nextBatchCode() {
+    const numbers = [...knownPurchases.map(p => p.batch_code), ...getRows().map(r => r.batch_code)]
+      .map(code => /^BATCH-(\d+)$/i.exec(code)?.[1]).filter(Boolean).map(Number);
+    return 'BATCH-' + String((numbers.length ? Math.max(...numbers) : 0) + 1).padStart(2, '0');
+  }
+  // Harga beli terakhir per varian dari PO sebelumnya.
+  function lastUnitCost(sku) {
+    const sorted = [...knownPurchases].sort((a, b) => String(a.ordered_on || a.batch_code).localeCompare(String(b.ordered_on || b.batch_code)));
+    for (let i = sorted.length - 1; i >= 0; i--) {
+      const item = sorted[i].pentol_purchase_items.find(x => x.sku === sku);
+      if (item?.unit_cost) return item.unit_cost;
+    }
+    return 0;
+  }
+
   function purchaseDialog(purchase) {
     const p = purchase || {pentol_purchase_items:[]};
     const header = block([
-      control('Kode batch','batch_code',{value:p.batch_code,props:{maxLength:40,readOnly:Boolean(purchase)}}),
-      control('Supplier','supplier',{value:p.supplier || 'Pentol Gilaaa Surabaya',props:{maxLength:120}}),
+      control('Kode batch','batch_code',{value:p.batch_code || nextBatchCode(),props:{maxLength:40,readOnly:Boolean(purchase)}}),
+      control('Tanggal pesan','ordered_on',{type:'date',value:p.ordered_on || (purchase ? '' : today()),required:false}),
+      control('Estimasi tiba','expected_on',{type:'date',value:p.expected_on,required:false})
+    ]);
+    // Varian dengan tombol − / +; harga beli terisi dari PO terakhir.
+    const rows = [...products].map(([sku,name]) => {
+      const item = p.pentol_purchase_items.find(x => x.sku === sku);
+      const row = el('div', undefined, 'restock-row');
+      const qty = el('input');
+      Object.assign(qty, { type:'number', name:'qty_' + sku, min:0, max:1000000, inputMode:'numeric', value:item?.quantity || 0 });
+      qty.setAttribute('aria-label', 'Jumlah ' + name);
+      const cost = el('input');
+      Object.assign(cost, { type:'number', name:'cost_' + sku, min:0, max:10000000, inputMode:'numeric', value:item?.unit_cost || lastUnitCost(sku) || 0 });
+      cost.setAttribute('aria-label', 'Harga beli per pack ' + name);
+      const sync = () => row.classList.toggle('selected', Number(qty.value) > 0);
+      const step = delta => { qty.value = Math.max(0, Number(qty.value || 0) + delta); sync(); };
+      const minus = button('−', () => step(-1));
+      const plus = button('+', () => step(1));
+      minus.setAttribute('aria-label', 'Kurangi ' + name);
+      plus.setAttribute('aria-label', 'Tambah ' + name);
+      qty.addEventListener('input', sync);
+      const price = el('label', 'Harga beli/pack');
+      price.append(cost);
+      row.append(el('strong', name), block([minus, qty, plus], 'restock-stepper'), price);
+      sync();
+      return row;
+    });
+    const costs = el('details', undefined, 'restock-costs');
+    costs.append(el('summary', 'Detail biaya & supplier (ongkir, styrofoam, lain-lain)'), block([
+      control('Supplier','supplier',{value:p.supplier || knownPurchases.at?.(-1)?.supplier || 'Pentol Gilaaa Surabaya',props:{maxLength:120}}),
       control('Nomor tagihan / PO','reference',{value:p.reference,required:false,props:{maxLength:80}}),
-      control('Tanggal pesan','ordered_on',{type:'date',value:p.ordered_on,required:false}),
-      control('Estimasi tiba','expected_on',{type:'date',value:p.expected_on,required:false}),
       ...[['Ongkir (Rp)','shipping'],['Styrofoam (Rp)','packaging'],['Biaya batch lain (Rp)','other_cost']].map(([name,key]) =>
         control(name,key,{type:'number',value:p[key] ?? 0,props:{min:0,max:100000000}}))
-    ]);
-    const details = [...products].map(([sku,name]) => {
-      const item = p.pentol_purchase_items.find(x => x.sku === sku);
-      return block([
-        control(name + ' (pack)', 'qty_' + sku, {type:'number',value:item?.quantity || 0,props:{min:0,max:1000000}}),
-        control('Harga beli / pack (Rp)', 'cost_' + sku, {type:'number',value:item?.unit_cost || 0,props:{min:0,max:10000000}})
-      ]);
-    });
-    showDialog(purchase ? 'Edit restok' : 'Catat restok supplier', [header,...details], async data => {
+    ]));
+    showDialog(purchase ? 'Edit restok · ' + p.batch_code : 'Catat restok supplier', [header, el('h4', 'Varian yang dipesan'),
+      block(rows, 'restock-list'), costs], async data => {
       const payload = Object.fromEntries(data);
       for (const key of ['ordered_on','expected_on']) payload[key] ||= null;
       payload.items = [...products.keys()].map(sku => ({sku,quantity:Number(data.get('qty_'+sku)),
         unit_cost:Number(data.get('cost_'+sku))})).filter(i => i.quantity);
+      if (!payload.items.length) throw new Error('Pilih 1–9 varian restok.');
       await admin('purchase',payload);
       return async () => { await refresh('Restok tersimpan.'); open('purchasing'); };
     });
+    // Isian wajib di "Detail biaya" yang tertutup: buka supaya galatnya terlihat.
+    costs.addEventListener('invalid', () => { costs.open = true; }, true);
   }
 
   function receivePurchase(purchase, items) {
@@ -889,11 +929,11 @@ export function initOperations({ $, request, status, products, prices, today, fo
     const date = control('Tanggal diterima', 'received_on', {type:'date',value:today(),props:{max:today()}});
     const inputs = items.filter(item => item.remaining > 0).map(item => {
       const name = products.get(item.sku) || item.sku;
-      return control(name + ' · sisa ' + item.remaining + ' pack', item.sku,
-        {type:'number', value:0, props:{min:0,max:item.remaining,step:1}});
+      return control(name + ' · sisa PO ' + item.remaining + ' pack', item.sku,
+        {type:'number', value:item.remaining, props:{min:0,max:item.remaining,step:1}});
     });
     showDialog('Terima barang · ' + purchase.batch_code, [
-      el('p', 'Isi jumlah fisik yang diterima kali ini. Jumlah booking dan pengantaran tidak diubah.'),
+      el('p', 'Terisi sisa PO. Kalau ada yang kurang atau belum datang, turunkan angkanya. Booking dan pengantaran tidak diubah.'),
       date, block(inputs)
     ], async data => {
       const receiptItems = items.map(item => ({sku:item.sku,quantity:Number(data.get(item.sku))}))
@@ -922,7 +962,13 @@ export function initOperations({ $, request, status, products, prices, today, fo
       loadRows()
     ]);
     if (getSession() !== session) return;
-    target.replaceChildren(button('+ Catat restok', () => purchaseDialog(null)));
+    knownPurchases = data;
+    const add = button('+ Catat restok', () => purchaseDialog(null));
+    add.classList.add('primary-action');
+    target.replaceChildren(block([add], 'ops-actions'));
+    const doneBox = el('details', undefined, 'po-done');
+    const active = [];
+    const done = [];
     if (!receipts) target.append(el('p', 'Terima Barang dari PO tersedia setelah migrasi penerimaan di Supabase dijalankan.'));
     for (const p of data) {
       const card = el('article', undefined, 'ops-card');
@@ -936,14 +982,14 @@ export function initOperations({ $, request, status, products, prices, today, fo
       const history = receipts?.filter(receipt => receipt.batch_code === p.batch_code) ?? [];
       const historyPanel = el('details');
       historyPanel.append(el('summary', 'Riwayat penerimaan (' + history.length + ')'));
-      historyPanel.append(...history.map(receipt => el('p', receipt.received_on + ' · ' + receipt.items
+      historyPanel.append(...history.map(receipt => el('p', dayLabel(receipt.received_on) + ' · ' + receipt.items
         .map(item => (products.get(item.sku) || item.sku) + ' × ' + item.quantity).join(', '))));
       if (!history.length) historyPanel.append(el('p', 'Belum ada penerimaan yang dicatat dari PO.'));
       const receive = button('Terima barang', () => receivePurchase(p, items));
       receive.disabled = !receipts || !items.some(item => item.remaining > 0);
       if (!receive.disabled) receive.classList.add('primary-action');
       card.append(el('strong', p.batch_code + ' · ' + p.supplier),
-        el('p', [p.reference,p.ordered_on,p.expected_on && 'Estimasi tiba ' + p.expected_on].filter(Boolean).join(' · ')),
+        el('p', [p.reference, p.ordered_on && 'Dipesan ' + dayLabel(p.ordered_on), p.expected_on && 'Estimasi tiba ' + dayLabel(p.expected_on)].filter(Boolean).join(' · ')),
         el('p','Total biaya batch: ' + money(totalCost)),
         table(['Varian','Dipesan ke supplier','Diterima','Sisa PO','Booking pelanggan','Siap jual'],
           items.map(item => [products.get(item.sku),item.quantity,item.received,item.remaining,
@@ -957,7 +1003,15 @@ export function initOperations({ $, request, status, products, prices, today, fo
             try { await navigator.clipboard.writeText(lines.join('\n')); status('Pesan supplier disalin.'); }
             catch { status('Pesan supplier belum bisa disalin.',true); }
           })], 'ops-actions'));
-      target.append(card);
+      (items.some(item => item.remaining > 0) ? active : done).push([p, card]);
+    }
+    // Menunggu kiriman di atas (estimasi tiba terdekat dulu); PO selesai dilipat.
+    active.sort(([a], [b]) => String(a.expected_on || '9999').localeCompare(String(b.expected_on || '9999')));
+    if (active.length) target.append(el('h3', 'Menunggu kiriman (' + active.length + ')'), ...active.map(([, card]) => card));
+    else target.append(el('p', 'Tidak ada PO yang menunggu kiriman.'));
+    if (done.length) {
+      doneBox.append(el('summary', 'PO selesai (' + done.length + ')'), ...done.reverse().map(([, card]) => card));
+      target.append(doneBox);
     }
   }
 
@@ -1559,5 +1613,5 @@ export function initOperations({ $, request, status, products, prices, today, fo
     return { requests: requests.length, late: late.length };
   }
 
-  return { badgeCounts, invoiceNumber, dayLabel, total, paymentLabel, deliveryLabel, orderButtons, mutate, errorMessage, loadPrices, inbox, open, clear };
+  return { badgeCounts, invoiceNumber, dayLabel, nextBatchCode, total, paymentLabel, deliveryLabel, orderButtons, mutate, errorMessage, loadPrices, inbox, open, clear };
 }
