@@ -291,3 +291,5 @@ summary { cursor: pointer; }
 @media (max-width: 480px) {
   .today-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+.brand-logo { flex: 0 0 auto; object-fit: contain; }

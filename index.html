@@ -26,6 +26,7 @@ button:disabled { opacity:.45; cursor:default; }
 .top { position:sticky; top:0; z-index:5; background:#faf6ecf5; border-bottom:1px solid var(--line); backdrop-filter:blur(14px); }
 nav { min-height:84px; display:flex; align-items:center; justify-content:space-between; gap:20px; }
 .brand { display:flex; align-items:center; gap:11px; text-decoration:none; font:800 25px/1 'Barlow Condensed',sans-serif; color:var(--wine); }
+.brand-logo { flex: 0 0 auto; object-fit: contain; }
 .brand-mark { width:43px; height:43px; display:grid; place-items:center; background:var(--wine); color:var(--gold); border-radius:12px 12px 12px 3px; font-size:29px; }
 .brand small { display:block; margin-top:6px; font:600 9px 'DM Sans',sans-serif; letter-spacing:3px; }
 .nav-links { display:flex; gap:28px; align-items:center; font-size:13px; font-weight:600; }
@@ -201,7 +202,7 @@ dialog::backdrop { background:#2516109c; backdrop-filter:blur(4px); }
 <body>
 <header class="top">
   <nav class="wrap" aria-label="Navigasi utama">
-    <a href="#" class="brand"><span class="brand-mark" aria-hidden="true">pg.</span><span>PENTOL GILAAA<small>SURABAYA</small></span></a>
+    <a href="#" class="brand"><img src="assets/pentol-gilaaa-logo.webp" width="44" height="44" class="brand-logo" alt=""><span>PENTOL GILAAA<small>SURABAYA</small></span></a>
     <div class="nav-links"><a href="#menu">Menu kami</a><a href="https://wa.me/628981718578">Hubungi kami</a><button type="button" data-cart>Keranjang <span id="count" class="count">0</span></button></div>
   </nav>
 </header>
