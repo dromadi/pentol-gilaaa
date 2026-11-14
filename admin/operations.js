@@ -545,20 +545,40 @@ export function initOperations({ $, request, status, products, prices, today, fo
     }
   }
 
-  function packingReady(item) {
-    const row = stock(item.stock_id);
-    return row && row.received - row.delivered >= row.reserved;
+  // Kesiapan packing per pesanan: stok fisik (diterima − diantar) tiap baris batch dibagi ke pesanan
+  // yang belum diantar menurut prioritas: jadwal antar paling awal (tanpa jadwal terakhir), lalu tanggal pesan.
+  // Hasil: Map 'orderId|stockId' -> pack yang bisa dikemas sekarang.
+  function allocatePacking(openOrders) {
+    const left = new Map(getRows().map(row => [row.id, Math.max(0, row.received - row.delivered)]));
+    const sorted = [...openOrders].sort((a, b) => (a.delivery_on || '9999').localeCompare(b.delivery_on || '9999')
+      || a.order_date.localeCompare(b.order_date) || String(a.created_at || '').localeCompare(String(b.created_at || ''))
+      || a.id.localeCompare(b.id));
+    const ready = new Map();
+    for (const order of sorted) {
+      for (const item of order.pentol_order_items) {
+        const need = item.quantity - item.shipped;
+        if (need <= 0) continue;
+        const have = left.get(item.stock_id) || 0;
+        const take = Math.min(need, have);
+        left.set(item.stock_id, have - take);
+        ready.set(order.id + '|' + item.stock_id, take);
+      }
+    }
+    return ready;
   }
-
-  const canPack = order => order.pentol_order_items.some(item =>
-    item.shipped < item.quantity && packingReady(item));
+  function packStatus(order, allocation) {
+    const items = order.pentol_order_items.filter(item => item.shipped < item.quantity)
+      .map(item => ({ item, need: item.quantity - item.shipped, ready: allocation.get(order.id + '|' + item.stock_id) || 0 }));
+    const need = items.reduce((sum, x) => sum + x.need, 0);
+    const ready = items.reduce((sum, x) => sum + x.ready, 0);
+    return { items, need, ready };
+  }
 
   // Belum lunas setelah ada barang yang diantar, termasuk antar sebagian.
   const unpaidFilter = '&paid=eq.false';
   const isOwed = order => balance(order) > 0 && order.pentol_order_items.some(item => item.shipped > 0);
   const owedQuery = async () => (await orderQuery(unpaidFilter)).filter(isOwed);
   const daysBetween = (from, to) => Math.round((Date.parse(to) - Date.parse(from)) / 86400000);
-  const scheduledFilter = date => '&delivered=eq.false&delivery_on=eq.' + date;
   const orderQuery = filters => list('pentol_orders?select=' + ordersSelect,
     '&cancelled=eq.false&order=order_date,created_at,id' + filters);
 
@@ -579,7 +599,8 @@ export function initOperations({ $, request, status, products, prices, today, fo
       .sort((a, b) => rank(a) - rank(b) || (a.delivery_on || '').localeCompare(b.delivery_on || ''));
     const late = deliveries.filter(order => rank(order) === 0).length;
     const unscheduled = deliveries.filter(order => rank(order) === 2).length;
-    const ready = deliveries.filter(canPack);
+    const allocation = allocatePacking(pending);
+    const ready = deliveries.filter(order => packStatus(order, allocation).ready > 0);
     const location = order => order.delivery_location || 'Lokasi belum diisi';
     const when = order => !order.delivery_on ? 'belum dijadwalkan'
       : order.delivery_on < date ? 'terlambat ' + daysBetween(order.delivery_on, date) + ' hari' : 'hari ini';
@@ -686,11 +707,14 @@ export function initOperations({ $, request, status, products, prices, today, fo
       const date = day.lastChild.value || today();
       const mode = filter.lastChild.value;
       output.textContent = 'Memuat pesanan…';
-      const listed = mode === 'unpaid' ? await owedQuery() : await orderQuery(mode === 'pending' ? '&delivered=eq.false'
-            : mode === 'unscheduled' ? '&delivered=eq.false&delivery_on=is.null'
-            : scheduledFilter(date));
+      // Semua pesanan belum diantar dimuat sekali, untuk membagi stok fisik secara adil.
+      const open = await orderQuery('&delivered=eq.false');
       if ((day.lastChild.value || today()) !== date || filter.lastChild.value !== mode) return;
-      const orders = mode === 'ready' ? listed.filter(canPack) : listed;
+      const allocation = allocatePacking(open);
+      const listed = mode === 'pending' ? open
+        : mode === 'unscheduled' ? open.filter(order => !order.delivery_on)
+        : open.filter(order => order.delivery_on === date);
+      const orders = mode === 'ready' ? listed.filter(order => packStatus(order, allocation).ready > 0) : listed;
       output.replaceChildren();
       const totals = new Map();
       const grouped = mode === 'packing' || mode === 'ready';
@@ -703,28 +727,26 @@ export function initOperations({ $, request, status, products, prices, today, fo
           output.append(el('h3', lastLocation));
         }
         const card = el('article', undefined, 'ops-card');
-        const items = order.pentol_order_items.filter(i => mode === 'unpaid' || i.shipped < i.quantity);
-        card.append(el('strong', order.customer), el('p', items.map(i =>
-          label(i) + ' × ' + (mode === 'unpaid' ? i.quantity : i.quantity-i.shipped)).join(', ')),
+        const pack = packStatus(order, allocation);
+        card.append(el('strong', order.customer), el('p', pack.items.map(x => label(x.item) + ' × ' + x.need).join(', ')),
           el('p', (order.delivery_on || 'Jadwal belum diisi') + ' · ' + paymentLabel(order)));
         const details = [order.contact,order.delivery_location,order.delivery_note].filter(Boolean);
         if (details.length) card.append(el('p',details.join(' · ')));
-        const readyItems = items.filter(packingReady);
-        if (mode !== 'unpaid') {
-          card.append(el('p', readyItems.length === items.length ? 'Siap dikemas'
-            : (readyItems.length ? 'Siap sebagian' : 'Tertahan')
-              + ' · Cek alokasi batch: ' + items.filter(item => !readyItems.includes(item)).map(label).join(', ')));
-        }
-        for (const item of readyItems) {
-          if (mode === 'unpaid') continue;
-          const name = label(item);
-          totals.set(name,(totals.get(name) || 0) + item.quantity-item.shipped);
+        const short = pack.items.filter(x => x.ready < x.need).map(x => label(x.item) + ' kurang ' + (x.need - x.ready));
+        const state = el('p', pack.ready === pack.need ? 'Siap dikemas'
+          : pack.ready ? 'Siap sebagian · ' + pack.ready + ' dari ' + pack.need + ' pack · ' + short.join(', ')
+            : 'Tertahan · stok fisik belum cukup · ' + short.join(', '), 'pack-state');
+        state.dataset.state = pack.ready === pack.need ? 'ready' : pack.ready ? 'partial' : 'blocked';
+        card.append(state);
+        for (const x of pack.items) {
+          if (!x.ready) continue;
+          const name = label(x.item);
+          totals.set(name, (totals.get(name) || 0) + x.ready);
         }
         orderButtons(order, card, 'packing');
         output.append(card);
       }
-      if (totals.size) output.prepend(table(['Varian / batch','Pack dikemas'],[...totals],''));
-      if (mode === 'unpaid') output.prepend(el('p', 'Sisa tagihan: ' + money(orders.reduce((sum,o) => sum+balance(o),0))));
+      if (totals.size) output.prepend(table(['Varian / batch','Pack siap dikemas'],[...totals],''));
       if (!orders.length) output.append(el('p', 'Tidak ada pesanan untuk pilihan ini.'));
     }
     const reload = () => render().catch(() => { output.textContent = 'Daftar packing belum bisa dimuat.'; });
@@ -1095,10 +1117,8 @@ export function initOperations({ $, request, status, products, prices, today, fo
                 cell.textContent = '';
                 cell.append(button('Terapkan', () => {
                   if (saving || id !== generation) return;
-                  const {live, type, amount, reserved} = action;
+                  const {live, type, amount} = action;
                   const nodes = [el('p', label), el('p', app + ' → ' + excel)];
-                  if (type === 'stock') nodes.push(el('p', 'Booking: ' + live.reserved + ' → ' + reserved
-                    + ' pack. Terapkan hanya jika booking ini belum tercatat dalam pesanan aplikasi.'));
                   if (type === 'ship') nodes.push(el('p', 'Aplikasi mencatat waktu penyimpanan sebagai waktu pengantaran.'));
                   if (type === 'pay') {
                     nodes.push(el('p', 'Catat penerimaan sebesar ' + money(amount) + '.'));
@@ -1110,8 +1130,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
                     if (id !== generation || getSession() !== session) throw new Error('Pesanan berubah. Bandingkan lagi.');
                     saving = true;
                     try {
-                      const payload = type === 'stock' ? {reserved}
-                        : type === 'pay' ? {payment_id:paymentId,date:data.get('date'),amount}
+                      const payload = type === 'pay' ? {payment_id:paymentId,date:data.get('date'),amount}
                           : {items:live.pentol_order_items.filter(item => item.quantity > item.shipped)
                             .map(item => ({stock_id:item.stock_id,quantity:item.quantity-item.shipped}))};
                       if (historyAvailable) {
@@ -1120,11 +1139,6 @@ export function initOperations({ $, request, status, products, prices, today, fo
                         await request(root + 'rpc/pentol_reconcile_with_history', {method:'POST',body:{
                           change_type:type,target:live.id,expected_revision:live.revision,payload,change_reason:reason
                         }});
-                      } else if (type === 'stock') {
-                        const updated = await request(root + 'pentol_batch_stock?id=eq.' + encodeURIComponent(live.id)
-                          + '&revision=eq.' + live.revision, { method:'PATCH',
-                          body:{reserved, revision:live.revision + 1}, prefer:'return=representation' });
-                        if (updated?.length !== 1) throw new Error('Jumlah stok berubah. Bandingkan lagi.');
                       } else {
                         await mutate(type, live.id, live.revision, payload);
                       }

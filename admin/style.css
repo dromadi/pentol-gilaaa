@@ -440,3 +440,7 @@ body { background: radial-gradient(1100px 480px at 105% -10%, #fbe7d9 0, transpa
 .bottom-nav .nav-badge { position: absolute; top: 4px; left: calc(50% + 6px); }
 #install-app { font-size: 12px; font-weight: 700; color: var(--wine); padding: 6px 10px; min-height: 36px; }
 @media (display-mode: standalone) { #install-app { display: none !important; } }
+.pack-state { font-weight: 650; }
+.pack-state[data-state="ready"] { color: #237365; }
+.pack-state[data-state="partial"] { color: #9a6a16; }
+.pack-state[data-state="blocked"] { color: #a44337; }

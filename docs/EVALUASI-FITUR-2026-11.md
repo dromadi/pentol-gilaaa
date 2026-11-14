@@ -45,7 +45,8 @@ Ukurannya: apakah pekerjaan harian (terima pesanan → kemas & antar → terima 
 | B6 | **Diperbaiki** (`stock-integrity-2026-11.sql`). Hak tulis langsung admin ke `pentol_batch_stock` dicabut. Diterima hanya bertambah lewat Terima barang dari PO; koreksi lewat `pentol_correct_received` (alasan wajib, tidak boleh di bawah jumlah diantar, tidak boleh tanggal masa depan, cek revisi) dan tercatat di Riwayat Perubahan. Form stok kini hanya untuk koreksi Diterima; "Tambah stok batch" diganti "Catat restok →" |
 | B7 | **Diperbaiki.** Rekonsiliasi tidak lagi bisa menaikkan booking (`pentol_reconcile_with_history` menolak jenis `stock`; UI menampilkan "Excel punya booking N pack yang belum jadi pesanan · catat di menu Pesanan"). Booking lama tanpa pesanan ditampilkan di Stok per Batch dan dibereskan lewat Catat pesanan → Pakai booking lama |
 | B8 | **Diperbaiki.** `Map.groupBy` diganti `groupBy()` di `admin/reconcile.js` (dipakai juga oleh Tagihan), `Object.hasOwn` diganti `hasOwnProperty`. Diuji di Chromium dengan kedua fungsi dihapus (simulasi HP lama): Tagihan tampil normal |
-| Lainnya | Belum dikerjakan |
+| B4 | **Diperbaiki.** `allocatePacking()` membagi stok fisik (diterima − diantar) per batch ke pesanan belum diantar menurut jadwal antar paling awal, lalu tanggal pesan; Packing menampilkan "Siap dikemas", "Siap sebagian · X dari Y pack", atau "Tertahan" per pesanan, dan Hari Ini memakai perhitungan yang sama |
+| Lainnya | Belum dikerjakan (B5 menunggu SQL: perlu tanggal per pengantaran) |
 
 Pengujian B6/B7: Postgres lokal (tulis langsung ditolak; rekonsiliasi stok ditolak; koreksi valid/tidak valid; PO, pesanan, antar, bayar tetap jalan) dan Chromium HP (form koreksi hanya memanggil RPC, indikator booking tanpa pesanan, tombol Catat restok).
 
@@ -77,6 +78,12 @@ Diuji di Chromium HP dengan data tiruan (filter URL per tombol, Batalkan/arsip s
 
 - **PWA:** `admin/manifest.webmanifest`, ikon di `admin/icons/`, `admin/sw.js`. Service worker **tidak menyimpan cache** (supaya versi baru selalu termuat); ia hanya menampilkan halaman "Tidak ada koneksi" saat offline. CSP ditambah `manifest-src 'self'; worker-src 'self'`. Tombol "⬇ Pasang aplikasi" muncul di header bila browser mendukung (`beforeinstallprompt`); di iPhone: Bagikan → Tambahkan ke Layar Utama. Chrome melaporkan 0 galat kelayakan pasang.
 - **Badge:** `badgeCounts()` (operations.js) + `refreshBadges()` (app.js): Pesanan = permintaan katalog menunggu, Hari Ini = antaran yang lewat jadwal. Diperbarui saat masuk, tiap 2 menit, saat aplikasi dibuka lagi, dan setelah perubahan pesanan; jumlahnya juga di judul tab, mis. "(3) Hari Ini".
+
+## Uji otomatis & perapian (14 Nov)
+
+- `tests/`: uji unit, browser (admin & katalog, Supabase tiruan), dan SQL (Postgres lokal). Lihat `tests/README.md`. Uji dipastikan bisa gagal: dengan kode packing lama, uji B4 gagal; dengan harapan SQL yang salah, uji SQL gagal.
+- Kode mati dihapus: halaman Analitik Stok, filter "Diantar, belum lunas" di Packing, jalur PATCH booking di Rekonsiliasi.
+- Katalog: CSP dipasang setelah skrip dan gaya dipindah ke file.
 
 ## Input lewat ChatGPT (tahap 1: tempel)
 

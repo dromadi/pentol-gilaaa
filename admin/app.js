@@ -1,5 +1,5 @@
 import { supabaseUrl, supabasePublishableKey } from './config.js';
-import { initOperations } from './operations.js?v=app-6';
+import { initOperations } from './operations.js?v=rapi-7';
 
 const products = new Map([
   ['UR','Pentol Urat'], ['PK','Pentol Kecil'], ['TP','Tahu Pentol'],
@@ -10,7 +10,6 @@ const $ = id => document.getElementById(id);
 const format = new Intl.NumberFormat('id-ID');
 const login = $('login');
 const form = $('batch-form');
-const filter = $('batch-filter');
 const stockBatch = $('stock-batch');
 const stockSearch = $('stock-search');
 const orderForm = $('order-form');
@@ -185,9 +184,6 @@ function endSession(message) {
   $('dashboard').hidden = true;
   $('logout').hidden = true;
   $('stock-rows').replaceChildren();
-  $('analytics-rows').replaceChildren();
-  $('metrics').replaceChildren();
-  filter.replaceChildren(new Option('Semua batch', ''));
   stockBatch.replaceChildren(new Option('Semua batch', ''));
   stockSearch.value = '';
   resetEditor();
@@ -225,28 +221,6 @@ function metricCards(target, values) {
     card.append(number, label);
     return card;
   }));
-}
-
-function renderAnalytics() {
-  const totals = [0, 0, 0, 0, 0];
-  const perProduct = new Map();
-  for (const row of rows.filter(item => !filter.value || item.batch_code === filter.value)) {
-    const product = perProduct.get(row.sku) || [0, 0, 0, 0, 0];
-    quantities(row).forEach((value, i) => { totals[i] += value; product[i] += value; });
-    perProduct.set(row.sku, product);
-  }
-  const labels = ['Diterima','Terpesan','Diantar','Sisa jual','Belum terpenuhi'];
-  $('metrics').replaceChildren(...labels.map((label, i) => {
-    const card = document.createElement('div');
-    card.className = 'metric';
-    const number = document.createElement('strong');
-    number.textContent = format.format(totals[i]);
-    card.append(number, label);
-    return card;
-  }));
-  const target = $('analytics-rows');
-  target.replaceChildren(...Array.from(perProduct, ([sku, counts]) => tableRow([products.get(sku), ...counts])));
-  emptyRow(target, 6, 'Belum ada data batch.');
 }
 
 function edit(row) {
@@ -336,13 +310,10 @@ function renderStock() {
 
 function renderRows() {
   const batches = Array.from(new Set(rows.map(row => row.batch_code)));
-  for (const select of [filter, stockBatch]) {
-    const previous = select.value;
-    select.replaceChildren(new Option('Semua batch', ''), ...batches.map(code => new Option(code, code)));
-    if (batches.includes(previous)) select.value = previous;
-  }
+  const previous = stockBatch.value;
+  stockBatch.replaceChildren(new Option('Semua batch', ''), ...batches.map(code => new Option(code, code)));
+  if (batches.includes(previous)) stockBatch.value = previous;
   renderStock();
-  renderAnalytics();
   for (const select of orderItems.querySelectorAll('select')) populateOrderStock(select);
 }
 
@@ -466,7 +437,6 @@ stockSearch.addEventListener('input', renderStock);
 $('logout').addEventListener('click', () => {
   if (!busy) endSession('Anda sudah keluar.');
 });
-filter.addEventListener('change', renderAnalytics);
 const isMobile = () => matchMedia('(max-width: 900px)').matches;
 const moreMenu = $('more-menu');
 const quickButtons = document.querySelectorAll('.bottom-nav [data-go]');
