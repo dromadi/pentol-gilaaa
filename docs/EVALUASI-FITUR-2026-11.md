@@ -150,6 +150,10 @@ Perbaikan (versi `laporan-16`):
 - Belum dikerjakan (perlu SQL): pencatatan biaya harian (bensin, plastik, es, listrik) supaya laba benar-benar bersih.
 - Uji baru: `laporan: tombol periode, 4 angka, laba per varian; tutup hari langsung tampil + kirim WA`. Mock kini melayani `pentol_payments`.
 
+## Arsip permintaan katalog bisa dilihat lagi (14 Nov)
+
+"Arsipkan" hanya mengubah status permintaan menjadi `dismissed` (data tidak dihapus), tetapi sebelumnya tidak ada tempat untuk melihatnya lagi. Sekarang di bawah "Permintaan dari katalog" ada lipatan **Diarsipkan 14 hari terakhir** dengan tombol **Buat pesanan** (form terisi; dikirim tanpa `inbox_id` agar tidak ditolak RPC karena statusnya bukan `pending`) dan **Balas WA**. Versi `arsip-17`. Uji: `permintaan yang diarsipkan masih terlihat dan bisa dijadikan pesanan`.
+
 ## Input lewat ChatGPT (tahap 1: tempel)
 
 Keputusan: **aplikasi (Supabase) tetap sumber kebenaran**; ChatGPT hanya pintu masuk. Tidak ada data yang tersimpan tanpa konfirmasi admin di form aplikasi, sehingga semua validasi database tetap berlaku.

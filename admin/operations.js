@@ -537,7 +537,12 @@ export function initOperations({ $, request, status, products, prices, today, fo
     const session = getSession();
     const target = $('inbox-list');
     try {
-      const entries = await list('pentol_inbox?select=*', '&status=eq.pending&order=created_at.desc,id');
+      // Arsip 14 hari terakhir tetap bisa dilihat dan dijadikan pesanan (arsip tidak menghapus data).
+      const since = new Date(Date.now() - 14 * 864e5).toISOString();
+      const [entries, archived] = await Promise.all([
+        list('pentol_inbox?select=*', '&status=eq.pending&order=created_at.desc,id'),
+        list('pentol_inbox?select=*', '&status=eq.dismissed&created_at=gte.' + since + '&order=created_at.desc,id&limit=20').catch(() => [])
+      ]);
       if (!session || getSession() !== session) return;
       $('inbox-count').textContent = '(' + entries.length + ')';
       $('checkout-inbox').open = entries.length > 0;
@@ -552,7 +557,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
           block([process, waAnchor(entry.phone, confirmMessage(entry), 'Balas WA') || '', button('Arsipkan', () => {
             // Disimpan setelah 6 detik kecuali dibatalkan.
             card.hidden = true;
-            status('Permintaan ' + entry.customer + ' diarsipkan.', false, {
+            status('Permintaan ' + entry.customer + ' diarsipkan. Masih ada di bagian "Diarsipkan".', false, {
               label:'Batalkan',
               undo:() => { card.hidden = false; },
               commit:() => admin('dismiss', {id:entry.id}).then(inbox).catch(() => {
@@ -564,6 +569,21 @@ export function initOperations({ $, request, status, products, prices, today, fo
         return card;
       }));
       if (!entries.length) target.append(el('p', 'Belum ada permintaan baru.'));
+      if (archived.length) {
+        const box = el('details', undefined, 'inbox-archived');
+        box.append(el('summary', 'Diarsipkan 14 hari terakhir (' + archived.length + ')'),
+          ...archived.map(entry => {
+            const card = el('article', undefined, 'ops-card');
+            // Tanpa id permintaan: pesanan dibuat biasa, arsipnya tetap tercatat.
+            card.append(el('strong', entry.customer),
+              el('p', 'Masuk ' + sinceText(entry.created_at) + ' · ' + [entry.phone, entry.area].filter(Boolean).join(' · ')),
+              el('p', entry.items.map(i => products.get(i.sku) + ' × ' + i.quantity).join(', ')),
+              block([button('Buat pesanan', () => openOrder(null, {...entry, id: undefined})),
+                waAnchor(entry.phone, confirmMessage(entry), 'Balas WA') || ''], 'ops-actions'));
+            return card;
+          }));
+        target.append(box);
+      }
     } catch {
       if (session && getSession() === session) target.replaceChildren(el('p', 'Daftar permintaan belum bisa dimuat.'));
     }

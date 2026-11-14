@@ -229,6 +229,23 @@ export function adminTests(browser, devices, baseUrl) {
     await s.close();
   });
 
+  test('permintaan yang diarsipkan masih terlihat dan bisa dijadikan pesanan', async () => {
+    const data = defaultData();
+    data.inbox.push({ ...data.inbox[0], id: '00000000-0000-0000-0000-00000000abcf', customer: 'Rina Terarsip', status: 'dismissed' });
+    const s = await open(data);
+    await goSub(s.page, 'orders');
+    const box = s.page.locator('#inbox-list .inbox-archived');
+    assert((await box.locator('summary').textContent()).includes('(1)'), 'ada 1 arsip');
+    await box.locator('summary').click();
+    await box.locator('button', { hasText: 'Buat pesanan' }).click();
+    equal(await s.page.inputValue('#order-form [name=customer]'), 'Rina Terarsip', 'form terisi dari arsip');
+    await s.page.click('#save-order');
+    await s.page.waitForTimeout(500);
+    const saved = s.data.writes.find(w => w.body.action === 'create');
+    assert(saved && !('inbox_id' in saved.body.payload), 'pesanan dibuat tanpa id permintaan');
+    await s.close();
+  });
+
   test('packing dibagi per pesanan menurut jadwal (bug B4)', async () => {
     const data = defaultData();
     data.stock = [{ id:'s1', batch_code:'B1', sku:'UR', received_on:shiftDay(-5), received:4, reserved:5, delivered:0, revision:1 }];
