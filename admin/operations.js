@@ -1,4 +1,4 @@
-import { closeDaySheets, closeDayWorkbook } from './close-day.js?v=1';
+import { closeDaySheets, closeDayWorkbook } from './close-day.js?v=2';
 import { invoiceContent, invoicePdf } from './invoice.js?v=1';
 import { openReconciliation, reconciliationRows, groupBy } from './reconcile.js?v=5';
 import { parseGptText, gptInstructions } from './gpt.js?v=1';
@@ -625,7 +625,14 @@ export function initOperations({ $, request, status, products, prices, today, fo
     $('today-date').dateTime = date;
     $('today-date').textContent = new Intl.DateTimeFormat('id-ID', {weekday:'long', day:'numeric', month:'long', timeZone:'UTC'})
       .format(new Date(date + 'T00:00:00Z'));
-    target.replaceChildren(block(sections.map(([title, records, unit, describe, action, navigate, note], index) => {
+    const age = backupAge();
+    const reminder = age === null || age >= 7 ? (() => {
+      const box = el('section', undefined, 'backup-reminder');
+      box.append(el('p', '🛟 ' + backupLabel() + ' Unduh cadangan seminggu sekali agar data aman.'),
+        button('Unduh cadangan', event => downloadBackup(event.currentTarget)));
+      return box;
+    })() : null;
+    target.replaceChildren(...(reminder ? [reminder] : []), block(sections.map(([title, records, unit, describe, action, navigate, note], index) => {
       const card = el('section', undefined, 'ops-card today-card');
       card.dataset.tone = ['request', 'pack', 'deliver', 'money'][index];
       const isMoney = records === unpaid;
@@ -886,7 +893,13 @@ export function initOperations({ $, request, status, products, prices, today, fo
     const out = el('div');
     const priceList = el('details', undefined, 'report-details');
     priceList.append(el('summary', 'Harga jual default'));
-    target.replaceChildren(block([first,last], 'ops-filters'), out, priceList);
+    const backupCard = el('section', undefined, 'report-backup');
+    const backupText = el('p', backupLabel());
+    backupText.dataset.backupLast = '';
+    backupCard.append(el('h3', 'Cadangan data'),
+      el('p', 'Semua pesanan, pembayaran, stok, PO, dan riwayat dalam satu file Excel. Simpan di Google Drive.'), backupText,
+      button('⬇ Unduh cadangan', event => downloadBackup(event.currentTarget)));
+    target.replaceChildren(block([first,last], 'ops-filters'), out, backupCard, priceList);
     priceList.append(
       ...[...products].map(([sku,name]) => block([
         el('span',name + ' · ' + money(prices[sku])),
@@ -1261,6 +1274,63 @@ export function initOperations({ $, request, status, products, prices, today, fo
     for (const view of Object.keys(views)) $(view+'-body').replaceChildren();
     $('inbox-list').replaceChildren();
     $('inbox-count').textContent='';
+  }
+
+  // ===== Cadangan data: semua tabel ke satu file Excel, diunduh di perangkat ini. =====
+  const backupKey = 'pentol-backup-at';
+  const backupTables = [
+    ['Pesanan', 'pentol_orders', 'id'], ['Item pesanan', 'pentol_order_items', 'order_id,stock_id'],
+    ['Pembayaran', 'pentol_payments', 'id'], ['Stok batch', 'pentol_batch_stock', 'id'],
+    ['PO', 'pentol_purchases', 'batch_code'], ['Item PO', 'pentol_purchase_items', 'batch_code,sku'],
+    ['Penerimaan PO', 'pentol_purchase_receipts', 'id'], ['Permintaan katalog', 'pentol_inbox', 'id'],
+    ['Harga', 'pentol_products', 'sku'], ['Riwayat koreksi', 'pentol_reconciliation_history', 'id']
+  ];
+  function lastBackup() {
+    try { return localStorage.getItem(backupKey) || ''; } catch { return ''; }
+  }
+  function backupAge() {
+    const last = lastBackup();
+    return last ? daysBetween(last, today()) : null;
+  }
+  async function downloadBackup(trigger) {
+    const session = getSession();
+    if (!session) return;
+    if (trigger) trigger.disabled = true;
+    status('Menyiapkan cadangan…');
+    try {
+      const info = [['Cadangan Pentol Gilaaa', ''], ['Tanggal (WIB)', today()], ['Waktu ekspor (UTC)', new Date().toISOString()], ['', ''], ['Lembar', 'Isi']];
+      const sheets = [];
+      for (const [name, table, order] of backupTables) {
+        let rows;
+        try { rows = await list(table + '?select=*', '&order=' + order); }
+        catch (error) {
+          if (error.status === 404) { info.push([name, 'belum aktif di database']); continue; }
+          throw error;
+        }
+        const keys = [...new Set(rows.flatMap(row => Object.keys(row)))];
+        sheets.push([name, [keys, ...rows.map(row => keys.map(key => row[key] == null ? ''
+          : typeof row[key] === 'object' ? JSON.stringify(row[key]) : row[key]))]]);
+        info.push([name, rows.length + ' baris']);
+      }
+      if (getSession() !== session) return;
+      const bytes = await closeDayWorkbook([['Info', info], ...sheets], window.JSZip);
+      const url = URL.createObjectURL(new Blob([bytes], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+      download(url, 'Cadangan-Pentol-Gilaaa-' + today() + '.xlsx');
+      setTimeout(() => URL.revokeObjectURL(url), 30_000);
+      try { localStorage.setItem(backupKey, today()); } catch {}
+      status('Cadangan diunduh. Simpan file ini di Google Drive atau tempat aman lain.');
+      document.querySelectorAll('.backup-reminder').forEach(node => node.remove());
+      document.querySelectorAll('[data-backup-last]').forEach(node => { node.textContent = backupLabel(); });
+    } catch {
+      status('Cadangan belum bisa dibuat. Periksa koneksi lalu coba lagi.', true);
+    } finally {
+      if (trigger) trigger.disabled = false;
+    }
+  }
+  function backupLabel() {
+    const age = backupAge();
+    return age === null ? 'Belum pernah mengunduh cadangan di perangkat ini.'
+      : age === 0 ? 'Cadangan terakhir: hari ini.' : 'Cadangan terakhir: ' + age + ' hari lalu.';
   }
 
   // Angka kecil untuk navigasi: permintaan katalog baru dan antaran yang lewat jadwal.

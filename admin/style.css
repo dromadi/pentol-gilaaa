@@ -444,3 +444,12 @@ body { background: radial-gradient(1100px 480px at 105% -10%, #fbe7d9 0, transpa
 .pack-state[data-state="ready"] { color: #237365; }
 .pack-state[data-state="partial"] { color: #9a6a16; }
 .pack-state[data-state="blocked"] { color: #a44337; }
+
+/* ===== Cadangan data ===== */
+.backup-reminder { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin: 0 0 14px; padding: 12px 16px; border-radius: var(--radius); background: #eef3fb; border: 1px solid #cbd8ee; }
+.backup-reminder p { margin: 0; font-size: 12px; color: #34465f; flex: 1 1 220px; }
+.backup-reminder button { min-height: 40px; border-radius: 999px; background: #2e4a73; border-color: #2e4a73; font-size: 12px; }
+.report-backup { padding: 16px 20px; margin: 0 0 14px; border-radius: var(--radius); background: var(--paper); border: 1px solid var(--line); box-shadow: var(--shadow); }
+#finance-body .report-backup h3 { margin: 0 0 6px; font-size: 14px; }
+.report-backup p { margin: 0 0 6px; font-size: 12px; }
+.report-backup button { margin-top: 6px; border-radius: 999px; }

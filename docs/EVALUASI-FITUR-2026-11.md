@@ -85,6 +85,13 @@ Diuji di Chromium HP dengan data tiruan (filter URL per tombol, Batalkan/arsip s
 - Kode mati dihapus: halaman Analitik Stok, filter "Diantar, belum lunas" di Packing, jalur PATCH booking di Rekonsiliasi.
 - Katalog: CSP dipasang setelah skrip dan gaya dipindah ke file.
 
+## Cadangan data (manual + pengingat)
+
+- `downloadBackup()` (operations.js): semua tabel (`backupTables`) ke satu file `Cadangan-Pentol-Gilaaa-YYYY-MM-DD.xlsx` dengan lembar Info (waktu ekspor, jumlah baris). Tabel yang belum ada (migrasi belum dijalankan) dilewati dan dicatat. Tombol di Laporan; pengingat di Hari Ini bila cadangan terakhir ≥ 7 hari atau belum pernah (tanggal disimpan di `localStorage` per perangkat).
+- `close-day.js`: nama kolom Excel mendukung > 26 kolom (AA, AB, …).
+- Diuji: unduh, isi lembar, tabel 404 dilewati, pengingat hilang; file dibuka dengan openpyxl.
+- **Belum: cadangan otomatis** (GitHub Actions terjadwal, terenkripsi) — butuh pemilik menambahkan secret di GitHub; lihat percakapan 14 Nov.
+
 ## Input lewat ChatGPT (tahap 1: tempel)
 
 Keputusan: **aplikasi (Supabase) tetap sumber kebenaran**; ChatGPT hanya pintu masuk. Tidak ada data yang tersimpan tanpa konfirmasi admin di form aplikasi, sehingga semua validasi database tetap berlaku.

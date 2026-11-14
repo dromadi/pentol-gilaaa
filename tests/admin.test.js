@@ -1,6 +1,8 @@
 // Uji browser admin dengan Supabase tiruan (ukuran HP Pixel 7).
 import { test, assert, equal } from './harness.js';
+import { createRequire } from 'node:module';
 import { mockSupabase, login, defaultData, order, todayJakarta, shiftDay } from './mock.js';
+const JSZip = createRequire(import.meta.url)('../admin/vendor/jszip.min.js');
 
 export function adminTests(browser, devices, baseUrl) {
   async function open(data = defaultData(), options = {}) {
@@ -195,6 +197,25 @@ export function adminTests(browser, devices, baseUrl) {
     await s.page.waitForTimeout(500);
     assert(await s.page.isVisible('.report-headline'), 'angka utama');
     equal(await s.page.locator('.week-bar').count(), 4, 'empat batang');
+    await s.close();
+  });
+
+  test('cadangan: pengingat, unduh Excel semua tabel, tabel belum aktif dilewati', async () => {
+    const data = defaultData();
+    data.missing = ['pentol_purchase_receipts'];
+    const s = await open(data);
+    assert(await s.page.isVisible('.backup-reminder'), 'pengingat tampil saat belum pernah mencadangkan');
+    const [download] = await Promise.all([s.page.waitForEvent('download'), s.page.click('.backup-reminder button')]);
+    equal(download.suggestedFilename(), 'Cadangan-Pentol-Gilaaa-' + todayJakarta() + '.xlsx', 'nama file');
+    const zip = await JSZip.loadAsync(await (await download.createReadStream()).toArray().then(Buffer.concat));
+    const workbook = await zip.file('xl/workbook.xml').async('string');
+    const names = [...workbook.matchAll(/name="([^"]+)"/g)].map(m => m[1]);
+    assert(names[0] === 'Info' && names.includes('Pesanan') && names.includes('Stok batch'), 'lembar: ' + names.join(', '));
+    assert(!names.includes('Penerimaan PO'), 'tabel yang belum aktif dilewati');
+    const info = await zip.file('xl/worksheets/sheet1.xml').async('string');
+    assert(info.includes('belum aktif di database') && info.includes('7 baris'), 'lembar Info mencatat jumlah baris');
+    await s.page.waitForTimeout(200);
+    assert(!await s.page.isVisible('.backup-reminder'), 'pengingat hilang setelah mengunduh');
     await s.close();
   });
 

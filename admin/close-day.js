@@ -46,6 +46,9 @@ export function closeDaySheets({date, exportedAt, orders, stocks, reconciliation
 const escapeXml = value => String(value ?? '').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffe\uffff]/g,'')
   .replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[char]));
 
+// 0 -> A, 25 -> Z, 26 -> AA (tabel cadangan bisa lebih dari 26 kolom).
+const columnName = index => (index >= 26 ? columnName(Math.floor(index / 26) - 1) : '') + String.fromCharCode(65 + index % 26);
+
 export function closeDayWorkbook(sheets, Zip) {
   const zip = new Zip();
   const packageNs = 'http://schemas.openxmlformats.org/package/2006/';
@@ -68,7 +71,7 @@ export function closeDayWorkbook(sheets, Zip) {
     + '</Relationships>');
   sheets.forEach(([, rows], index) => {
     const body = rows.map((row, rowIndex) => '<row r="' + (rowIndex+1) + '">' + row.map((value, column) => {
-      const ref = ' r="' + String.fromCharCode(65+column) + (rowIndex+1) + '"';
+      const ref = ' r="' + columnName(column) + (rowIndex+1) + '"';
       return typeof value === 'number' && Number.isFinite(value)
         ? '<c' + ref + '><v>' + value + '</v></c>'
         : '<c' + ref + ' t="inlineStr"><is><t xml:space="preserve">' + escapeXml(value) + '</t></is></c>';
