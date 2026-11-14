@@ -12,6 +12,7 @@ Katalog pelanggan (`/index.html`) memakai GitHub Pages. Area admin (`/admin/`) m
    5. `receipts-2026-11.sql` – penerimaan bertahap dari PO (boleh dijalankan ulang)
    6. `invoice-reference-2026-11.sql` – penyimpanan nomor invoice Excel (boleh dijalankan ulang)
    7. `reconciliation-history-2026-11.sql` – riwayat koreksi Excel (boleh dijalankan ulang)
+   8. `stock-integrity-2026-11.sql` – stok hanya berubah lewat PO, pesanan, dan koreksi beralasan (boleh dijalankan ulang). **Wajib setelah no. 5 dan 7**, karena setelah ini barang masuk hanya bisa dicatat lewat Terima barang
 2. Nonaktifkan pendaftaran mandiri di pengaturan Auth. Buat pengguna di **Authentication → Users** dan salin UUID pengguna.
 3. Daftarkan UUID tersebut lewat SQL Editor.
 
@@ -27,7 +28,8 @@ Katalog pelanggan (`/index.html`) memakai GitHub Pages. Area admin (`/admin/`) m
 
 ## Pencatatan
 
-- **Stok per batch:** satu baris per kode batch + varian. Diterima, terpesan, dan diantar dalam pack. Pesanan dan pengantaran mengubah angka terpesan/diantar otomatis lewat `pentol_order_action`; edit manual di form stok hanya untuk koreksi atau booking lama yang belum tercatat sebagai pesanan.
+- **Stok per batch:** satu baris per kode batch + varian, dibuat dari **Catat restok**. Diterima bertambah lewat **Terima barang**; terpesan dan diantar berubah otomatis dari pesanan. Admin tidak bisa mengubah tabel stok langsung. Salah hitung atau barang rusak: tombol **Koreksi** (alasan wajib, tercatat di Riwayat Perubahan).
+- **Booking tanpa pesanan** (sisa data lama/Excel) ditampilkan di Stok per Batch. Bereskan dengan **Catat pesanan → Pakai booking lama**, sehingga booking itu menjadi milik pelanggan. Rekonsiliasi Excel tidak lagi menambah booking.
 - **Pesanan, pembayaran, pengantaran:** dicatat di menu Pesanan dan Packing & Tagihan. Setiap pembayaran disimpan dengan tanggalnya, dan laporan kas mengikuti tanggal itu.
 - **Restok, HPP, harga jual, laba:** di menu Restok & Supplier dan Harga & Laba.
 - **Checkout katalog:** pembeli mengirim permintaan ke inbox (`pentol_submit_checkout`). Batasnya 8 per nomor per jam, 40 total per jam, dan 150 yang menunggu. Jika batas tercapai, pembeli tetap diarahkan ke WhatsApp. Jumlah per varian tidak boleh melebihi stok bebas; katalog menampilkan "Sisa N pack" saat stok tinggal 1–9.

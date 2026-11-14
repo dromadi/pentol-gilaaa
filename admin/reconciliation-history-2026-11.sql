@@ -24,9 +24,7 @@ create or replace function public.pentol_reconcile_with_history(
   change_type text, target uuid, expected_revision integer, payload jsonb, change_reason text
 ) returns void language plpgsql security definer set search_path='' as $$
 declare
-  stock public.pentol_batch_stock%rowtype;
   order_row public.pentol_orders%rowtype;
-  proposed integer;
   order_total bigint;
   captured_paid bigint;
   before_data jsonb;
@@ -40,18 +38,8 @@ begin
   end if;
 
   if change_type = 'stock' then
-    select * into stock from public.pentol_batch_stock where id=target for update;
-    if not found or stock.revision is distinct from expected_revision then
-      raise exception 'Stok berubah. Bandingkan ulang Excel.';
-    end if;
-    proposed := (payload->>'reserved')::integer;
-    if proposed is null or proposed <= stock.reserved or proposed > stock.received-stock.delivered then
-      raise exception 'Jumlah booking koreksi tidak valid.';
-    end if;
-    description := stock.batch_code || ' · ' || stock.sku;
-    before_data := jsonb_build_object('booking',stock.reserved,'sisa_jual',stock.received-stock.delivered-stock.reserved);
-    update public.pentol_batch_stock set reserved=proposed, revision=revision+1 where id=target;
-    after_data := jsonb_build_object('booking',proposed,'sisa_jual',stock.received-stock.delivered-proposed);
+    -- Booking harus selalu milik pesanan. Selisih booking dari Excel dicatat sebagai pesanan.
+    raise exception 'Booking dari Excel dicatat sebagai pesanan, bukan koreksi stok.';
   elsif change_type in ('ship','pay') then
     select * into order_row from public.pentol_orders where id=target for update;
     if not found or order_row.cancelled or order_row.revision is distinct from expected_revision then

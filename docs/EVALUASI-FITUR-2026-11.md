@@ -42,9 +42,13 @@ Ukurannya: apakah pekerjaan harian (terima pesanan → kemas & antar → terima 
 |---|---|
 | B1, B3, B9 | **Diperbaiki.** Kartu "Perlu diantar" di Hari Ini memuat antaran terlambat ("terlambat N hari"), jadwal hari ini, dan pesanan belum dijadwalkan, dengan urutan itu. Jadwal setelah hari ini tidak ditampilkan. Label permintaan kini "N permintaan". Tombol membuka Packing → "Semua belum diantar" |
 | B2 | **Diperbaiki.** "Diantar, belum lunas" berarti belum lunas dan sudah ada pack yang diantar. Definisi yang sama dipakai di Hari Ini, Ringkasan Piutang, dan Packing. Pesanan antar sebagian diberi tanda "antar sebagian". Sisa yang ditampilkan adalah sisa seluruh pesanan |
+| B6 | **Diperbaiki** (`stock-integrity-2026-11.sql`). Hak tulis langsung admin ke `pentol_batch_stock` dicabut. Diterima hanya bertambah lewat Terima barang dari PO; koreksi lewat `pentol_correct_received` (alasan wajib, tidak boleh di bawah jumlah diantar, tidak boleh tanggal masa depan, cek revisi) dan tercatat di Riwayat Perubahan. Form stok kini hanya untuk koreksi Diterima; "Tambah stok batch" diganti "Catat restok →" |
+| B7 | **Diperbaiki.** Rekonsiliasi tidak lagi bisa menaikkan booking (`pentol_reconcile_with_history` menolak jenis `stock`; UI menampilkan "Excel punya booking N pack yang belum jadi pesanan · catat di menu Pesanan"). Booking lama tanpa pesanan ditampilkan di Stok per Batch dan dibereskan lewat Catat pesanan → Pakai booking lama |
 | Lainnya | Belum dikerjakan |
 
-Pengujian (Chromium, Pixel 7, data tiruan dengan 8 jenis pesanan): pesanan terlambat, hari ini, dan tanpa jadwal tampil; jadwal besok tidak tampil; pesanan antar sebagian yang belum bayar tampil di ketiga tempat; pesanan lunas tidak tampil; tanpa error.
+Pengujian B6/B7: Postgres lokal (tulis langsung ditolak; rekonsiliasi stok ditolak; koreksi valid/tidak valid; PO, pesanan, antar, bayar tetap jalan) dan Chromium HP (form koreksi hanya memanggil RPC, indikator booking tanpa pesanan, tombol Catat restok).
+
+Pengujian B1–B3 (Chromium, Pixel 7, data tiruan dengan 8 jenis pesanan): pesanan terlambat, hari ini, dan tanpa jadwal tampil; jadwal besok tidak tampil; pesanan antar sebagian yang belum bayar tampil di ketiga tempat; pesanan lunas tidak tampil; tanpa error.
 
 ## Fitur yang tumpang tindih (bikin ribet, bukan memudahkan)
 

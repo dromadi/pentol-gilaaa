@@ -1,6 +1,6 @@
 import { closeDaySheets, closeDayWorkbook } from './close-day.js?v=1';
 import { invoiceContent, invoicePdf } from './invoice.js?v=1';
-import { openReconciliation, reconciliationRows } from './reconcile.js?v=3';
+import { openReconciliation, reconciliationRows } from './reconcile.js?v=4';
 
 export function initOperations({ $, request, status, products, prices, today, format,
   tableRow, emptyRow, quantities, getRows, getSession, openOrder, refresh, selectView, loadRows }) {
@@ -633,7 +633,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
             try { await navigator.clipboard.writeText(lines.join('\n')); status('Pesan supplier disalin.'); }
             catch { status('Pesan supplier belum bisa disalin.',true); }
           }),
-          button('Catat penerimaan di stok', () => {
+          button('Lihat stok batch', () => {
             $('admin-menu').querySelector('[data-view=stock]').click();
             $('stock-batch').value = p.batch_code;
             $('stock-batch').dispatchEvent(new Event('change'));

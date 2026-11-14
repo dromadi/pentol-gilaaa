@@ -1,5 +1,5 @@
 import { supabaseUrl, supabasePublishableKey } from './config.js';
-import { initOperations } from './operations.js?v=hari-ini-2';
+import { initOperations } from './operations.js?v=stok-1';
 
 const products = new Map([
   ['UR','Pentol Urat'], ['PK','Pentol Kecil'], ['TP','Tahu Pentol'],
@@ -132,9 +132,6 @@ function resetEditor() {
   editing = null;
   form.reset();
   form.hidden = true;
-  $('new-entry').setAttribute('aria-expanded', 'false');
-  $('editor-title').textContent = 'Tambah varian ke batch';
-  $('save').textContent = 'Tambah varian ke batch';
 }
 
 function endSession(message) {
@@ -221,19 +218,18 @@ function renderAnalytics() {
 
 function edit(row) {
   editing = row;
-  for (const name of ['batch_code','sku','received_on','received','reserved','delivered']) {
-    form.elements[name].value = row[name] ?? '';
-  }
-  showEditor();
-  $('editor-title').textContent = 'Edit stok batch';
-  $('save').textContent = 'Simpan perubahan';
+  form.reset();
+  form.elements.received_on.value = row.received_on ?? '';
+  form.elements.received.value = row.received;
+  form.elements.received.min = row.delivered;
+  $('editor-target').textContent = row.batch_code + ' · ' + products.get(row.sku) + ' · sudah diantar ' + row.delivered + ' pack';
+  form.hidden = false;
+  form.elements.received.focus();
 }
 
-function showEditor() {
-  form.hidden = false;
-  $('new-entry').setAttribute('aria-expanded', 'true');
-  form.elements.batch_code.focus();
-}
+// Booking yang tidak dimiliki pesanan aktif (sisa data lama atau Excel), per baris stok.
+let ownedBookings = null;
+const unowned = row => ownedBookings ? Math.max(0, row.reserved - (ownedBookings.get(row.id) || 0)) : 0;
 
 function renderStock() {
   const target = $('stock-rows');
@@ -246,26 +242,29 @@ function renderStock() {
     quantities(row).forEach((value, i) => { sum[i] += value; });
     return sum;
   }, [0,0,0,0,0]);
+  const orphan = batchRows.reduce((sum, row) => sum + unowned(row), 0);
   metricCards($('stock-metrics'), [
     ['Siap dijual · pack', counts[3]], ['Terpesan · pack', counts[1]],
-    ['Sudah diantar · pack', counts[2]], ['Belum terpenuhi · pack', counts[4]]
+    ['Sudah diantar · pack', counts[2]], ['Belum terpenuhi · pack', counts[4]],
+    ...(orphan ? [['Booking tanpa pesanan · pack', orphan]] : [])
   ]);
   const labels = ['Batch', 'Varian', 'Diterima', 'Terpesan', 'Diantar', 'Sisa jual', 'Belum terpenuhi'];
   target.replaceChildren(...visible.map(row => {
     const tr = tableRow([row.batch_code, products.get(row.sku), ...quantities(row)]);
     Array.from(tr.cells).forEach((cell, i) => { cell.dataset.label = labels[i]; });
+    if (unowned(row)) tr.cells[3].textContent += ' · ' + format.format(unowned(row)) + ' tanpa pesanan';
     const button = document.createElement('button');
     button.className = 'secondary';
-    button.textContent = 'Edit';
+    button.textContent = 'Koreksi';
     button.type = 'button';
-    button.setAttribute('aria-label', 'Edit ' + row.batch_code + ' ' + products.get(row.sku));
+    button.setAttribute('aria-label', 'Koreksi diterima ' + row.batch_code + ' ' + products.get(row.sku));
     button.addEventListener('click', () => { if (!busy) edit(row); });
     const actionCell = tr.insertCell();
     actionCell.dataset.label = 'Aksi';
     actionCell.append(button);
     return tr;
   }));
-  emptyRow(target, 8, rows.length ? 'Tidak ada stok yang cocok dengan filter.' : 'Belum ada data batch. Tambahkan varian untuk mulai mencatat.');
+  emptyRow(target, 8, rows.length ? 'Tidak ada stok yang cocok dengan filter.' : 'Belum ada data batch. Catat restok di Restok & Supplier untuk mulai.');
 }
 
 function renderRows() {
@@ -291,7 +290,19 @@ async function loadRows() {
     if (page.length < pageSize) break;
   }
   rows = loaded;
+  ownedBookings = await loadOwnedBookings().catch(() => null);
+  if (session !== token) return;
   renderRows();
+}
+
+async function loadOwnedBookings() {
+  const owned = new Map();
+  for (let offset = 0; ; offset += 1000) {
+    const page = await request('/rest/v1/pentol_order_items?select=stock_id,quantity,shipped,pentol_orders!inner(cancelled)'
+      + '&pentol_orders.cancelled=eq.false&order=order_id,stock_id&limit=1000&offset=' + offset);
+    for (const item of page) owned.set(item.stock_id, (owned.get(item.stock_id) || 0) + item.quantity - item.shipped);
+    if (page.length < 1000) return owned;
+  }
 }
 
 async function run(button, action) {
@@ -341,50 +352,38 @@ login.addEventListener('submit', event => {
 form.addEventListener('submit', event => {
   event.preventDefault();
   run($('save'), async () => {
-    const entry = Object.fromEntries(new FormData(form));
-    entry.batch_code = entry.batch_code.trim().toUpperCase();
-    entry.received_on ||= null;
-    for (const key of ['received','reserved','delivered']) entry[key] = Number(entry[key]);
-    if (!entry.batch_code || (entry.received && !entry.received_on) || entry.delivered > entry.received) {
-      status('Isi kode batch dan tanggal terima saat barang tiba. Jumlah diantar maksimal sama dengan jumlah diterima.', true);
-      return;
-    }
     const current = editing;
-    const path = '/rest/v1/pentol_batch_stock';
+    if (!current) return;
+    const received = Number(form.elements.received.value);
+    const receivedOn = form.elements.received_on.value || null;
+    const reason = form.elements.reason.value.trim();
+    if (!reason) return status('Isi alasan koreksi.', true);
+    if (received > 0 && !receivedOn) return status('Isi tanggal diterima.', true);
+    if (received < current.delivered) return status('Diterima tidak boleh kurang dari yang sudah diantar (' + current.delivered + ' pack).', true);
     let saved = false;
     try {
-      const result = current
-        ? await request(path + '?id=eq.' + encodeURIComponent(current.id) + '&revision=eq.' + current.revision,
-          { method:'PATCH', body:{ ...entry, revision:current.revision + 1 }, prefer:'return=representation' })
-        : await request(path, { method:'POST', body:entry, prefer:'return=representation' });
-      if (current && !result.length) {
-        await loadRows();
-        resetEditor();
-        return status('Data sudah berubah. Buka kembali baris terbaru sebelum mengedit.', true);
-      }
+      await request('/rest/v1/rpc/pentol_correct_received', { method:'POST', body:{
+        stock_id:current.id, expected_revision:current.revision, new_received:received,
+        new_received_on:receivedOn, change_reason:reason } });
       saved = true;
       resetEditor();
       await loadRows();
-      status('Stok batch tersimpan.');
+      status('Koreksi stok tersimpan dan tercatat di Riwayat Perubahan.');
     } catch (error) {
-      status(saved ? 'Stok tersimpan, tetapi daftar gagal dimuat. Masuk kembali untuk melihat data terbaru.'
-        : error.status === 409 ? 'Varian ini sudah ada di batch tersebut. Gunakan Edit.'
-        : 'Penyimpanan belum terkonfirmasi. Masuk kembali untuk memeriksa data sebelum mencoba lagi.', true);
+      status(saved ? 'Koreksi tersimpan, tetapi daftar gagal dimuat. Masuk kembali untuk melihat data terbaru.'
+        : error.status === 404 ? 'Koreksi stok belum aktif. Jalankan stock-integrity-2026-11.sql di Supabase.'
+        : /^(Stok berubah|Jumlah diterima|Isi tanggal|Tanggal diterima|Alasan koreksi)/.test(error.message) ? error.message
+        : 'Koreksi belum terkonfirmasi. Muat ulang daftar stok sebelum mencoba lagi.', true);
     }
   });
 });
 
-for (const [sku, label] of products) form.elements.sku.add(new Option(label, sku));
 $('new-entry').addEventListener('click', () => {
-  if (busy) return;
-  resetEditor();
-  if (stockBatch.value) form.elements.batch_code.value = stockBatch.value;
-  showEditor();
+  if (!busy) selectView('purchasing');
 });
 $('cancel').addEventListener('click', () => {
   if (busy) return;
   resetEditor();
-  $('new-entry').focus();
 });
 stockBatch.addEventListener('change', renderStock);
 stockSearch.addEventListener('input', renderStock);

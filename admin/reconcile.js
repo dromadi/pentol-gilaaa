@@ -130,9 +130,8 @@ export function reconciliationRows(targets, stocks, orders, products, total, pai
     else if (free === target.free) status = 'Cocok';
     else if (live && free > target.free && live.received === target.received
       && (!target.projected || (target.free === 0 && target.booked === target.received))) {
-      const reserved = live.received - live.delivered - target.free;
-      action = { type:'stock', live, reserved };
-      status = 'Kurangi sisa jual melalui booking';
+      // Booking harus milik pesanan: tidak ada tombol Terapkan untuk selisih stok.
+      status = 'Excel punya booking ' + (free - target.free) + ' pack yang belum jadi pesanan · catat di menu Pesanan';
     } else if (target.projected) status = 'Proyeksi · cek penerimaan dan alokasi';
     return { label:products.get(target.sku) + ' · Batch ' + target.batch, excel:target.free + ' pack',
       app:free === null ? 'Batch/varian belum cocok' : free + ' pack', status, action };

@@ -9,7 +9,7 @@
 <title>Admin · Pentol Gilaaa Surabaya</title>
 <link rel="stylesheet" href="style.css?v=rekonsiliasi-1">
 <script defer src="vendor/jszip.min.js"></script>
-<script type="module" src="app.js?v=hari-ini-2"></script>
+<script type="module" src="app.js?v=stok-1"></script>
 </head>
 <body>
 <header class="app-header"><div class="bar">
@@ -55,19 +55,17 @@
 <div id="today-body" aria-live="polite"></div>
 </section>
 <section id="stock" class="panel" hidden>
-<div class="section-head"><div><p class="eyebrow">INVENTORI</p><h2 tabindex="-1">Stok per Batch</h2><p>Catat barang masuk dan alokasi pesanan per varian.</p></div><button type="button" id="new-entry" aria-controls="batch-form" aria-expanded="false">+ Tambah stok batch</button></div>
+<div class="section-head"><div><p class="eyebrow">INVENTORI</p><h2 tabindex="-1">Stok per Batch</h2><p>Stok bertambah lewat Terima barang di Restok &amp; Supplier, dan berkurang lewat pesanan.</p></div><button type="button" id="new-entry" class="secondary">Catat restok →</button></div>
 <form id="batch-form" class="editor" hidden>
-<h3 id="editor-title">Tambah varian ke batch</h3>
-<p>Untuk pesanan sebelum barang tiba, isi jumlah terpesan. Tambahkan tanggal dan jumlah diterima saat barang datang.</p>
+<h3 id="editor-title">Koreksi jumlah diterima</h3>
+<p id="editor-target"></p>
+<p>Barang masuk dicatat lewat <strong>Restok &amp; Supplier → Terima barang</strong>. Terpesan dan diantar berubah otomatis dari pesanan. Gunakan koreksi ini hanya untuk salah hitung atau barang rusak.</p>
 <div class="fields">
-<label>Kode batch <input name="batch_code" maxlength="40" placeholder="Contoh BATCH-02" required></label>
-<label>Varian <select name="sku" required></select></label>
 <label>Tanggal diterima <input name="received_on" type="date"></label>
 <label>Diterima (pack) <input name="received" type="number" min="0" max="1000000" value="0" required></label>
-<label>Terpesan, belum diantar (pack) <input name="reserved" type="number" min="0" max="1000000" value="0" required></label>
-<label>Sudah diantar (pack) <input name="delivered" type="number" min="0" max="1000000" value="0" required></label>
+<label class="full">Alasan koreksi <input name="reason" maxlength="500" placeholder="Contoh: 1 pack rusak saat diterima" required></label>
 </div>
-<button id="save">Tambah varian ke batch</button> <button type="button" id="cancel">Batal</button>
+<button id="save">Simpan koreksi</button> <button type="button" id="cancel">Batal</button>
 </form>
 <div id="stock-metrics" class="metrics summary-metrics" aria-label="Ringkasan stok"></div>
 <div class="stock-controls">
@@ -129,7 +127,7 @@
 <div id="closeDay-body"></div>
 </section>
 <section id="history" class="panel" hidden>
-<div class="section-head"><div><h2 tabindex="-1">Riwayat Perubahan</h2><p>100 koreksi terakhir dari Rekonsiliasi Excel.</p></div></div>
+<div class="section-head"><div><h2 tabindex="-1">Riwayat Perubahan</h2><p>100 koreksi terakhir: koreksi stok diterima dan koreksi dari Rekonsiliasi Excel.</p></div></div>
 <div id="history-body"></div>
 </section>
 <section id="packing" class="panel" hidden><div class="section-head"><div><h2 tabindex="-1">Packing &amp; Tagihan</h2><p>Siapkan pengantaran dan pantau tagihan pelanggan.</p></div></div><div id="packing-body"></div></section>
