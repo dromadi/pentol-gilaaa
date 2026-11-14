@@ -383,6 +383,34 @@ export function adminTests(browser, devices, baseUrl) {
     await s.close();
   });
 
+  test('Tempel dari GPT: Simpan semua hanya menyimpan yang cocok tunggal', async () => {
+    const data = defaultData();
+    const day = shiftDay(-1);
+    data.orders = [order('o1', 'Sari Satu', { order_date: shiftDay(-4) }),
+      order('o2', 'Ria Dua', { order_date: shiftDay(-4) }), order('o3', 'Ria Dua', { order_date: shiftDay(-3) })];
+    const s = await open(data);
+    await goSub(s.page, 'orders');
+    await s.page.click('#gpt-import');
+    const acts = [['Sari', 'antar'], ['Sari', 'bayar'], ['Ria', 'antar'], ['Ria', 'bayar'], ['Tidak Ada', 'antar']].map(([n, j]) =>
+      j === 'antar' ? { jenis: 'antar', pelanggan: n, tanggal: day } : { jenis: 'bayar', pelanggan: n, nominal: 'lunas', tanggal: day });
+    await s.page.fill('#ops-form [name=gpt_text]', JSON.stringify({ aksi: acts }));
+    await s.page.click('#ops-form > button:not([type])');
+    await s.page.waitForTimeout(300);
+    await s.page.click('#gpt-results >> text=Simpan semua');
+    assert((await s.page.textContent('#ops-dialog')).includes('5 aksi'), 'konfirmasi menyebut jumlah');
+    await s.page.click('#ops-form button:has-text("Ya, simpan semua")');
+    await s.page.waitForTimeout(1500);
+    const ship = s.data.writes.filter(w => w.fn === 'pentol_ship_order');
+    const pay = s.data.writes.filter(w => w.body?.action === 'pay');
+    equal([ship.length, ship[0]?.body.target, ship[0]?.body.ship_date], [1, 'o1', day], 'hanya Sari diantar, bertanggal');
+    equal([pay.length, pay[0]?.body.target, pay[0]?.body.payload.amount], [1, 'o1', 72000], 'Sari dilunasi sebesar sisa tagihan');
+    const states = await s.page.$$eval('#gpt-results .gpt-state', xs => xs.map(x => x.textContent));
+    equal(states.filter(x => x.startsWith('✓')).length, 2, 'dua tersimpan');
+    assert(states.some(x => x.includes('2 pesanan cocok')), 'Ria dilewati karena dua pesanan');
+    assert(states.some(x => x.includes('Tidak ada pesanan')), 'nama tak dikenal dilewati');
+    await s.close();
+  });
+
   test('packing dibagi per pesanan menurut jadwal (bug B4)', async () => {
     const data = defaultData();
     data.stock = [{ id:'s1', batch_code:'B1', sku:'UR', received_on:shiftDay(-5), received:4, reserved:5, delivered:0, revision:1 }];

@@ -198,6 +198,13 @@ Untuk mencatat antaran yang sudah lewat (misalnya rekap Excel 9–13 Nov) tanpa 
 - Hari ini: jalur lama (`pentol_order_action` 'ship'), tidak perlu SQL baru. Tanggal lain: `pentol_ship_order` dari **`admin/tanggal-antar-2026-11.sql`** (jalankan setelah operasional): mengatur `pentol.ship_date` selama transaksi sehingga trigger `pentol_log_shipment` menulis `shipped_on` = tanggal itu, dan `delivered_at` = siang WIB tanggal itu. Laporan (per tanggal antar), grafik mingguan, dan Tutup hari ikut tanggal itu. Stok tidak terpengaruh. Sebelum SQL dijalankan: pesan jelas, tidak ada yang tersimpan.
 - Uji: SQL `tanggal antar…`, browser `tanggal antar: bawaan hari ini…` dan `Tempel dari GPT: tanggal antar…`. Versi `tanggal-22`.
 
+## Tempel dari GPT: nominal "lunas" dan Simpan semua (14 Nov)
+
+Untuk memasukkan rekap lama (31 pesanan diantar & lunas) tanpa 62 kali Simpan.
+- `"nominal":"lunas"` pada aksi `bayar` melunasi seluruh sisa tagihan pesanan itu (form bayar terisi sisa tagihan).
+- Tombol **Simpan semua yang cocok tunggal (n)** di hasil GPT (muncul bila ada ≥2 aksi antar/bayar) dengan kotak konfirmasi. Berurutan, jadi antar lalu bayar untuk orang yang sama aman. Aksi dilewati (dengan keterangan, tetap bisa manual) bila: nama cocok dengan >1 pesanan atau tidak ada, jumlah antar tidak sesuai sisa, tanggal antar di luar batas, nominal bayar melebihi sisa tagihan. Aksi `pesanan` tidak ikut (tetap lewat form). Penyimpanan memakai jalur yang sama dengan kotak dialog (`submitOrderAction`), termasuk antar bertanggal lain via `pentol_ship_order`.
+- Tidak ada pembatalan massal; koreksi satu per satu lewat Koreksi. Satu tempelan GPT maksimal 30 aksi. Versi `simpan-24`. Uji: `Tempel dari GPT: Simpan semua hanya menyimpan yang cocok tunggal`, unit `bayar "lunas"`.
+
 ## Input lewat ChatGPT (tahap 1: tempel)
 
 Keputusan: **aplikasi (Supabase) tetap sumber kebenaran**; ChatGPT hanya pintu masuk. Tidak ada data yang tersimpan tanpa konfirmasi admin di form aplikasi, sehingga semua validasi database tetap berlaku.

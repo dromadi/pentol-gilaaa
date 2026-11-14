@@ -140,21 +140,25 @@ export function initOperations({ $, request, status, products, prices, today, fo
     } finally { save.disabled = false; }
   });
 
+  // Satu pintu simpan untuk kotak dialog dan "Simpan semua" dari GPT.
+  async function submitOrderAction(action, order, body) {
+    const shipDay = action === 'ship' ? body.date : null;
+    if (action === 'ship') delete body.date;
+    if (shipDay && shipDay !== today()) {
+      // Antar bertanggal lain (pencatatan terlambat): butuh tanggal-antar-2026-11.sql.
+      try {
+        await request(root + 'rpc/pentol_ship_order', {method:'POST', body:{
+          target:order.id, expected_revision:order.revision, payload:body, ship_date:shipDay}});
+      } catch (error) {
+        if (error.status === 404) throw new Error('Tanggal antar selain hari ini aktif setelah tanggal-antar-2026-11.sql dijalankan di Supabase. Untuk sekarang pilih hari ini.');
+        throw error;
+      }
+    } else await mutate(action, order.id, order.revision, body);
+  }
+
   function orderDialog(action, order, title, nodes, payload, onDone) {
     showDialog(title, nodes, async data => {
-      const body = payload(data);
-      const shipDay = action === 'ship' ? body.date : null;
-      if (action === 'ship') delete body.date;
-      if (shipDay && shipDay !== today()) {
-        // Antar bertanggal lain (pencatatan terlambat): butuh tanggal-antar-2026-11.sql.
-        try {
-          await request(root + 'rpc/pentol_ship_order', {method:'POST', body:{
-            target:order.id, expected_revision:order.revision, payload:body, ship_date:shipDay}});
-        } catch (error) {
-          if (error.status === 404) throw new Error('Tanggal antar selain hari ini aktif setelah tanggal-antar-2026-11.sql dijalankan di Supabase. Untuk sekarang pilih hari ini.');
-          throw error;
-        }
-      } else await mutate(action, order.id, order.revision, body);
+      await submitOrderAction(action, order, payload(data));
       onDone?.();
       const mapped = excelInvoices.get(order.id);
       if (mapped?.revision === order.revision && ['pay', 'ship', 'schedule'].includes(action)) mapped.revision++;
@@ -184,18 +188,25 @@ export function initOperations({ $, request, status, products, prices, today, fo
   }
 
   // prefill.items: [{sku, quantity}] dibagi ke baris pesanan varian yang sama; kosong = semua sisa.
-  function shipDialog(order, prefill = {}) {
+  // Jumlah antar per baris pesanan: kosong = semua sisa; selain itu dibagi ke varian yang sama.
+  function shipAmounts(order, items = []) {
     const pending = order.pentol_order_items.filter(i => i.shipped < i.quantity);
-    const wanted = new Map((prefill.items || []).map(item => [item.sku, item.quantity]));
+    const wanted = new Map(items.map(item => [item.sku, item.quantity]));
+    const take = new Map(pending.map(i => {
+      const left = i.quantity - i.shipped;
+      if (!wanted.size) return [i.stock_id, left];
+      const sku = stock(i.stock_id)?.sku;
+      const part = Math.min(left, wanted.get(sku) || 0);
+      if (part) wanted.set(sku, wanted.get(sku) - part);
+      return [i.stock_id, part];
+    }));
+    return { pending, take, wanted };
+  }
+
+  function shipDialog(order, prefill = {}) {
+    const { pending, take, wanted } = shipAmounts(order, prefill.items);
     const notes = [];
-    const value = item => {
-      const left = item.quantity - item.shipped;
-      if (!wanted.size) return left;
-      const sku = stock(item.stock_id)?.sku;
-      const take = Math.min(left, wanted.get(sku) || 0);
-      if (take) wanted.set(sku, wanted.get(sku) - take);
-      return take;
-    };
+    const value = item => take.get(item.stock_id);
     const fields = pending.map(i => control(label(i), i.stock_id, {type:'number',value:value(i),props:{min:0,max:i.quantity-i.shipped}}));
     for (const [sku, rest] of wanted) if (rest > 0) notes.push(el('p', 'Dari GPT: ' + rest + ' pack ' + (products.get(sku) || sku) + ' tidak ada di sisa pesanan ini.'));
     const first = order.order_date > today() ? today() : order.order_date;
@@ -506,20 +517,73 @@ export function initOperations({ $, request, status, products, prices, today, fo
       () => open(order))), 'ops-actions'));
   }
 
+  // Simpan massal untuk antar & bayar: hanya aksi yang cocok dengan TEPAT satu pesanan. Pilihan lain dilewati
+  // (tetap bisa dikerjakan manual lewat tombolnya). Berurutan, jadi "antar" lalu "bayar" untuk orang yang sama aman.
+  async function saveOne(action) {
+    const candidates = matchOrders(action.type === 'pay'
+      ? (await orderQuery('&paid=eq.false')).filter(order => balance(order) > 0)
+      : await orderQuery('&delivered=eq.false'), action);
+    if (!candidates.length) return { skip: action.type === 'pay' ? 'Tidak ada tagihan terbuka atas nama ini' : 'Tidak ada pesanan belum diantar atas nama ini' };
+    if (candidates.length > 1) return { skip: candidates.length + ' pesanan cocok · pilih manual lewat tombol' };
+    const order = candidates[0];
+    if (action.type === 'ship') {
+      const { take, wanted } = shipAmounts(order, action.items);
+      if ([...wanted.values()].some(rest => rest > 0)) return { skip: 'Jumlah tidak sesuai sisa pesanan · periksa manual' };
+      const items = [...take].filter(([, quantity]) => quantity > 0).map(([stock_id, quantity]) => ({ stock_id, quantity }));
+      if (!items.length) return { skip: 'Tidak ada sisa untuk diantar' };
+      if (action.date > today() || action.date < order.order_date) return { skip: 'Tanggal antar di luar batas · periksa manual' };
+      await submitOrderAction('ship', order, { date: action.date, items });
+    } else {
+      const due = balance(order);
+      if (!action.full && action.amount > due) return { skip: 'Nominal melebihi sisa tagihan · periksa manual' };
+      await submitOrderAction('pay', order, { payment_id: crypto.randomUUID(), date: action.date,
+        amount: action.full ? due : action.amount });
+    }
+    return { ok: true };
+  }
+  function saveAllGpt(entries) {
+    showDialog('Simpan semua?', [
+      el('p', entries.length + ' aksi akan disimpan satu per satu, berurutan.'),
+      el('p', 'Hanya yang cocok dengan satu pesanan. Yang cocok dengan beberapa pesanan atau tidak ditemukan dilewati dan tetap bisa dikerjakan manual. Yang sudah tersimpan tidak bisa dibatalkan massal (pakai Koreksi satu per satu).')
+    ], async () => async () => {
+      let saved = 0, skipped = 0;
+      for (const { action, mark } of entries) {
+        mark('Menyimpan…');
+        try {
+          const result = await saveOne(action);
+          if (result.ok) { saved++; mark('✓ Tersimpan'); } else { skipped++; mark(result.skip, true); }
+        } catch (error) {
+          skipped++;
+          mark(errorMessage(error), true);
+        }
+      }
+      await refresh('Pesanan diperbarui.');
+      status(saved + ' tersimpan' + (skipped ? ' · ' + skipped + ' dilewati, lihat keterangan di tiap aksi' : '') + '.', skipped > 0 && !saved);
+    }, { submitLabel: 'Ya, simpan semua' });
+  }
+
   function renderGptResults({actions, errors}) {
     const panel = $('gpt-results');
     panel.hidden = false;
     const head = block([el('strong', 'Dari GPT · ' + actions.length + ' aksi'),
       button('Tutup', () => { panel.hidden = true; panel.replaceChildren(); })], 'gpt-head');
     panel.replaceChildren(head, ...errors.map(error => el('p', error, 'gpt-error')));
+    const entries = [];
     for (const action of actions) {
       const row = el('article', undefined, 'gpt-action');
       const state = el('p', '', 'gpt-state');
       const mark = (text, bad = false) => { state.textContent = text; state.dataset.error = String(bad); };
+      entries.push({ action, row, mark });
       const go = button(action.type === 'order' ? 'Buka form pesanan' : action.type === 'pay' ? 'Catat bayar' : 'Catat antar',
         () => runGptAction(action, row, mark).catch(() => mark('Data pesanan belum bisa dimuat. Coba lagi.', true)));
       row.append(el('p', describeAction(action)), state, block([go], 'ops-actions'));
       panel.append(row);
+    }
+    const bulk = entries.filter(entry => entry.action.type !== 'order');
+    if (bulk.length > 1) {
+      const all = button('Simpan semua yang cocok tunggal (' + bulk.length + ')', () => saveAllGpt(bulk));
+      all.classList.add('primary-action');
+      head.append(all);
     }
     panel.scrollIntoView({block:'start'});
   }
