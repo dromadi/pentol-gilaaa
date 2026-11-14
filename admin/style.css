@@ -603,3 +603,4 @@ input[type="file"]::file-selector-button { margin-right: 10px; padding: 8px 14px
 #ops-fields > label + .fields { margin-top: 14px; }
 .gpt-head { flex-wrap: wrap; }
 .gpt-head .primary-action { flex: 1 1 100%; order: 3; }
+.ops-filters .report-export { align-self: end; border-radius: 999px; }

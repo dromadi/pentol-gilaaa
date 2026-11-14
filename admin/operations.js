@@ -1174,6 +1174,11 @@ export function initOperations({ $, request, status, products, prices, today, fo
     }
     const filters = block([first,last], 'ops-filters');
     filters.prepend(periods);
+    let report = null;
+    const exportButton = button('⬇ Unduh Excel', event => exportReport(event.currentTarget));
+    exportButton.classList.add('report-export');
+    exportButton.disabled = true;
+    filters.append(exportButton);
     target.replaceChildren(filters, out, priceList, backupCard);
     priceList.append(
       ...[...products].map(([sku,name]) => block([
@@ -1221,10 +1226,75 @@ export function initOperations({ $, request, status, products, prices, today, fo
       }
       return chart;
     }
+    // Excel laporan untuk periode yang sedang tampil: ringkasan, laba per varian, mingguan, pesanan,
+    // pembayaran, tagihan terbuka (semua, saat ini), dan stok dengan harga beli.
+    async function exportReport(trigger) {
+      const r = report;
+      const session = getSession();
+      if (!r || !session) return;
+      trigger.disabled = true;
+      status('Menyiapkan Excel laporan…');
+      try {
+        const open = (await orderQuery('&paid=eq.false')).filter(order => balance(order) > 0);
+        if (getSession() !== session) return;
+        const pct = value => r.revenue ? Math.round(value / r.revenue * 1000) / 10 : 0;
+        const summary = [['Laporan Pentol Gilaaa', r.range], ['Periode', r.a + ' s.d. ' + r.b], ['Diekspor (WIB)', today()], ['', ''],
+          ['Penjualan (barang diantar)', r.revenue], ['HPP barang diantar', r.missing ? 'Belum lengkap' : r.cost],
+          ['Laba bruto', r.missing ? 'Belum lengkap' : r.gross], ['Biaya antar toko', r.shipping],
+          ['Laba setelah biaya antar', r.missing ? 'Belum lengkap' : r.net], ['Margin (%)', r.missing ? 'Belum lengkap' : pct(r.net)],
+          ['Uang masuk (tanggal bayar)', r.cash], ['Tagihan pesanan periode ini', r.billed], ['Belum dibayar dari pesanan periode ini', r.unpaid],
+          ['Nilai stok siap jual (saat ini)', r.unsold], ['', ''],
+          ['Catatan', (r.byShipDate ? 'Penjualan, HPP, dan ongkir menurut tanggal antar.' : 'Penjualan menurut tanggal pesanan.')
+            + ' Uang masuk menurut tanggal bayar. Tagihan menurut tanggal pesanan.'
+            + (r.missing ? ' Harga beli ' + r.missing + ' pack belum ada di data restok.' : '')]];
+        const variants = [['Varian', 'Pack diantar', 'Penjualan (Rp)', 'HPP (Rp)', 'Laba (Rp)'],
+          ...[...r.byVariant].filter(([, v]) => v.qty).map(([sku, v]) => [products.get(sku) || 'Varian batch', v.qty, v.sales,
+            v.missing ? 'Belum lengkap' : Math.round(v.cost), v.missing ? 'Belum lengkap' : Math.round(v.sales - v.cost)])];
+        const weeks = new Map();
+        for (const entry of r.chartEntries) { const key = weekStart(entry.date); weeks.set(key, (weeks.get(key) || 0) + entry.amount); }
+        const weekly = [['Minggu mulai (Senin)', 'Penjualan diantar (Rp)'], ...[...weeks].sort().map(([day, amount]) => [day, amount])];
+        const itemsText = order => order.pentol_order_items.map(i => (products.get(stock(i.stock_id)?.sku) || 'Varian') + ' × ' + i.quantity).join(', ');
+        const orderRows = [['Tanggal pesan', 'Invoice', 'Pelanggan', 'WhatsApp', 'Pesanan', 'Pack', 'Total (Rp)', 'Dibayar (Rp)', 'Sisa (Rp)',
+          'Status bayar', 'Status antar', 'Jadwal antar'],
+          ...r.orders.map(o => [o.order_date, invoiceNumber(o), o.customer, o.contact || '', itemsText(o),
+            o.pentol_order_items.reduce((sum, i) => sum + i.quantity, 0), total(o), paid(o), balance(o),
+            paymentLabel(o), deliveryLabel(o), o.delivery_on || ''])];
+        const byId = new Map(r.orders.map(o => [o.id, o]));
+        const paymentRows = [['Tanggal bayar', 'Pelanggan', 'Invoice', 'Nominal (Rp)'],
+          ...r.payments.map(p => {
+            const o = p.pentol_orders || byId.get(p.order_id) || {};
+            return [p.paid_on || '', o.customer || '', o.invoice_no ? invoiceNumber(o) : '', Number(p.amount)];
+          })];
+        const openRows = [['Pelanggan', 'Invoice', 'Tanggal pesan', 'Status antar', 'Umur sejak diantar (hari)', 'Total (Rp)', 'Dibayar (Rp)', 'Sisa (Rp)', 'WhatsApp'],
+          ...open.sort((x, y) => (owedDays(y) ?? -1) - (owedDays(x) ?? -1)).map(o => [o.customer, invoiceNumber(o), o.order_date,
+            deliveryLabel(o), owedDays(o) ?? '', total(o), paid(o), balance(o), o.contact || ''])];
+        const stockRows = [['Batch', 'Varian', 'Diterima', 'Terpesan', 'Diantar', 'Siap jual', 'Harga beli / pack (Rp)', 'Nilai siap jual (Rp)'],
+          ...getRows().map(row => {
+            const [received, reserved, delivered, free] = quantities(row);
+            const unit = r.hpp.get(row.batch_code + '|' + row.sku);
+            return [row.batch_code, products.get(row.sku) || row.sku, received, reserved, delivered, free,
+              unit === undefined ? '' : Math.round(unit), unit === undefined ? '' : Math.round(free * unit)];
+          })];
+        const bytes = await closeDayWorkbook([['Ringkasan', summary], ['Laba per varian', variants], ['Penjualan per minggu', weekly],
+          ['Pesanan', orderRows], ['Pembayaran', paymentRows], ['Tagihan terbuka', openRows], ['Stok', stockRows]], window.JSZip);
+        if (getSession() !== session) return;
+        const url = URL.createObjectURL(new Blob([bytes], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+        download(url, 'Laporan-Pentol-Gilaaa-' + r.a + '_' + r.b + '.xlsx');
+        setTimeout(() => URL.revokeObjectURL(url), 30_000);
+        status('Excel laporan diunduh.');
+      } catch {
+        status('Excel laporan belum bisa dibuat. Coba lagi.', true);
+      } finally {
+        trigger.disabled = !report;
+      }
+    }
+
     let generation = 0;
     async function render() {
       const current = ++generation;
       markPeriod();
+      report = null;
+      exportButton.disabled = true;
       const a = first.lastChild.value;
       const b = last.lastChild.value;
       if (!a || !b || a>b) { out.textContent='Pilih rentang tanggal yang valid.'; return; }
@@ -1242,7 +1312,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
       const [data,orders,payments,recent,ships,done,recentShips,recentDone] = await Promise.all([
         purchases(),
         list('pentol_orders?select='+ordersSelect,'&cancelled=eq.false&order_date=gte.'+a+'&order_date=lte.'+b+'&order=order_date,id'),
-        list('pentol_payments?select=id,amount','&paid_on=gte.'+a+'&paid_on=lte.'+b+'&order=paid_on,id'),
+        list('pentol_payments?select=id,amount,paid_on,order_id,pentol_orders(customer,invoice_no,excel_invoice_no)','&paid_on=gte.'+a+'&paid_on=lte.'+b+'&order=paid_on,id'),
         byShipDate ? [] : list('pentol_orders?select='+ordersSelect,'&cancelled=eq.false&order_date=gte.'+chartFrom+'&order=order_date,id'),
         byShipDate ? shipsIn(a, b) : [],
         byShipDate ? doneIn(a, b) : [],
@@ -1292,6 +1362,9 @@ export function initOperations({ $, request, status, products, prices, today, fo
       const gross = revenue-cost;
       const net = gross-shipping;
       const range = a === b ? dayLabel(a) : dayLabel(a) + ' – ' + dayLabel(b);
+      report = { a, b, range, byShipDate, revenue, cost, gross, net, shipping, cash, unpaid, billed, missing, unsold, stockUnknown,
+        byVariant, chartEntries, orders, payments, hpp };
+      exportButton.disabled = false;
       const headline = el('section', undefined, 'report-headline');
       const stat = (name, value, note, key) => {
         const box = el('div', undefined, 'report-stat');

@@ -205,6 +205,10 @@ Untuk memasukkan rekap lama (31 pesanan diantar & lunas) tanpa 62 kali Simpan.
 - Tombol **Simpan semua yang cocok tunggal (n)** di hasil GPT (muncul bila ada ≥2 aksi antar/bayar) dengan kotak konfirmasi. Berurutan, jadi antar lalu bayar untuk orang yang sama aman. Aksi dilewati (dengan keterangan, tetap bisa manual) bila: nama cocok dengan >1 pesanan atau tidak ada, jumlah antar tidak sesuai sisa, tanggal antar di luar batas, nominal bayar melebihi sisa tagihan. Aksi `pesanan` tidak ikut (tetap lewat form). Penyimpanan memakai jalur yang sama dengan kotak dialog (`submitOrderAction`), termasuk antar bertanggal lain via `pentol_ship_order`.
 - Tidak ada pembatalan massal; koreksi satu per satu lewat Koreksi. Satu tempelan GPT maksimal 30 aksi. Versi `simpan-24`. Uji: `Tempel dari GPT: Simpan semua hanya menyimpan yang cocok tunggal`, unit `bayar "lunas"`.
 
+## Laporan: Unduh Excel per periode (14 Nov)
+
+Tombol **⬇ Unduh Excel** di Laporan → Laba & harga, mengikuti periode yang tampil (Hari ini/Minggu ini/Bulan ini/Bulan lalu/tanggal bebas). File `Laporan-Pentol-Gilaaa-<dari>_<sampai>.xlsx`, 7 lembar: **Ringkasan** (penjualan, HPP, laba, margin, uang masuk, tagihan, belum dibayar, nilai stok + catatan dasar tanggal), **Laba per varian**, **Penjualan per minggu** (4 minggu terakhir), **Pesanan** (pesanan periode: invoice, pelanggan, WA, isi, total, dibayar, sisa, status, jadwal), **Pembayaran** (tanggal bayar, pelanggan, invoice, nominal; nama dari embed `pentol_orders`), **Tagihan terbuka** (semua yang belum lunas saat ini, urut paling lama sejak diantar), **Stok** (per batch + harga beli & nilai siap jual). Angka rupiah disimpan sebagai angka agar bisa dijumlah di Excel. Tanpa SQL baru. Versi `excel-25`. Uji: `laporan: Unduh Excel berisi 7 lembar…`.
+
 ## Input lewat ChatGPT (tahap 1: tempel)
 
 Keputusan: **aplikasi (Supabase) tetap sumber kebenaran**; ChatGPT hanya pintu masuk. Tidak ada data yang tersimpan tanpa konfirmasi admin di form aplikasi, sehingga semua validasi database tetap berlaku.

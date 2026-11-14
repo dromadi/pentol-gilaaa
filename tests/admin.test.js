@@ -508,6 +508,32 @@ export function adminTests(browser, devices, baseUrl) {
     await s.close();
   });
 
+  test('laporan: Unduh Excel berisi 7 lembar untuk periode yang dipilih', async () => {
+    const data = defaultData();
+    const t = todayJakarta();
+    data.shipments = [{ order_id: 'o6', stock_id: 's1', quantity: 2, unit_price: 36000, shipped_on: t }];
+    data.purchases = [{ batch_code:'BATCH-02', supplier:'', reference:'', ordered_on:shiftDay(-9), expected_on:null, shipping:0, packaging:0, other_cost:0,
+      pentol_purchase_items:[{ batch_code:'BATCH-02', sku:'UR', quantity:30, unit_cost:20000 }] }];
+    data.orders.find(o => o.id === 'o7').pentol_payments = [{ id:'p1', order_id:'o7', amount:50000, paid_on:t }];
+    const s = await open(data);
+    await goSub(s.page, 'finance');
+    await s.page.click('.period-chips >> text=Hari ini');
+    await s.page.waitForTimeout(500);
+    const [download] = await Promise.all([s.page.waitForEvent('download'), s.page.click('text=⬇ Unduh Excel')]);
+    equal(download.suggestedFilename(), 'Laporan-Pentol-Gilaaa-' + t + '_' + t + '.xlsx', 'nama file');
+    const zip = await JSZip.loadAsync(await (await download.createReadStream()).toArray().then(Buffer.concat));
+    const names = [...(await zip.file('xl/workbook.xml').async('string')).matchAll(/name="([^"]+)"/g)].map(m => m[1]);
+    equal(names, ['Ringkasan', 'Laba per varian', 'Penjualan per minggu', 'Pesanan', 'Pembayaran', 'Tagihan terbuka', 'Stok'], 'lembar');
+    const sheet = n => zip.file('xl/worksheets/sheet' + n + '.xml').async('string');
+    const summary = await sheet(1);
+    assert(summary.includes('<v>72000</v>') && summary.includes('<v>32000</v>') && summary.includes('<v>50000</v>'), 'penjualan, laba, uang masuk');
+    assert((await sheet(2)).includes('Pentol Urat'), 'laba per varian');
+    assert((await sheet(5)).includes('Gina Belum Bayar'), 'pembayaran dengan nama pelanggan');
+    assert((await sheet(6)).includes('Eka Antar Sebagian'), 'tagihan terbuka');
+    assert((await sheet(7)).includes('BATCH-02') && (await sheet(7)).includes('<v>20000</v>'), 'stok + harga beli');
+    await s.close();
+  });
+
   test('koreksi: batalkan pembayaran dan kurangi jumlah antar (alasan wajib)', async () => {
     const data = defaultData();
     data.orders = [order('o9', 'Hana Koreksi', { delivery_on: todayJakarta(), items: [[4, 2]], delivered_at: shiftDay(-1) + 'T05:00:00Z',
