@@ -90,7 +90,7 @@ Diuji di Chromium HP dengan data tiruan (filter URL per tombol, Batalkan/arsip s
 - `downloadBackup()` (operations.js): semua tabel (`backupTables`) ke satu file `Cadangan-Pentol-Gilaaa-YYYY-MM-DD.xlsx` dengan lembar Info (waktu ekspor, jumlah baris). Tabel yang belum ada (migrasi belum dijalankan) dilewati dan dicatat. Tombol di Laporan; pengingat di Hari Ini bila cadangan terakhir ≥ 7 hari atau belum pernah (tanggal disimpan di `localStorage` per perangkat).
 - `close-day.js`: nama kolom Excel mendukung > 26 kolom (AA, AB, …).
 - Diuji: unduh, isi lembar, tabel 404 dilewati, pengingat hilang; file dibuka dengan openpyxl.
-- **Belum: cadangan otomatis** (GitHub Actions terjadwal, terenkripsi) — butuh pemilik menambahkan secret di GitHub; lihat percakapan 14 Nov.
+- **Cadangan otomatis disiapkan**: `.github/workflows/backup.yml` + `scripts/backup.sh` (pg_dump + CSV → 7z AES-256, artifact 90 hari, 02.17 WIB). Aktif setelah pemilik mengisi secret `SUPABASE_DB_URL` dan `BACKUP_PASSWORD` — lihat `docs/CADANGAN-OTOMATIS.md`. Diuji lokal termasuk pemulihan ke database kosong.
 
 ## Input lewat ChatGPT (tahap 1: tempel)
 

@@ -6,3 +6,4 @@
 - Database Supabase dipakai bersama oleh semua branch; perubahan SQL tidak otomatis jalan — pemilik menjalankannya manual di SQL Editor.
 - **Jalankan uji sebelum push:** `cd tests && node run.js` (browser, data tiruan) dan `bash tests/sql/run.sh` (SQL, Postgres lokal). Lihat `tests/README.md`. Fitur baru = tambah satu uji.
 - Katalog pembeli: skrip di `catalog.js`, gaya di `catalog.css`, CSP di `index.html`. Jangan menambah `<script>` atau `<style>` inline.
+- Cadangan: manual di admin (Laporan → Unduh cadangan) dan otomatis tiap malam lewat `.github/workflows/backup.yml` + `scripts/backup.sh` (7z terenkripsi, artifact 90 hari). Panduan & pemulihan: `docs/CADANGAN-OTOMATIS.md`. Jangan pernah menyimpan cadangan tanpa enkripsi di repo ini (repo publik).

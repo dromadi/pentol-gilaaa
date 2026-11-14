@@ -1,0 +1,62 @@
+# Cadangan otomatis database Pentol Gilaaa, tiap malam pukul 02:17 WIB.
+# Butuh 2 secret repo (Settings → Secrets and variables → Actions):
+#   SUPABASE_DB_URL  – connection string "Session pooler" dari Supabase (berisi kata sandi database)
+#   BACKUP_PASSWORD  – kata sandi file cadangan (buat sendiri, simpan baik-baik)
+# Selama secret belum diisi, alur ini dilewati tanpa galat. Panduan: docs/CADANGAN-OTOMATIS.md
+name: Cadangan database
+
+on:
+  schedule:
+    - cron: '17 19 * * *'   # 19:17 UTC = 02:17 WIB
+  workflow_dispatch:         # tombol "Run workflow" untuk menjalankan sekarang
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cadangan-database
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      BACKUP_PASSWORD: ${{ secrets.BACKUP_PASSWORD }}
+    steps:
+      - name: Periksa secret
+        id: check
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ] || [ -z "$BACKUP_PASSWORD" ]; then
+            echo "::notice::Cadangan dilewati: secret SUPABASE_DB_URL dan BACKUP_PASSWORD belum diisi. Lihat docs/CADANGAN-OTOMATIS.md."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.check.outputs.ready == 'true'
+
+      - name: Pasang pg_dump 17 dan 7-Zip
+        if: steps.check.outputs.ready == 'true'
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt noble-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17 p7zip-full >/dev/null
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+
+      - name: Buat cadangan terenkripsi
+        if: steps.check.outputs.ready == 'true'
+        run: bash scripts/backup.sh backup-out
+
+      - name: Simpan 90 hari
+        if: steps.check.outputs.ready == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: cadangan-pentol-gilaaa-${{ github.run_number }}
+          path: backup-out/*.7z
+          retention-days: 90
+          if-no-files-found: error
