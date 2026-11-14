@@ -300,3 +300,16 @@ body { background: radial-gradient(1100px 480px at 105% -10%, #fbe7d9 0, transpa
 }
 .today-card[data-tone="money"] > .today-number { font-size: clamp(32px, 2.7vw, 44px); overflow-wrap: normal; white-space: nowrap; }
 @media (min-width: 901px) { #today-date { display: none; } }
+
+/* ===== UI v3: tab bagian di dalam menu Pesanan, Stok, Laporan ===== */
+.subtabs { display: flex; gap: 6px; width: fit-content; max-width: 100%; overflow-x: auto; margin: 0 0 22px; padding: 5px; background: var(--paper); border: 1px solid var(--line); border-radius: 999px; box-shadow: var(--shadow); scrollbar-width: none; }
+.subtabs::-webkit-scrollbar { display: none; }
+.subtabs button { flex: 0 0 auto; min-height: 40px; padding: 8px 16px; border: 0; border-radius: 999px; background: transparent; color: #6f5f55; font-size: 13px; font-weight: 650; box-shadow: none; white-space: nowrap; }
+.subtabs button:hover { background: #f4ece2; color: var(--wine); box-shadow: none; }
+.subtabs button[aria-current="page"] { background: var(--wine-dark); color: #fff; }
+@media (max-width: 620px) {
+  .subtabs { width: 100%; }
+  .subtabs button { flex: 1 0 auto; padding-inline: 12px; font-size: 12px; }
+}
+#checkout-inbox:has(#inbox-list .ops-card) { background: linear-gradient(140deg, var(--peach-1), #ffe6d6); border-color: #f6c3a8; }
+#checkout-inbox > summary { font-size: 13px; }

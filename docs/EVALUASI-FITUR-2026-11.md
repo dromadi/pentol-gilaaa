@@ -69,7 +69,14 @@ Pengujian B1–B3 (Chromium, Pixel 7, data tiruan dengan 8 jenis pesanan): pesan
 - Kartu, tabel, dan filter lebih lembut (radius 18 px, bayangan tipis), tombol berbentuk pil.
 - Diuji di Chromium HP (Pixel 7) dan desktop 1366 px: 11 menu tanpa error dan tanpa geser ke samping; navigasi bawah, lembar menu, Esc, dan ketuk di luar berfungsi.
 
-Belum: menggabungkan isi halaman (Pesanan + Packing + Piutang jadi satu tempat), dan gaya baru untuk halaman selain Hari Ini.
+## Upgrade UI/UX (tahap 2)
+
+- **11 menu → 5 menu utama + 2 menu Excel.** Sidebar dan navigasi bawah: Hari Ini · Pesanan · Stok · Laporan · Promosi (di HP: Promosi lewat "Lainnya"), lalu Rekonsiliasi Excel dan Riwayat Perubahan.
+- **Tab bagian** di atas halaman: Pesanan = Daftar pesanan / Packing & antar / Tagihan; Stok = Stok per batch / Restok & PO; Laporan = Laba & harga / Tutup hari. Menu utama membuka tab terakhir yang dipakai.
+- Packing tidak lagi punya filter "Diantar, belum lunas" (sudah ada di tab Tagihan).
+- **Permintaan dari katalog** dipindah ke paling atas halaman Pesanan dan otomatis terbuka saat ada permintaan baru.
+- Kode: `viewGroups`, `selectView`, `openNav` di `admin/app.js`; tombol bagian dibuat di `#subtabs`. Untuk pindah halaman dari kode, panggil `selectView('<id bagian>')`, jangan klik tombol menu.
+- Diuji di Chromium HP dan desktop: semua 11 bagian tampil, tab dan menu bawah menyala sesuai halaman, tab terakhir diingat, tombol dari Hari Ini dan tombol Edit dari Packing membuka bagian yang benar; tanpa error dan tanpa geser ke samping.
 
 ## Rekomendasi utama: 11 menu → 5 menu
 

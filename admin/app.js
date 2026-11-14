@@ -1,5 +1,5 @@
 import { supabaseUrl, supabasePublishableKey } from './config.js';
-import { initOperations } from './operations.js?v=ui-2';
+import { initOperations } from './operations.js?v=ui-3';
 
 const products = new Map([
   ['UR','Pentol Urat'], ['PK','Pentol Kecil'], ['TP','Tahu Pentol'],
@@ -320,9 +320,7 @@ async function showDashboard() {
   $('dashboard').hidden = false;
   $('logout').hidden = false;
   status('');
-  const active = Array.from(menuButtons).find(b => b.getAttribute('aria-pressed') === 'true');
-  if (active?.dataset.view === 'orders') { loadOrders(); ops.inbox(); }
-  else if (active) ops.open(active.dataset.view);
+  selectView(currentView);
 }
 
 login.addEventListener('submit', event => {
@@ -415,10 +413,10 @@ function syncQuickNav(view) {
 }
 quickButtons.forEach(button => button.addEventListener('click', () => {
   setMenuExpanded(false);
-  selectView(button.dataset.go);
+  openNav(button.dataset.go);
 }));
 moreMenu.addEventListener('click', () => setMenuExpanded(moreMenu.getAttribute('aria-expanded') !== 'true'));
-syncQuickNav(Array.from(menuButtons).find(b => b.getAttribute('aria-pressed') === 'true')?.dataset.view);
+syncQuickNav('today');
 document.addEventListener('click', event => {
   if (document.body.classList.contains('menu-open') && !event.target.closest('.admin-sidebar, .bottom-nav')) setMenuExpanded(false);
 });
@@ -433,26 +431,55 @@ document.addEventListener('keydown', event => {
   moreMenu.focus();
 });
 
+// Menu utama dengan beberapa bagian ditampilkan sebagai tab di atas halaman.
+const viewGroups = {
+  orders: [['orders', 'Daftar pesanan'], ['packing', 'Packing & antar'], ['receivables', 'Tagihan']],
+  stock: [['stock', 'Stok per batch'], ['purchasing', 'Restok & PO']],
+  finance: [['finance', 'Laba & harga'], ['closeDay', 'Tutup hari']]
+};
+const groupOf = view => Object.keys(viewGroups).find(group => viewGroups[group].some(([id]) => id === view));
+const lastInGroup = Object.fromEntries(Object.keys(viewGroups).map(group => [group, group]));
+let currentView = 'today';
+
+function renderSubtabs(group, view) {
+  const bar = $('subtabs');
+  bar.hidden = !group;
+  if (!group) return bar.replaceChildren();
+  bar.replaceChildren(...viewGroups[group].map(([id, label]) => {
+    const tab = document.createElement('button');
+    tab.type = 'button';
+    tab.textContent = label;
+    if (id === view) tab.setAttribute('aria-current', 'page');
+    tab.addEventListener('click', () => { if (id !== currentView) selectView(id); });
+    return tab;
+  }));
+}
+
 function selectView(view, packingMode) {
-  const button = Array.from(menuButtons).find(tab => tab.dataset.view === view);
-  menuButtons.forEach(tab => {
-    const selected = tab === button;
-    tab.setAttribute('aria-pressed', String(selected));
-    $(tab.dataset.view).hidden = !selected;
-  });
-  $('mobile-view-label').textContent = button.querySelector('span:last-child').textContent;
-  document.title = $('mobile-view-label').textContent + ' · Admin Pentol Gilaaa';
-  syncQuickNav(view);
+  const group = groupOf(view);
+  if (group) lastInGroup[group] = view;
+  currentView = view;
+  const navView = group || view;
+  menuButtons.forEach(tab => tab.setAttribute('aria-pressed', String(tab.dataset.view === navView)));
+  document.querySelectorAll('.admin-content > .panel').forEach(panel => { panel.hidden = panel.id !== view; });
+  renderSubtabs(group, view);
+  const navLabel = Array.from(menuButtons).find(tab => tab.dataset.view === navView).querySelector('span:last-child').textContent;
+  const subLabel = group ? viewGroups[group].find(([id]) => id === view)[1] : '';
+  $('mobile-view-label').textContent = navLabel;
+  document.title = (subLabel && subLabel !== navLabel ? subLabel + ' · ' : '') + navLabel + ' · Admin Pentol Gilaaa';
+  syncQuickNav(navView);
   if (isMobile()) {
     setMenuExpanded(false);
     scrollTo({top:0});
-    $(button.dataset.view).querySelector('h2').focus({preventScroll:true});
+    $(view).querySelector('h2').focus({preventScroll:true});
   }
-  if (button.dataset.view === 'orders') { loadOrders(); ops.inbox(); }
+  if (view === 'orders') { loadOrders(); ops.inbox(); }
   else ops.open(view, packingMode);
 }
 
-menuButtons.forEach(button => button.addEventListener('click', () => selectView(button.dataset.view)));
+// Menu utama membuka bagian terakhir yang dipakai di grup itu.
+const openNav = view => selectView(viewGroups[view] ? lastInGroup[view] : view);
+menuButtons.forEach(button => button.addEventListener('click', () => openNav(button.dataset.view)));
 $('refresh-today').addEventListener('click', () => run($('refresh-today'), async () => {
   try { await loadRows(); }
   catch { return status('Stok belum bisa diperbarui. Coba muat ulang lagi.', true); }

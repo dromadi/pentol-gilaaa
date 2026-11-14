@@ -173,7 +173,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
     }
     if (!order.paid && !paid(order) && !order.pentol_order_items.some(i => i.shipped)) {
       actions.append(button('Edit', () => {
-        $('admin-menu').querySelector('[data-view=orders]').click();
+        selectView('orders');
         openOrder(order);
       }));
       actions.append(button('Batalkan', () => orderDialog('cancel', order, 'Batalkan pesanan · ' + order.customer,
@@ -344,6 +344,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
       const entries = await list('pentol_inbox?select=*', '&status=eq.pending&order=created_at.desc,id');
       if (!session || getSession() !== session) return;
       $('inbox-count').textContent = '(' + entries.length + ')';
+      $('checkout-inbox').open = entries.length > 0;
       target.replaceChildren(...entries.map(entry => {
         const card = el('article', undefined, 'ops-card');
         card.append(el('strong', entry.customer),
@@ -490,7 +491,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
     const oldFilter = initialMode || target.querySelector('[name=pack_filter]')?.value || 'packing';
     const day = control('Tanggal jadwal antar', 'pack_date', {type:'date', value:old});
     const filter = control('Tampilkan', 'pack_filter', {value:oldFilter, values:[
-      ['packing','Sesuai tanggal jadwal'],['ready','Siap dikemas sesuai tanggal'],['unscheduled','Belum dijadwalkan'],['pending','Semua belum diantar'],['unpaid','Diantar, belum lunas']
+      ['packing','Sesuai tanggal jadwal'],['ready','Siap dikemas sesuai tanggal'],['unscheduled','Belum dijadwalkan'],['pending','Semua belum diantar']
     ]});
     const output = el('div');
     target.replaceChildren(block([day,filter], 'ops-filters'), output);
@@ -650,7 +651,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
             catch { status('Pesan supplier belum bisa disalin.',true); }
           }),
           button('Lihat stok batch', () => {
-            $('admin-menu').querySelector('[data-view=stock]').click();
+            selectView('stock');
             $('stock-batch').value = p.batch_code;
             $('stock-batch').dispatchEvent(new Event('change'));
           })], 'ops-actions'));
