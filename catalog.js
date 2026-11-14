@@ -171,6 +171,7 @@ menu.addEventListener('click', event => {
   const item = products.find(product => product.id === id);
   if (!item || item.soldOut) return;
   const change = button.hasAttribute('data-add') ? 1 : Number(button.dataset.menuChange);
+  clearReceipt();
   const next = Math.max(0, Math.min(maxQty(item), (quantities.get(id) || 0) + change));
   if (next) quantities.set(id, next);
   else quantities.delete(id);
@@ -180,17 +181,53 @@ menu.addEventListener('click', event => {
   (next ? card.querySelector('[data-menu-change="' + change + '"]') : card.querySelector('[data-add]')).focus();
 });
 
+// Layar setelah pesanan dikirim: tetap tampil (juga setelah halaman dimuat ulang) sampai pembeli menekan Selesai
+// atau mulai memilih varian lagi.
 function showCheckoutReceipt() {
   const panel = document.querySelector('#checkout-receipt');
-  panel.hidden = !checkoutReceipt;
-  if (!checkoutReceipt) return;
-  const { queued, id, message } = checkoutReceipt;
+  const active = Boolean(checkoutReceipt);
+  panel.hidden = !active;
+  document.querySelector('.checkout-progress').hidden = active;
+  if (active) {
+    document.querySelector('#summary-panel').hidden = true;
+    document.querySelector('#buyer-panel').hidden = true;
+  }
+  if (!active) return;
+  const { queued, id, message, lines = [], total = '', meta = '', phone = '' } = checkoutReceipt;
+  const code = String(id).slice(0, 8);
+  document.querySelector('#receipt-icon').textContent = queued ? '✓' : '!';
+  panel.dataset.queued = String(Boolean(queued));
+  document.querySelector('#receipt-title').textContent = queued ? 'Pesananmu sudah masuk' : 'Pesanan belum sampai ke toko';
   document.querySelector('#receipt-status').textContent = queued
-    ? 'Permintaan tercatat. Kode: ' + id + '. Pesanan menunggu konfirmasi toko.'
-    : 'Pencatatan belum terkonfirmasi. Kirim rincian lewat WhatsApp agar toko bisa memeriksanya.';
-  document.querySelector('#receipt-whatsapp').href =
-    'https://wa.me/628981718578?text=' + encodeURIComponent(message + '\nKode permintaan: ' + id);
+    ? 'Pesanan tercatat dengan kode ' + code + '. Toko akan membalas ke ' + (phone || 'nomormu') + ' untuk konfirmasi stok, ongkir, dan pembayaran.'
+    : 'Koneksi bermasalah. Kirim rincian pesanan lewat WhatsApp supaya tetap diproses.';
+  document.querySelector('#receipt-items').replaceChildren(...lines.map(line => {
+    const li = document.createElement('li');
+    li.textContent = line;
+    return li;
+  }));
+  document.querySelector('#receipt-total').textContent = total;
+  document.querySelector('#receipt-meta').textContent = meta;
+  const wa = document.querySelector('#receipt-whatsapp');
+  wa.textContent = queued ? 'Kabari toko lewat WhatsApp ↗' : 'Kirim lewat WhatsApp ↗';
+  wa.href = 'https://wa.me/628981718578?text=' + encodeURIComponent(message + '\nKode pesanan: ' + code);
+  document.querySelector('#receipt-done').textContent = queued ? 'Selesai' : 'Tutup';
+  document.querySelector('#receipt-hint').textContent = queued
+    ? 'Tekan Kirim di WhatsApp supaya toko langsung tahu dan pesananmu cepat diproses.'
+    : 'Isi keranjang masih tersimpan. Kamu juga bisa mencoba kirim lagi.';
 }
+function clearReceipt() {
+  if (!checkoutReceipt) return;
+  checkoutReceipt = null;
+  try { sessionStorage.removeItem('pentol-checkout-receipt'); } catch {}
+  showCheckoutReceipt();
+}
+document.querySelector('#receipt-done').addEventListener('click', () => {
+  const queued = checkoutReceipt?.queued;
+  clearReceipt();
+  if (queued) cart.close();
+  else setCheckoutStep(true);
+});
 
 // Data pembeli langganan disimpan hanya di HP pembeli (localStorage), bila dicentang.
 const buyerKey = 'pentol-gilaaa-buyer';
@@ -231,7 +268,8 @@ function setCheckoutStep(buyerStep, focus = true) {
 }
 
 document.querySelectorAll('[data-cart]').forEach(button => button.addEventListener('click', () => {
-  setCheckoutStep(false, false);
+  if (checkoutReceipt) showCheckoutReceipt();
+  else setCheckoutStep(false, false);
   cart.showModal();
 }));
 document.querySelector('#continue-checkout').addEventListener('click', () => setCheckoutStep(true));
@@ -250,8 +288,30 @@ cart.addEventListener('click', event => {
   renderCart();
   (cart.querySelector(`[data-id="${id}"][data-change="${change}"]`) || cart.querySelector('form button')).focus();
 });
+// Tanggal WIB, agar "besok" sama dengan kalender toko.
+const jakartaToday = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Jakarta' }).format(new Date());
+const addDays = (day, n) => new Date(Date.parse(day + 'T00:00:00Z') + n * 864e5).toISOString().slice(0, 10);
+const dayText = day => new Intl.DateTimeFormat('id-ID', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })
+  .format(new Date(day + 'T00:00:00Z'));
+function chosenDay() {
+  const fields = orderForm.elements;
+  if (fields.when.value === 'tomorrow') return addDays(jakartaToday(), 1);
+  if (fields.when.value === 'date') return fields.when_date.value;
+  return '';
+}
+function syncWhenFields() {
+  const fields = orderForm.elements;
+  const picking = fields.when.value === 'date';
+  document.querySelector('#when-date-field').hidden = !picking;
+  fields.when_date.required = picking;
+  fields.when_date.min = jakartaToday();
+}
+orderForm.querySelectorAll('[name="when"]').forEach(choice => choice.addEventListener('change', syncWhenFields));
+syncWhenFields();
+
 function syncDeliveryFields() {
   const needsAddress = orderForm.elements.method.value === 'Diantar';
+  document.querySelector('#when-legend').textContent = needsAddress ? 'Mau diantar kapan?' : 'Mau diambil kapan?';
   orderForm.elements.location.required = needsAddress;
   document.querySelector('#location-label').textContent = needsAddress
     ? 'Lokasi kantor / alamat pengantaran' : 'Lokasi kantor / alamat (opsional)';
@@ -268,6 +328,8 @@ function checkoutMessage() {
   fields.phone.setCustomValidity(/^\+?[\d ()-]+$/.test(phone) && digits.length >= 8 && digits.length <= 15
     ? '' : 'Masukkan nomor WhatsApp yang valid, misalnya 081234567890.');
   fields.location.setCustomValidity(fields.location.required && !location ? 'Isi alamat pengantaran.' : '');
+  const day = chosenDay();
+  fields.when_date.setCustomValidity(fields.when.value === 'date' && (!day || day < jakartaToday()) ? 'Pilih tanggal mulai hari ini.' : '');
   if (!orderLines.length || !orderForm.reportValidity()) return '';
   const details = [
     'Halo, saya mau pesan Pentol Gilaaa Surabaya.',
@@ -276,6 +338,7 @@ function checkoutMessage() {
     'WhatsApp: ' + phone,
     'Metode terima: ' + fields.method.value
   ];
+  details.push('Jadwal: ' + (day ? dayText(day) : 'secepatnya'));
   if (location) details.push('Lokasi/alamat: ' + location);
   if (notes) details.push('Catatan: ' + notes);
   return [...details, '', ...orderLines, '', 'Subtotal produk: ' + document.querySelector('#subtotal').textContent,
@@ -313,7 +376,7 @@ orderForm.addEventListener('submit', async event => {
   const payload = {
     customer_name:fields.buyer.value.trim(), contact:fields.phone.value.trim(),
     area_name:fields.location.value.trim(),
-    customer_note:fields.method.value + ' · ' + fields.notes.value.trim(),
+    customer_note:[fields.method.value, chosenDay() && 'Jadwal: ' + chosenDay(), fields.notes.value.trim()].filter(Boolean).join(' · '),
     cart:[...quantities].map(([sku,quantity]) => ({sku,quantity}))
   };
   const signature = JSON.stringify(payload);
@@ -322,8 +385,8 @@ orderForm.addEventListener('submit', async event => {
   whatsapp.disabled = true;
   copy.disabled = true;
   document.querySelector('#back-to-cart').disabled = true;
-  whatsapp.textContent = 'Menyiapkan pesanan…';
-  feedback.textContent = 'Meneruskan pesanan ke toko…';
+  whatsapp.textContent = 'Mengirim pesanan…';
+  feedback.textContent = 'Mengirim pesanan ke toko…';
   let queued = false;
   let stockError = '';
   try {
@@ -340,7 +403,7 @@ orderForm.addEventListener('submit', async event => {
   whatsapp.disabled = false;
   copy.disabled = false;
   document.querySelector('#back-to-cart').disabled = false;
-  whatsapp.textContent = 'Lanjut ke WhatsApp ↗';
+  whatsapp.textContent = 'Kirim pesanan →';
   if (stockError) {
     // Someone else took the last packs: refresh limits and let the buyer adjust.
     await syncCatalog();
@@ -356,16 +419,19 @@ orderForm.addEventListener('submit', async event => {
     feedback.textContent = stockError + ' Jumlah di keranjang sudah disesuaikan, periksa lagi sebelum melanjutkan.';
     return;
   }
-  checkoutReceipt = { queued, id: pendingCheckout.id, message };
+  const day = chosenDay();
+  checkoutReceipt = { queued, id: pendingCheckout.id, message, lines: orderLines.map(line => line.replace(/^• /, '')),
+    total: document.querySelector('#subtotal').textContent, phone: fields.phone.value.trim(),
+    meta: fields.method.value + ' · ' + (day ? dayText(day) : 'secepatnya') + (fields.location.value.trim() ? ' · ' + fields.location.value.trim() : '') };
+  feedback.textContent = '';
   try { sessionStorage.setItem('pentol-checkout-receipt', JSON.stringify(checkoutReceipt)); } catch {}
   if (queued) {
     quantities.clear();
     renderCart();
     pendingCheckout = undefined;
   }
-  setCheckoutStep(false, false);
   showCheckoutReceipt();
-  document.querySelector('#receipt-whatsapp').focus();
+  document.querySelector('#receipt-title').focus();
 });
 copy.addEventListener('click', async () => {
   const message = checkoutMessage();
@@ -374,7 +440,7 @@ copy.addEventListener('click', async () => {
     await navigator.clipboard.writeText(message);
     feedback.textContent = 'Pesanan disalin.';
   } catch {
-    feedback.textContent = 'Penyalinan gagal. Gunakan tombol Kirim Pesanan via WhatsApp.';
+    feedback.textContent = 'Penyalinan gagal. Kirim pesanan lalu pakai tombol WhatsApp.';
   }
 });
 renderMenu();

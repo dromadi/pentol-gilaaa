@@ -1,5 +1,5 @@
 import { supabaseUrl, supabasePublishableKey } from './config.js';
-import { initOperations } from './operations.js?v=arsip-17';
+import { initOperations } from './operations.js?v=katalog-18';
 
 const products = new Map([
   ['UR','Pentol Urat'], ['PK','Pentol Kecil'], ['TP','Tahu Pentol'],
@@ -965,11 +965,14 @@ function openOrder(order = null, inboxEntry = null) {
   const e = orderForm.elements;
   e.order_date.value = order?.order_date || (inboxEntry ? today() : orderDate.value || today());
   e.customer.value = order?.customer || inboxEntry?.customer || '';
-  e.delivery_on.value = order?.delivery_on || '';
+  // Permintaan katalog membawa jadwal di catatan: "Jadwal: YYYY-MM-DD".
+  const inboxDay = inboxEntry?.note?.match(/Jadwal: (\d{4}-\d{2}-\d{2})/)?.[1] || '';
+  e.delivery_on.value = order?.delivery_on || inboxDay;
   $('existing-booking-option').hidden = Boolean(order || inboxEntry);
   e.contact.value = order?.contact || inboxEntry?.phone || '';
   e.delivery_location.value = order?.delivery_location || inboxEntry?.area || '';
-  e.delivery_note.value = order?.delivery_note || inboxEntry?.note || '';
+  e.delivery_note.value = order?.delivery_note || (inboxEntry?.note || '').split(' · ')
+    .filter(part => part.trim() && !part.startsWith('Jadwal: ')).join(' · ').trim();
   e.shipping_charge.value = order?.shipping_charge || 0;
   e.shipping_cost.value = order?.shipping_cost || 0;
   if (order) order.pentol_order_items.forEach(addOrderItem);

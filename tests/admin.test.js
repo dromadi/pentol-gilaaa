@@ -246,6 +246,21 @@ export function adminTests(browser, devices, baseUrl) {
     await s.close();
   });
 
+  test('permintaan katalog dengan jadwal: tampil "Jadwal", form terisi jadwal antar', async () => {
+    const data = defaultData();
+    const day = shiftDay(2);
+    data.inbox[0].note = 'Diantar · Jadwal: ' + day + ' · titip satpam';
+    const s = await open(data);
+    await goSub(s.page, 'orders');
+    const card = s.page.locator('#inbox-list .ops-card').first();
+    assert((await card.textContent()).includes('Jadwal '), 'jadwal tampil');
+    assert(!(await card.textContent()).includes('Jadwal: '), 'tanpa format mentah');
+    await card.locator('button', { hasText: 'Proses pesanan' }).click();
+    equal(await s.page.inputValue('#order-form [name=delivery_on]'), day, 'jadwal antar terisi');
+    equal(await s.page.inputValue('#order-form [name=delivery_note]'), 'Diantar · titip satpam', 'catatan tanpa jadwal');
+    await s.close();
+  });
+
   test('packing dibagi per pesanan menurut jadwal (bug B4)', async () => {
     const data = defaultData();
     data.stock = [{ id:'s1', batch_code:'B1', sku:'UR', received_on:shiftDay(-5), received:4, reserved:5, delivered:0, revision:1 }];

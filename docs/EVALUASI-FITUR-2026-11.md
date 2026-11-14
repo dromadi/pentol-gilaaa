@@ -154,6 +154,18 @@ Perbaikan (versi `laporan-16`):
 
 "Arsipkan" hanya mengubah status permintaan menjadi `dismissed` (data tidak dihapus), tetapi sebelumnya tidak ada tempat untuk melihatnya lagi. Sekarang di bawah "Permintaan dari katalog" ada lipatan **Diarsipkan 14 hari terakhir** dengan tombol **Buat pesanan** (form terisi; dikirim tanpa `inbox_id` agar tidak ditolak RPC karena statusnya bukan `pending`) dan **Balas WA**. Versi `arsip-17`. Uji: `permintaan yang diarsipkan masih terlihat dan bisa dijadikan pesanan`.
 
+## Evaluasi alur pesan dari katalog (14 Nov)
+
+Ditelusuri dari katalog → keranjang → data pemesan → kirim → kotak "Permintaan dari katalog" di admin → form pesanan.
+
+Masalah dan perbaikan (katalog `v=3`, admin `katalog-18`):
+- **Setelah kirim, pembeli melihat "Belum ada camilan pilihanmu" dan tombol mati**, sementara tanda berhasil terselip di bawah dengan kode UUID panjang. Sekarang ada layar selesai sendiri: ✓ "Pesananmu sudah masuk", rincian varian, subtotal, cara terima dan jadwal, kode pendek 8 karakter (sama dengan "Kode" di admin), tombol utama **Kabari toko lewat WhatsApp** dan **Selesai**. Bila gagal tercatat: "!" "Pesanan belum sampai ke toko" dan WhatsApp jadi jalan utama; isi keranjang tetap.
+- Layar selesai tetap ada saat keranjang dibuka lagi atau halaman dimuat ulang, dan hilang saat menekan Selesai atau memilih varian baru. Sebelumnya struk lama bisa muncul di bawah keranjang baru.
+- Tombol "Catat permintaan" (istilah toko) diganti **Kirim pesanan**. Setelah gagal, tombol tidak lagi berubah menjadi "Lanjut ke WhatsApp".
+- **Jadwal terima:** pilihan Secepatnya / Besok / Pilih tanggal (judulnya ikut "diambil"/"diantar"). Jadwal dikirim di catatan sebagai `Jadwal: YYYY-MM-DD` (tanpa ubah SQL), ditulis di pesan WA, tampil "Jadwal Sen, 16 Nov" di kartu admin, dan **mengisi otomatis "Jadwal antar"** saat Proses pesanan. Catatan tidak lagi berakhiran " · " kosong.
+- WhatsApp tetap disarankan karena toko hanya tahu ada permintaan baru saat admin dibuka.
+- Uji baru: `jadwal terima ikut terkirim; layar selesai menggantikan keranjang kosong` (katalog) dan `permintaan katalog dengan jadwal: tampil "Jadwal", form terisi jadwal antar` (admin).
+
 ## Input lewat ChatGPT (tahap 1: tempel)
 
 Keputusan: **aplikasi (Supabase) tetap sumber kebenaran**; ChatGPT hanya pintu masuk. Tidak ada data yang tersimpan tanpa konfirmasi admin di form aplikasi, sehingga semua validasi database tetap berlaku.

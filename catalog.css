@@ -242,3 +242,20 @@ dialog { max-width:100%; }
   dialog { width:100%; max-width:100%; }
 }
 .secondary-actions { margin-top:10px; }
+
+/* ===== Katalog v3: jadwal terima & layar pesanan terkirim ===== */
+.when-choice { grid-template-columns:repeat(3, 1fr); }
+.when-choice span { min-height:44px; font-size:13px; }
+.receipt { text-align:center; }
+.receipt-icon { display:grid; place-items:center; width:58px; height:58px; margin:4px auto 12px; border-radius:50%; background:#e3f5ea; color:#1d6b45; font-size:30px; font-weight:800; }
+.receipt[data-queued="false"] .receipt-icon { background:#fbece4; color:var(--red); }
+.receipt h3 { margin:0 0 8px; font:800 28px/1.1 'Barlow Condensed',sans-serif; color:var(--wine); }
+.receipt h3:focus { outline:none; }
+#receipt-status { margin:0 auto 16px; max-width:420px; font-size:13px; color:var(--muted); }
+.receipt-items { list-style:none; margin:0; padding:12px 16px; border:1px solid var(--line); border-radius:14px; background:#fffdf8; text-align:left; font-size:14px; }
+.receipt-items li { padding:6px 0; border-top:1px solid var(--line); }
+.receipt-items li:first-child { border-top:0; }
+.receipt-total { display:flex; justify-content:space-between; margin:12px 4px 0; font-size:14px; }
+.receipt-total strong { color:var(--wine); font-size:18px; }
+.receipt #receipt-meta { text-align:left; margin:6px 4px 0; }
+.receipt .cart-actions .btn { width:100%; }

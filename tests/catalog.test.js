@@ -85,6 +85,42 @@ export function catalogTests(browser, devices, baseUrl) {
     await s.close();
   });
 
+  test('jadwal terima ikut terkirim; layar selesai menggantikan keranjang kosong', async () => {
+    let sent;
+    const s = await open((route, fn) => {
+      if (fn === 'pentol_submit_checkout') { sent = route.request().postDataJSON(); return route.fulfill({ status: 204 }); }
+      return json(route, catalog());
+    });
+    const tomorrow = await s.page.evaluate(() => {
+      const t = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Jakarta' }).format(new Date());
+      return new Date(Date.parse(t + 'T00:00:00Z') + 864e5).toISOString().slice(0, 10);
+    });
+    await card(s.page, 'UR').locator('[data-add]').click();
+    await s.page.click('#dock [data-cart]');
+    await s.page.click('#continue-checkout');
+    await s.page.fill('[name=buyer]', 'Sari');
+    await s.page.fill('[name=phone]', '081234567890');
+    await s.page.locator('.method-choice span', { hasText: 'Diantar' }).click();
+    equal(await s.page.textContent('#when-legend'), 'Mau diantar kapan?', 'judul jadwal ikut cara terima');
+    await s.page.locator('.when-choice span', { hasText: 'Besok' }).click();
+    await s.page.fill('[name=location]', 'Gedung C');
+    await s.page.fill('[name=notes]', 'titip satpam');
+    await s.page.click('#whatsapp');
+    await s.page.waitForSelector('#checkout-receipt:not([hidden])');
+    equal(sent.customer_note, 'Diantar · Jadwal: ' + tomorrow + ' · titip satpam', 'catatan berisi jadwal');
+    assert(await s.page.isHidden('#summary-panel') && await s.page.isHidden('.checkout-progress'), 'keranjang kosong tidak tampil');
+    equal(await s.page.textContent('#receipt-title'), 'Pesananmu sudah masuk', 'judul berhasil');
+    assert((await s.page.textContent('#receipt-items')).includes('Pentol Urat × 1 pack'), 'rincian pesanan');
+    assert((await s.page.textContent('#receipt-status')).includes(sent.request_id.slice(0, 8)), 'kode pendek sama dengan admin');
+    assert(decodeURIComponent(await s.page.getAttribute('#receipt-whatsapp', 'href')).includes('Jadwal: '), 'pesan WA memuat jadwal');
+    await s.page.click('#receipt-done');
+    assert(!await s.page.evaluate(() => document.getElementById('cart').open), 'Selesai menutup keranjang');
+    await s.page.click('[data-cart] >> nth=0');
+    assert(await s.page.isVisible('#summary-panel') && await s.page.isHidden('#checkout-receipt'), 'buka lagi = keranjang baru');
+    equal(s.problems, [], 'tanpa error / pelanggaran CSP');
+    await s.close();
+  });
+
   test('CSP katalog memblokir skrip sisipan', async () => {
     const s = await open(route => json(route, catalog()));
     const ran = await s.page.evaluate(() => new Promise(resolve => {

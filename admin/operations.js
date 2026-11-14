@@ -226,6 +226,9 @@ export function initOperations({ $, request, status, products, prices, today, fo
   // "2026-11-14" -> "Sab, 14 Nov"
   const dayFormat = new Intl.DateTimeFormat('id-ID', { weekday:'short', day:'numeric', month:'short', timeZone:'UTC' });
   const dayLabel = day => day ? dayFormat.format(new Date(day + 'T00:00:00Z')) : '';
+  // Catatan dari katalog: "Diantar · Jadwal: 2026-11-16 · titip resepsionis" -> tampil "Jadwal Sen, 16 Nov".
+  const inboxNote = note => String(note || '').replace(/Jadwal: (\d{4}-\d{2}-\d{2})/, (_, day) => 'Jadwal ' + dayLabel(day))
+    .replace(/(\s·\s*)+$/, '').trim();
 
   // Aksi utama tampil langsung (Antar / Bayar / WA); aksi jarang dipakai di menu "⋯".
   // context: 'packing' (daftar antar), 'receivables' (tagihan), atau kosong (daftar pesanan).
@@ -552,7 +555,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
         process.classList.add('primary-action');
         card.append(el('strong', entry.customer),
           el('p', 'Masuk ' + sinceText(entry.created_at) + ' · Kode ' + entry.id.slice(0, 8)),
-          el('p', [entry.phone,entry.area,entry.note].filter(Boolean).join(' · ')),
+          el('p', [entry.phone,entry.area,inboxNote(entry.note)].filter(Boolean).join(' · ')),
           el('p', entry.items.map(i => products.get(i.sku) + ' × ' + i.quantity).join(', ')),
           block([process, waAnchor(entry.phone, confirmMessage(entry), 'Balas WA') || '', button('Arsipkan', () => {
             // Disimpan setelah 6 detik kecuali dibatalkan.
