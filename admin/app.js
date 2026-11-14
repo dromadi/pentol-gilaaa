@@ -1,5 +1,5 @@
 import { supabaseUrl, supabasePublishableKey } from './config.js';
-import { initOperations } from './operations.js?v=ui-3';
+import { initOperations } from './operations.js?v=ui-4';
 
 const products = new Map([
   ['UR','Pentol Urat'], ['PK','Pentol Kecil'], ['TP','Tahu Pentol'],
@@ -359,17 +359,27 @@ form.addEventListener('submit', event => {
     if (received > 0 && !receivedOn) return status('Isi tanggal diterima.', true);
     if (received < current.delivered) return status('Diterima tidak boleh kurang dari yang sudah diantar (' + current.delivered + ' pack).', true);
     let saved = false;
+    let message = 'Koreksi stok tersimpan dan tercatat di Riwayat Perubahan.';
     try {
-      await request('/rest/v1/rpc/pentol_correct_received', { method:'POST', body:{
-        stock_id:current.id, expected_revision:current.revision, new_received:received,
-        new_received_on:receivedOn, change_reason:reason } });
+      try {
+        await request('/rest/v1/rpc/pentol_correct_received', { method:'POST', body:{
+          stock_id:current.id, expected_revision:current.revision, new_received:received,
+          new_received_on:receivedOn, change_reason:reason } });
+      } catch (error) {
+        if (error.status !== 404) throw error;
+        // Sementara, sebelum stock-integrity-2026-11.sql dijalankan: simpan langsung seperti form lama.
+        const updated = await request('/rest/v1/pentol_batch_stock?id=eq.' + encodeURIComponent(current.id)
+          + '&revision=eq.' + current.revision, { method:'PATCH', prefer:'return=representation',
+          body:{ received, received_on:receivedOn, revision:current.revision + 1 } });
+        if (!updated?.length) throw Object.assign(new Error('Stok berubah. Muat ulang daftar stok.'), {status:409});
+        message = 'Jumlah diterima tersimpan. Riwayat koreksi aktif setelah SQL terbaru dijalankan di Supabase.';
+      }
       saved = true;
       resetEditor();
       await loadRows();
-      status('Koreksi stok tersimpan dan tercatat di Riwayat Perubahan.');
+      status(message);
     } catch (error) {
       status(saved ? 'Koreksi tersimpan, tetapi daftar gagal dimuat. Masuk kembali untuk melihat data terbaru.'
-        : error.status === 404 ? 'Koreksi stok belum aktif. Jalankan stock-integrity-2026-11.sql di Supabase.'
         : /^(Stok berubah|Jumlah diterima|Isi tanggal|Tanggal diterima|Alasan koreksi)/.test(error.message) ? error.message
         : 'Koreksi belum terkonfirmasi. Muat ulang daftar stok sebelum mencoba lagi.', true);
     }

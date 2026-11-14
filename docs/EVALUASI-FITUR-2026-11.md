@@ -50,6 +50,10 @@ Pengujian B6/B7: Postgres lokal (tulis langsung ditolak; rekonsiliasi stok ditol
 
 Pengujian B1–B3 (Chromium, Pixel 7, data tiruan dengan 8 jenis pesanan): pesanan terlambat, hari ini, dan tanpa jadwal tampil; jadwal besok tidak tampil; pesanan antar sebagian yang belum bayar tampil di ketiga tempat; pesanan lunas tidak tampil; tanpa error.
 
+### Mode sementara sebelum SQL dijalankan
+
+Sampai `stock-integrity-2026-11.sql` dijalankan di produksi, tombol **Koreksi** di Stok per Batch memanggil `pentol_correct_received`; jika fungsi itu belum ada (404), jumlah diterima disimpan langsung ke `pentol_batch_stock` dengan cek revisi, seperti form lama, dan tidak tercatat di riwayat. Alur barang masuk akhir pekan: Catat restok → Koreksi. Setelah migrasi berjalan, jalur sementara ini tidak terpakai (tulis langsung ditolak) dan bisa dihapus dari `admin/app.js`.
+
 ## Fitur yang tumpang tindih (bikin ribet, bukan memudahkan)
 
 | Tumpang tindih | Saran |
