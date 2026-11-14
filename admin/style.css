@@ -243,3 +243,51 @@ summary { cursor: pointer; }
 .reconcile-section { margin-top: 22px; }
 .reconcile-section td { min-width: 120px; }
 .reconcile-section td:last-child { min-width: 0; }
+
+/* Ringkasan operasional Hari Ini */
+#today {
+  background: linear-gradient(135deg, #f0f6f1 10%, #fff1e2 100%);
+  border: 1px solid #e0e9df;
+  border-radius: 26px;
+  padding: clamp(16px, 3vw, 32px);
+  color: #19332e;
+}
+#today h2 {
+  margin: 0 0 6px;
+  color: #17352f;
+  font-size: clamp(25px, 3.5vw, 42px);
+  line-height: 1.12;
+}
+#today .section-head p { color: #435c54; font-size: 13px; }
+.today-header-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+#today-date, #refresh-today { padding: 9px 13px; border-radius: 999px; background: #fffefa; color: #22564a; }
+#today-date { border: 1px solid #dedfd5; font-size: 13px; font-weight: 650; }
+#today-date:empty { display: none; }
+.today-grid { grid-template-columns: minmax(0, 1.2fr) repeat(2, minmax(0, 1fr)); }
+.today-grid .ops-card {
+  background: #fffefa;
+  border: 1px solid #e0e7dc;
+  border-radius: 22px;
+  padding: clamp(16px, 2vw, 24px);
+  min-width: 0;
+  gap: 12px;
+}
+.today-grid .ops-card:nth-child(1) { background: linear-gradient(140deg, #ffd6bc, #ffab89); border-color: #f8ae90; }
+.today-grid .ops-card:nth-child(2) { background: #dff2e8; border-color: #cce6db; }
+.today-grid .ops-card:nth-child(3) { background: #fff0d7; border-color: #f3e1bf; }
+.today-grid .ops-card:nth-child(4) { grid-column: 1 / -1; }
+.today-grid h3 { color: #203b33; font-size: 14px; }
+.today-grid .ops-card > strong { font-size: clamp(24px, 3vw, 35px); line-height: 1.12; overflow-wrap: anywhere; }
+.today-grid li, .today-grid .ops-card p { color: #364e45; }
+.today-grid li + li { margin-top: 4px; }
+.today-grid button { border-radius: 999px; border-color: #abc8bc; color: #164c3e; background: #fffefa; min-height: 44px; }
+.today-grid .ops-card:first-child button { background: #653129; border-color: #653129; color: #fff; }
+.today-grid button:hover { background: #edf7ef; }
+.today-grid .ops-card:first-child button:hover { background: #50221d; }
+@media (max-width: 760px) {
+  .today-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .today-grid .ops-card:first-child { grid-column: 1 / -1; }
+}
+@media (max-width: 480px) {
+  .today-grid { grid-template-columns: minmax(0, 1fr); }
+}
