@@ -1,3 +1,4 @@
+import { closeDaySheets, closeDayWorkbook } from './close-day.js?v=1';
 import { invoiceContent, invoicePdf } from './invoice.js?v=1';
 import { openReconciliation, reconciliationRows } from './reconcile.js?v=3';
 
@@ -11,6 +12,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
   let submit;
   let dialogRun = 0;
   let excelInvoices = new Map();
+  let lastReconciliation = null;
   const sizes = {UR:'9 pcs',PK:'30 pcs',TP:'30 pcs',JM:'9 pcs',MZ:'9 pcs',RJ:'9 pcs',TD:'9 pcs',PG:'9 pcs',SG:'±100 g'};
   const money = value => 'Rp' + format.format(Math.round(value));
   const total = order => Number(order.shipping_charge) + order.pentol_order_items.reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
@@ -808,6 +810,11 @@ export function initOperations({ $, request, status, products, prices, today, fo
         if (id !== generation || getSession() !== session || !target.contains(file)) return;
         const {stockRows, orderRows, invoiceMatches} = reconciliationRows(targets, getRows(), orders, products, total, paid);
         excelInvoices = invoiceMatches;
+        lastReconciliation = {
+          at:new Date().toISOString(), filename:file.files[0].name,
+          rows:[...stockRows,...orderRows].filter(row => !['Cocok','Data terkonfirmasi cocok'].includes(row.status))
+            .map(({label, excel, app, status}) => ({label, excel, app, status}))
+        };
         function section(title, rows) {
           return block([el('h3', title), table(['Data', 'Excel', 'Aplikasi', 'Hasil', 'Tindakan'],
             rows.map(({label, excel, app, status:detail, action}) => {
@@ -878,7 +885,76 @@ export function initOperations({ $, request, status, products, prices, today, fo
       el('p', 'Gunakan tab Tutup Hari, Pesanan, Packing, dan Booking dan Invoice B2 dari pembukuan Pentol Gilaaa. File dibaca di browser. Periksa pratinjau sebelum menerapkan koreksi.'), feedback, result);
   }
 
-  const views={today:overview,packing,purchasing,finance,promotions,reconcile,history,receivables};
+  function closeDay(target) {
+    const dateField = control('Tanggal laporan', 'close_date', {type:'date',value:today(),props:{max:today()}});
+    const dateInput = dateField.lastChild;
+    const output = el('div');
+    const feedback = el('p');
+    feedback.setAttribute('role', 'status');
+    let preview;
+    let generation = 0;
+    const exportButton = button('Unduh Excel', async () => {
+      const current = preview;
+      const session = getSession();
+      if (!current || !session) return;
+      exportButton.disabled = true;
+      try {
+        const bytes = await closeDayWorkbook(current.sheets, window.JSZip);
+        if (getSession() !== session || preview !== current || !target.contains(output)) return;
+        const url = URL.createObjectURL(new Blob([bytes], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+        download(url, 'Rekap-Tutup-Hari-' + current.date + '.xlsx');
+        setTimeout(() => URL.revokeObjectURL(url), 30_000);
+        feedback.textContent = 'File Excel siap digunakan untuk serah-terima ke Chat 01.';
+      } catch {
+        if (getSession() === session) feedback.textContent = 'File Excel belum bisa dibuat. Coba lagi.';
+      } finally {
+        if (preview === current) exportButton.disabled = false;
+      }
+    });
+    exportButton.disabled = true;
+    function clearPreview() {
+      generation++;
+      preview = null;
+      exportButton.disabled = true;
+      output.replaceChildren();
+      feedback.textContent = '';
+    }
+    dateInput.addEventListener('change', clearPreview);
+    const previewButton = button('Lihat pratinjau', async () => {
+      if (!dateInput.reportValidity()) return;
+      clearPreview();
+      const id = generation;
+      const date = dateInput.value;
+      const session = getSession();
+      feedback.textContent = 'Memuat rekap…';
+      try {
+        const [orders] = await Promise.all([
+          list('pentol_orders?select=' + ordersSelect, '&order=order_date,created_at,id'),
+          loadRows()
+        ]);
+        if (getSession() !== session || id !== generation || !target.contains(output)) return;
+        const {summary,sheets} = closeDaySheets({
+          date, exportedAt:new Date(), orders, stocks:getRows(), reconciliation:lastReconciliation,
+          invoiceNumber, productName:sku=>products.get(sku) || sku, total, paid, deliveryLabel
+        });
+        preview = {date,sheets};
+        output.replaceChildren(table(['Ringkasan','Nilai'],[
+          ['Pesanan dibuat atau selesai diantar',summary.orders],
+          ['Kas masuk pada tanggal pilihan',money(summary.cash)],
+          ['Sisa tagihan saat pratinjau',money(summary.due)],
+          ['Baris stok saat pratinjau',summary.stocks],
+          ['Selisih pada perbandingan Excel terakhir',summary.differences ?? 'Belum dibandingkan di sesi ini']
+        ],''));
+        feedback.textContent = '';
+        exportButton.disabled = false;
+      } catch {
+        if (id === generation && getSession() === session) feedback.textContent = 'Rekap belum bisa dimuat. Coba lagi.';
+      }
+    });
+    target.replaceChildren(block([dateField,previewButton,exportButton], 'ops-filters'), feedback, output);
+  }
+
+  const views={today:overview,packing,purchasing,finance,promotions,reconcile,history,receivables,closeDay};
   async function open(view, packingMode) {
     if (!views[view]) return;
     const token=getSession();
@@ -895,6 +971,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
   function clear() {
     if (dialog.open) dialog.close();
     excelInvoices.clear();
+    lastReconciliation = null;
     for (const view of Object.keys(views)) $(view+'-body').replaceChildren();
     $('inbox-list').replaceChildren();
     $('inbox-count').textContent='';
