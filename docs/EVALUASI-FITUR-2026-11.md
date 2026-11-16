@@ -276,6 +276,13 @@ Sub menu Laporan kini **Laba · Harga jual · Tutup hari** (versi `harga-36`).
 
 Di atas halaman Laporan → Laba ada 4 kartu yang selalu tampil: **Laba hari ini · minggu ini · bulan ini · tahun ini** (laba = penjualan − HPP − ongkir toko, plus penjualannya; "Belum lengkap" bila HPP kurang). Data diambil sekali untuk 1 Januari s.d. hari ini (`loadQuick`, cara hitung sama dengan laporan: tanggal antar bila `pentol_shipments` ada). Tekan kartu = periode di bawah ikut berganti. Rincian kini juga punya pilihan **Per tahun** (untuk periode > 27 hari). Versi `laba-37`. Uji: `laporan: 4 kartu laba…`.
 
+## Laporan: Laba waktu & Laba varian (16 Nov)
+
+Sub menu Laporan: **Laba waktu · Laba varian · Harga jual · Tutup hari** (versi `varian-38`). Keduanya memakai `finance(target, mode)` yang sama sehingga angkanya konsisten.
+- **Laba waktu** (`#finance`): 4 kartu (hari/minggu/bulan/tahun ini), periode, angka utama, laba per hari/minggu/bulan/tahun, grafik, rincian, Unduh Excel. Tabel laba per varian dipindah.
+- **Laba varian** (`#profitVariant`): periode + daftar varian urut laba terbesar: pack & penjualan, laba, margin (laba ÷ penjualan varian, sebelum ongkir toko), porsi dari total laba (bilah). **⚠ margin < 15%** disorot + kotak saran dengan tombol **Ubah harga →** (ke Harga jual). Tekan varian = tren varian itu per hari/minggu/bulan (mengikuti panjang periode). Catatan bertanggal (`dated`) kini menyimpan `sku`.
+- Uji: `Laba varian: urut laba terbesar…`; uji laporan lama disesuaikan.
+
 ## Input lewat ChatGPT (tahap 1: tempel)
 
 Keputusan: **aplikasi (Supabase) tetap sumber kebenaran**; ChatGPT hanya pintu masuk. Tidak ada data yang tersimpan tanpa konfirmasi admin di form aplikasi, sehingga semua validasi database tetap berlaku.

@@ -29,7 +29,7 @@ export function adminTests(browser, devices, baseUrl) {
   test('semua halaman terbuka tanpa error dan tanpa geser ke samping', async () => {
     const s = await open();
     const pages = [['today'], ['orders'], ['orders', 'Semua pesanan'], ['orders', 'Packing'], ['orders', 'Antar'], ['orders', 'Tagihan'], ['stock'], ['stock', 'Per batch & koreksi'], ['stock', 'Restok & PO'], ['stock', 'PO selesai'],
-      ['finance'], ['finance', 'Harga jual'], ['finance', 'Tutup hari']];
+      ['finance'], ['finance', 'Laba varian'], ['finance', 'Harga jual'], ['finance', 'Tutup hari']];
     for (const [nav, tab] of pages) {
       await goSub(s.page, nav, tab);
       assert(!await s.page.evaluate(() => document.documentElement.scrollWidth > innerWidth), 'geser ke samping di ' + nav + ' ' + (tab || ''));
@@ -645,6 +645,29 @@ export function adminTests(browser, devices, baseUrl) {
     await s.close();
   });
 
+  test('Laba varian: urut laba terbesar, margin & porsi, tanda margin tipis, tekan = tren per varian', async () => {
+    const data = defaultData();
+    const t = todayJakarta();
+    data.stock.push({ id:'s2', batch_code:'BATCH-02', sku:'PK', received_on:shiftDay(-5), received:10, reserved:0, delivered:1, revision:1 });
+    data.shipments = [{ order_id: 'o6', stock_id: 's1', quantity: 2, unit_price: 36000, shipped_on: t },
+      { order_id: 'o7', stock_id: 's2', quantity: 1, unit_price: 39000, shipped_on: t }];
+    data.purchases = [{ batch_code:'BATCH-02', supplier:'', reference:'', ordered_on:shiftDay(-9), expected_on:null, shipping:0, packaging:0, other_cost:0,
+      pentol_purchase_items:[{ batch_code:'BATCH-02', sku:'UR', quantity:30, unit_cost:20000 }, { batch_code:'BATCH-02', sku:'PK', quantity:10, unit_cost:36000 }] }];
+    const s = await open(data);
+    await goSub(s.page, 'finance', 'Laba varian');
+    await s.page.waitForTimeout(500);
+    const rows = await s.page.$$eval('#profitVariant-body .vp-row', xs => xs.map(x => [x.dataset.sku, x.querySelector('.vp-value strong').textContent, x.dataset.thin || '']));
+    equal(rows, [['UR', 'Rp32.000', ''], ['PK', 'Rp3.000', 'true']], 'Urat di atas; Kecil margin tipis (8%)');
+    assert((await s.page.textContent('.vp-row[data-sku=UR]')).includes('margin 44%'), 'margin Urat');
+    assert(await s.page.isVisible('.vp-warn'), 'peringatan margin tipis');
+    await s.page.click('.vp-row[data-sku=UR]');
+    assert((await s.page.textContent('.vp-detail')).includes('Pentol Urat per'), 'tren per varian terbuka');
+    await s.page.click('.vp-warn >> text=Ubah harga →');
+    await s.page.waitForTimeout(400);
+    assert(await s.page.isVisible('#prices'), 'ke Harga jual');
+    await s.close();
+  });
+
   test('laporan: Unduh Excel berisi 8 lembar untuk periode yang dipilih', async () => {
     const data = defaultData();
     const t = todayJakarta();
@@ -836,8 +859,7 @@ export function adminTests(browser, devices, baseUrl) {
     equal(await s.page.textContent('[data-stat=sales] strong'), 'Rp72.000', 'penjualan');
     equal(await s.page.textContent('[data-stat=profit] strong'), 'Rp32.000', 'laba = 72.000 − 2×20.000');
     equal(await s.page.textContent('[data-stat=cash] strong'), 'Rp50.000', 'uang masuk');
-    const row = s.page.locator('#finance-body tr', { hasText: 'Pentol Urat' }).first();
-    assert((await row.textContent()).includes('Rp32.000'), 'laba per varian');
+    equal(await s.page.locator('#finance-body >> text=Laba per varian').count(), 0, 'laba varian tidak lagi di Laba waktu');
     await goSub(s.page, 'finance', 'Tutup hari');
     await s.page.waitForSelector('.close-section');
     const text = await s.page.textContent('#closeDay-body');

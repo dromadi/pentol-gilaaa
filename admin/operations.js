@@ -168,6 +168,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
         if (!$('packing').hidden) open('packing');
         if (!$('delivery').hidden) open('delivery');
         if (!$('finance').hidden) open('finance');
+        if (!$('profitVariant').hidden) open('profitVariant');
         if (!$('receivables').hidden) await open('receivables');
         if (!$('today').hidden) await open('today');
       };
@@ -1228,7 +1229,8 @@ export function initOperations({ $, request, status, products, prices, today, fo
       el('p', 'Harga jual dipakai untuk pesanan baru dan katalog pembeli. Pesanan lama tetap memakai harga saat dicatat. Harga beli = harga per pack + bagian ongkir/kemasan batch terakhir.', 'breakdown-note'));
   }
 
-  async function finance(target) {
+  // mode 'time': laba menurut waktu (kartu, per hari/minggu/bulan/tahun, grafik). mode 'variant': laba per varian.
+  async function finance(target, mode = 'time') {
     const first = control('Dari','first',{type:'date',value:target.querySelector('[name=first]')?.value || today().slice(0,8)+'01'});
     const last = control('Sampai','last',{type:'date',value:target.querySelector('[name=last]')?.value || today()});
     const out = el('div');
@@ -1266,7 +1268,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
     filters.append(exportButton);
     const quick = el('section', undefined, 'profit-quick');
     quick.setAttribute('aria-label', 'Laba hari ini, minggu ini, bulan ini, tahun ini');
-    target.replaceChildren(quick, filters, out);
+    target.replaceChildren(...(mode === 'time' ? [quick] : []), filters, out);
     // Empat angka laba yang selalu tampil (tidak bergantung periode di bawah). Tekan = buka periode itu.
     async function loadQuick() {
       const t = today();
@@ -1314,7 +1316,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
         return tile;
       }));
     }
-    loadQuick().catch(() => quick.replaceChildren(el('p', 'Ringkasan laba belum bisa dimuat.')));
+    if (mode === 'time') loadQuick().catch(() => quick.replaceChildren(el('p', 'Ringkasan laba belum bisa dimuat.')));
     // Penjualan diantar per minggu (Senin–Minggu), 4 minggu terakhir, menurut tanggal pesanan.
     function weekStart(day) {
       const date = new Date(day + 'T00:00:00Z');
@@ -1487,6 +1489,74 @@ export function initOperations({ $, request, status, products, prices, today, fo
       r.breakdown = { mode, rows };
     }
 
+    // ===== Laba per varian: urut laba terbesar, margin, porsi laba, tanda margin tipis, tekan = per minggu/bulan =====
+    const thinMargin = 0.15;
+    function renderVariantProfit(r) {
+      const box = el('section', undefined, 'report-variants variant-profit');
+      const rows = [...r.byVariant].filter(([, v]) => v.qty).map(([sku, v]) => ({ sku, name: products.get(sku) || 'Varian batch',
+        qty: v.qty, sales: v.sales, cost: v.cost, missing: v.missing, profit: v.sales - v.cost, margin: v.sales ? (v.sales - v.cost) / v.sales : 0 }))
+        .sort((x, y) => (y.missing ? -Infinity : y.profit) - (x.missing ? -Infinity : x.profit) || y.sales - x.sales);
+      const totalProfit = rows.filter(x => !x.missing && x.profit > 0).reduce((sum, x) => sum + x.profit, 0);
+      box.append(el('h3', 'Laba per varian · ' + r.range));
+      if (!rows.length) { box.append(el('p', 'Belum ada barang diantar pada periode ini.', 'breakdown-note')); return box; }
+      const list = el('div', undefined, 'vp-list');
+      const detail = el('div', undefined, 'vp-detail');
+      for (const x of rows) {
+        const thin = !x.missing && x.margin < thinMargin;
+        const row = el('button', undefined, 'vp-row');
+        row.type = 'button';
+        row.dataset.sku = x.sku;
+        if (thin) row.dataset.thin = 'true';
+        const share = !x.missing && x.profit > 0 && totalProfit ? x.profit / totalProfit : 0;
+        const bar = el('span', undefined, 'vp-bar');
+        const fill = el('span');
+        fill.style.width = Math.max(2, Math.round(share * 100)) + '%';
+        bar.append(fill);
+        const name = el('span', undefined, 'vp-name');
+        name.append(el('strong', (thin ? '⚠ ' : '') + x.name), el('small', x.qty + ' pack · ' + money(x.sales)));
+        const value = el('span', undefined, 'vp-value');
+        value.append(el('strong', x.missing ? 'Belum lengkap' : money(x.profit)),
+          el('small', x.missing ? 'harga beli belum ada' : 'margin ' + Math.round(x.margin * 100) + '%' + (share ? ' · ' + Math.round(share * 100) + '% laba' : '')));
+        row.append(name, value, bar);
+        row.addEventListener('click', () => {
+          const open = row.getAttribute('aria-expanded') === 'true';
+          list.querySelectorAll('.vp-row').forEach(node => node.setAttribute('aria-expanded', 'false'));
+          if (open) { detail.replaceChildren(); return; }
+          row.setAttribute('aria-expanded', 'true');
+          showVariantTrend(detail, r, x);
+          row.after(detail);
+        });
+        list.append(row);
+      }
+      box.append(list);
+      const thinRows = rows.filter(x => !x.missing && x.margin < thinMargin);
+      if (thinRows.length) {
+        const warn = el('div', undefined, 'vp-warn');
+        warn.append(el('p', '⚠ Margin di bawah ' + Math.round(thinMargin * 100) + '%: ' + thinRows.map(x => x.name).join(', ') + '. Pertimbangkan naikkan harga atau cari harga beli lebih murah.'),
+          button('Ubah harga →', () => selectView('prices')));
+        box.append(warn);
+      }
+      box.append(el('p', 'Margin = laba ÷ penjualan varian itu (sebelum ongkir toko). Porsi = sumbangan ke total laba varian. Tekan varian untuk melihat labanya per minggu/bulan.', 'breakdown-note'));
+      return box;
+    }
+    function showVariantTrend(detail, r, x) {
+      const days = spanDays(r.a, r.b);
+      const trendMode = days <= 14 ? 'day' : days <= 92 ? 'week' : 'month';
+      const sums = new Map();
+      for (let t = Date.parse(r.a + 'T00:00:00Z'); t <= Date.parse(r.b + 'T00:00:00Z'); t += 864e5) {
+        const key = bucketKey(new Date(t).toISOString().slice(0, 10), trendMode);
+        if (!sums.has(key)) sums.set(key, { qty: 0, sales: 0, cost: 0, missing: 0 });
+      }
+      for (const e of r.dated) {
+        if (e.sku !== x.sku) continue;
+        const m = sums.get(bucketKey(e.date, trendMode));
+        if (m) { m.qty += e.qty || 0; m.sales += e.sales || 0; m.cost += e.cost || 0; m.missing += e.missing || 0; }
+      }
+      const rows = [...sums].reverse().map(([key, m]) => [bucketLabel(key, trendMode, r), m.qty + ' pack', money(m.sales), m.missing ? 'belum lengkap' : money(m.sales - m.cost)]);
+      detail.replaceChildren(el('p', x.name + ' per ' + ({ day: 'hari', week: 'minggu', month: 'bulan' })[trendMode], 'vp-detail-title'),
+        table(['Periode', 'Terjual', 'Penjualan', 'Laba'], rows, ''));
+    }
+
     let generation = 0;
     async function render() {
       const current = ++generation;
@@ -1536,7 +1606,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
         v.sales += qty*price;
         if (unit === undefined) v.missing += qty; else v.cost += qty*unit;
         byVariant.set(s?.sku, v);
-        dated.push({ date, qty, sales: qty*price, cost: unit === undefined ? 0 : qty*unit, missing: unit === undefined ? qty : 0 });
+        dated.push({ date, sku: s?.sku, qty, sales: qty*price, cost: unit === undefined ? 0 : qty*unit, missing: unit === undefined ? qty : 0 });
       };
       for (const o of orders) {
         billed += total(o);
@@ -1599,7 +1669,8 @@ export function initOperations({ $, request, status, products, prices, today, fo
       detail.append(el('summary', 'Rincian laporan'));
       const breakdownBox = el('section', undefined, 'report-variants report-breakdown');
       renderBreakdown(breakdownBox, report);
-      out.replaceChildren(headline, breakdownBox, variantBox, chartBox, detail);
+      if (mode === 'variant') out.replaceChildren(renderVariantProfit(report));
+      else out.replaceChildren(headline, breakdownBox, chartBox, detail);
       detail.append(table(['Metrik','Nilai'],[
         ['Tagihan pesanan',money(billed)],['Kas diterima (tanggal bayar tercatat)',money(cash)],
         ['Penjualan yang sudah diantar',money(revenue)],['HPP pack yang diantar',money(cost)],
@@ -1932,7 +2003,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
     return load();
   }
 
-  const views={dataExcel,prices:priceList,poDone:t=>purchasing(t,'done'),today:overview,packing:(t,m)=>packing(t,m,'packing'),delivery:(t,m)=>packing(t,m,'delivery'),purchasing,finance,promotions,reconcile,history,receivables,closeDay};
+  const views={dataExcel,prices:priceList,poDone:t=>purchasing(t,'done'),today:overview,packing:(t,m)=>packing(t,m,'packing'),delivery:(t,m)=>packing(t,m,'delivery'),purchasing,finance:t=>finance(t,'time'),profitVariant:t=>finance(t,'variant'),promotions,reconcile,history,receivables,closeDay};
   async function open(view, packingMode) {
     if (!views[view]) return;
     const token=getSession();
@@ -2014,7 +2085,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
         }
         return async () => {
           await refresh('Koreksi tersimpan dan tercatat di Riwayat Perubahan.');
-          for (const view of ['packing', 'delivery', 'receivables', 'finance']) if (!$(view).hidden) await open(view);
+          for (const view of ['packing', 'delivery', 'receivables', 'finance', 'profitVariant']) if (!$(view).hidden) await open(view);
         };
       });
     sync();
