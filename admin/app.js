@@ -1,5 +1,5 @@
 import { supabaseUrl, supabasePublishableKey } from './config.js';
-import { initOperations } from './operations.js?v=catat-39';
+import { initOperations } from './operations.js?v=selesai-40';
 
 const products = new Map([
   ['UR','Pentol Urat'], ['PK','Pentol Kecil'], ['TP','Tahu Pentol'],
@@ -635,6 +635,7 @@ function selectView(view, packingMode, { keepScroll = false, fromHistory = false
   document.title = (badgeTotal ? '(' + badgeTotal + ') ' : '') + (subLabel && subLabel !== navLabel ? subLabel + ' · ' : '') + navLabel + ' · Admin Pentol Gilaaa';
   syncQuickNav(navView);
   if (!fromHistory) rememberView(view);
+  syncQuickOrder();
   if (isMobile() && !keepScroll) {
     setMenuExpanded(false);
     scrollTo({top:0});
@@ -940,6 +941,75 @@ async function loadOrders() {
   }
 }
 
+// ===== Pesanan → Selesai: baris ringkas, 6 (HP) / 8 (laptop) per halaman, tekan = rincian di kotak tersendiri =====
+let donePage = 0;
+let doneQuery = '';
+let doneDetail;
+const shortDate = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+const wibDate = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Jakarta' });
+function renderDoneList(list, query) {
+  if (query !== doneQuery) { doneQuery = query; donePage = 0; }
+  const box = $('done-list');
+  const perPage = innerWidth <= 620 ? 6 : 8;
+  const pages = Math.max(1, Math.ceil(list.length / perPage));
+  donePage = Math.min(Math.max(donePage, 0), pages - 1);
+  const node = (tag, text, className) => { const n = document.createElement(tag); if (text != null) n.textContent = text; if (className) n.className = className; return n; };
+  const rowsBox = node('div', null, 'po-rows');
+  for (const order of list.slice(donePage * perPage, donePage * perPage + perPage)) {
+    const row = node('button', null, 'po-row');
+    row.type = 'button';
+    const left = node('span');
+    left.append(node('strong', order.customer), node('small', ' · ' + ops.invoiceNumber(order)));
+    row.append(left, node('span', shortDate.format(new Date(order.order_date + 'T00:00:00Z')) + ' · Rp' + format.format(ops.total(order)), 'po-row-meta'));
+    row.setAttribute('aria-label', 'Rincian pesanan ' + order.customer);
+    row.addEventListener('click', () => showDoneDetail(order));
+    rowsBox.append(row);
+  }
+  if (!list.length) rowsBox.append(node('p', doneQuery ? 'Tidak ada pesanan selesai yang cocok.' : 'Belum ada pesanan yang lunas dan sudah diantar.', 'result-count'));
+  const pager = node('div', null, 'po-pager');
+  const prev = node('button', '‹ Sebelumnya');
+  const next = node('button', 'Berikutnya ›');
+  prev.type = next.type = 'button';
+  prev.disabled = donePage === 0;
+  next.disabled = donePage >= pages - 1;
+  prev.addEventListener('click', () => { donePage--; renderOrderList(); });
+  next.addEventListener('click', () => { donePage++; renderOrderList(); });
+  pager.append(prev, node('span', (donePage + 1) + ' / ' + pages, 'po-page'), next);
+  pager.hidden = pages <= 1;
+  // Tombol halaman di atas daftar: tidak tertutup tombol + Catat pesanan di HP.
+  box.replaceChildren(pager, rowsBox);
+}
+function showDoneDetail(order) {
+  if (!doneDetail) {
+    doneDetail = document.createElement('dialog');
+    doneDetail.className = 'po-detail';
+    document.body.append(doneDetail);
+  }
+  const node = (tag, text, className) => { const n = document.createElement(tag); if (text != null) n.textContent = text; if (className) n.className = className; return n; };
+  const stockById = new Map(rows.map(row => [row.id, row]));
+  const card = node('article', null, 'ops-card');
+  const shipped = order.delivered_at ? shortDate.format(new Date(wibDate.format(new Date(order.delivered_at)) + 'T00:00:00Z')) : '';
+  card.append(node('strong', order.customer + ' · ' + ops.invoiceNumber(order)),
+    node('p', 'Dipesan ' + shortDate.format(new Date(order.order_date + 'T00:00:00Z')) + (shipped ? ' · diantar ' + shipped : '') + ' · ✓ Selesai'),
+    node('p', order.pentol_order_items.map(item => (products.get(stockById.get(item.stock_id)?.sku) || 'Varian') + ' × ' + item.quantity).join(', ')),
+    node('p', 'Total Rp' + format.format(ops.total(order)) + (Number(order.shipping_charge) ? ' (termasuk ongkir Rp' + format.format(order.shipping_charge) + ')' : '')),
+    node('p', (order.pentol_payments || []).length
+      ? 'Dibayar: ' + order.pentol_payments.map(p => shortDate.format(new Date(p.paid_on + 'T00:00:00Z')) + ' Rp' + format.format(p.amount)).join(', ')
+      : 'Ditandai lunas'));
+  const extra = [order.contact, order.delivery_location, order.delivery_note].filter(Boolean).join(' · ');
+  if (extra) card.append(node('p', extra));
+  ops.orderButtons(order, card);
+  const close = node('button', 'Tutup');
+  close.type = 'button';
+  close.addEventListener('click', () => doneDetail.close());
+  const actions = node('div', null, 'ops-actions');
+  actions.append(close);
+  doneDetail.replaceChildren(card, actions);
+  // Tombol aksi (Ubah, Koreksi, Invoice…) membuka form/kotak lain: tutup rincian dulu.
+  card.querySelectorAll('button').forEach(button => button.addEventListener('click', () => doneDetail.close(), { capture: true }));
+  doneDetail.showModal();
+}
+
 function renderOrderList() {
   const { weekly, period } = loadedPeriod;
   const stockById = new Map(rows.map(row => [row.id, row]));
@@ -958,6 +1028,9 @@ function renderOrderList() {
       text.includes(digits) || text.includes(digits.replace(/^0/, '62')) || text.replace(/^62/, '0').includes(digits)));
   const selectedStatus = orderStatus.value;
   if (orderChip === 'done') loadedOrders.sort((a, b) => b.order_date.localeCompare(a.order_date) || b.invoice_no - a.invoice_no);
+  const doneMode = orderChip === 'done';
+  document.querySelector('.order-table').hidden = doneMode;
+  $('done-list').hidden = !doneMode;
   const visible = loadedOrders.filter(order => {
     if (!matchesQuery(order)) return false;
     if (orderChip !== 'all') return true;
@@ -970,6 +1043,12 @@ function renderOrderList() {
     }
   });
   const target = $('order-rows');
+  if (doneMode) {
+    target.replaceChildren();
+    renderDoneList(visible, query);
+    $('orders-summary').textContent = period + visible.length + ' dari ' + loadedOrders.length + ' pesanan · ' + format.format(packs) + ' pack';
+    return;
+  }
   target.replaceChildren(...visible.map(order => {
     // Ringkas: varian tanpa kode batch; jadwal, lokasi, invoice, dan WA di satu baris info.
     const items = order.pentol_order_items.map(item => {
@@ -1117,7 +1196,8 @@ function openOrder(order = null, inboxEntry = null) {
 }
 $('new-order').addEventListener('click', () => { if (orderForm.hidden) openOrder(); });
 // Tombol besar "+ Catat pesanan" di semua halaman: buka Pesanan → form pesanan baru, langsung ke kolom nama.
-function syncQuickOrder() { $('quick-order').hidden = !session || $('dashboard').hidden || !orderForm.hidden; }
+// Di Pesanan → Selesai tombol besar di kepala halaman sudah ada; tombol melayang disembunyikan agar tidak menutupi daftar.
+function syncQuickOrder() { $('quick-order').hidden = !session || $('dashboard').hidden || !orderForm.hidden || currentView === 'done'; }
 $('quick-order').addEventListener('click', () => {
   if (!['actions', 'orders', 'done'].includes(currentView)) selectView('actions');
   if (orderForm.hidden) openOrder();

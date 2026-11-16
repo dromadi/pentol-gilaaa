@@ -737,3 +737,5 @@ input[type="file"]::file-selector-button { margin-right: 10px; padding: 8px 14px
   .quick-order { right: 14px; bottom: calc(86px + env(safe-area-inset-bottom)); min-height: 54px; padding: 0 22px; font-size: 15px; }
   .admin-main { padding-bottom: 180px; }
 }
+#done-list .po-pager { margin: 0 0 10px; }
+#done-list .po-pager button { min-height: 42px; }

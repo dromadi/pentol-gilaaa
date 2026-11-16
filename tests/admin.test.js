@@ -143,8 +143,13 @@ export function adminTests(browser, devices, baseUrl) {
     await goSub(s.page, 'orders', 'Selesai');
     await s.page.waitForTimeout(400);
     equal(await s.page.textContent('#orders-title'), 'Pesanan selesai', 'judul');
-    const names = await s.page.$$eval('#order-rows tr td[data-label="Pelanggan"] strong', xs => xs.map(x => x.textContent));
+    const names = await s.page.$$eval('#done-list .po-row strong', xs => xs.map(x => x.textContent));
     equal(names, ['Zaki Selesai Baru', 'Fajar Lunas'], 'hanya selesai, terbaru dulu');
+    assert(await s.page.isHidden('.order-table'), 'tabel diganti baris ringkas');
+    await s.page.click('#done-list .po-row');
+    const detail = await s.page.textContent('.po-detail');
+    assert(detail.includes('Zaki Selesai Baru') && detail.includes('✓ Selesai') && detail.includes('Invoice'), 'rincian: ' + detail);
+    await s.page.click('.po-detail >> text=Tutup');
     assert(await s.page.isHidden('#checkout-inbox') && await s.page.isHidden('.order-chips') && await s.page.isHidden('#order-filters'), 'tanpa permintaan, tombol cepat, filter');
     assert(s.page.url().endsWith('#done'), 'alamat #done');
     assert(!await s.page.evaluate(() => document.documentElement.scrollWidth > innerWidth), 'tanpa geser ke samping');
@@ -169,6 +174,24 @@ export function adminTests(browser, devices, baseUrl) {
     assert(await s.page.isHidden('#quick-order'), 'tombol sembunyi selama form terbuka');
     await s.page.click('#cancel-order');
     assert(await s.page.isVisible('#quick-order'), 'muncul lagi setelah form ditutup');
+    await s.close();
+  });
+
+  test('Pesanan → Selesai: 6 per halaman di HP, cari mengulang ke halaman 1', async () => {
+    const data = defaultData();
+    for (let i = 1; i <= 8; i++) data.orders.push(order('d' + i, 'Selesai ' + i, { paid: true, delivered: true, items: [[1, 1]], order_date: shiftDay(-10 + i) }));
+    const s = await open(data);
+    await goSub(s.page, 'orders', 'Selesai');
+    await s.page.waitForTimeout(400);
+    const names = () => s.page.$$eval('#done-list .po-row strong', xs => xs.map(x => x.textContent));
+    equal((await names()).length, 6, 'halaman 1: 6 baris');
+    assert(await s.page.isHidden('#quick-order'), 'tombol melayang tidak menutupi daftar Selesai');
+    assert(await s.page.evaluate(() => document.querySelector('#done-list .po-pager').getBoundingClientRect().bottom <= innerHeight + 400), 'tombol halaman dekat');
+    await s.page.click('#done-list >> text=Berikutnya ›');
+    equal((await names()).length, 3, 'halaman 2: sisa 3 (9 selesai)');
+    await s.page.fill('#order-search', 'Selesai 3');
+    await s.page.waitForTimeout(200);
+    equal(await names(), ['Selesai 3'], 'cari langsung ketemu');
     await s.close();
   });
 

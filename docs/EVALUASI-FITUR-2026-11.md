@@ -287,6 +287,10 @@ Sub menu Laporan: **Laba waktu · Laba varian · Harga jual · Tutup hari** (ver
 
 Keluhan pemilik: Catat pesanan "ngumpet" (hanya kecil di kepala halaman Pesanan), padahal dipakai tiap hari. Sekarang ada tombol melayang `#quick-order` di semua halaman admin: di HP tepat di atas menu bawah (kanan), di laptop pojok kanan bawah. Tekan = pindah ke Pesanan → Perlu tindakan (bila belum di Pesanan), form pesanan baru terbuka, kursor di kolom nama. Tombol sembunyi selama form terbuka dan muncul lagi setelah Simpan/Batal (`syncQuickOrder`). Ruang bawah halaman HP ditambah agar tidak menutupi isi. Versi `catat-39`. Uji: `tombol besar + Catat pesanan…`.
 
+## Pesanan → Selesai: baris ringkas + halaman (16 Nov)
+
+Pola PO selesai dipasang di Pesanan → Selesai (`renderDoneList`, `#done-list`; tabel disembunyikan di mode ini): satu baris per pesanan (`nama · invoice` | `tanggal pesan · total`), **6 per halaman di HP / 8 di laptop**, tombol ‹ Sebelumnya · n/m · Berikutnya › **di atas daftar** (agar tidak tertutup), kotak cari yang sama (cari baru = kembali ke halaman 1). Tekan baris = rincian di kotak tersendiri (dipesan, diantar, ✓ Selesai, isi, total, pembayaran, kontak) dengan tombol Invoice dan ⋯ (Ubah/Koreksi; rincian ditutup dulu). Tombol melayang "+ Catat pesanan" disembunyikan khusus di tab ini (tombol besar di kepala halaman tetap). Versi `selesai-40`. Uji: `Pesanan → Selesai: 6 per halaman…`.
+
 ## Input lewat ChatGPT (tahap 1: tempel)
 
 Keputusan: **aplikasi (Supabase) tetap sumber kebenaran**; ChatGPT hanya pintu masuk. Tidak ada data yang tersimpan tanpa konfirmasi admin di form aplikasi, sehingga semua validasi database tetap berlaku.
