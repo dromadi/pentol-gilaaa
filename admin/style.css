@@ -751,3 +751,5 @@ input[type="file"]::file-selector-button { margin-right: 10px; padding: 8px 14px
 .todo-tag.cancelled { background: #eee7e2; color: #7a675c; }
 .po-row > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .po-row-meta { flex-shrink: 0; }
+.paged-list .po-pager { margin: 0 0 10px; }
+.paged-list .po-pager button { min-height: 42px; }

@@ -1,5 +1,5 @@
 import { supabaseUrl, supabasePublishableKey } from './config.js';
-import { initOperations } from './operations.js?v=semua-45';
+import { initOperations } from './operations.js?v=tagihan-46';
 
 const products = new Map([
   ['UR','Pentol Urat'], ['PK','Pentol Kecil'], ['TP','Tahu Pentol'],
@@ -1238,7 +1238,7 @@ function openOrder(order = null, inboxEntry = null) {
 $('new-order').addEventListener('click', () => { if (orderForm.hidden) openOrder(); });
 // Tombol besar "+ Catat pesanan" di semua halaman: buka Pesanan → form pesanan baru, langsung ke kolom nama.
 // Di daftar Pesanan (Perlu tindakan, Semua pesanan, Selesai) tombol besar di kepala halaman sudah ada; tombol melayang disembunyikan agar tidak menutupi daftar.
-function syncQuickOrder() { $('quick-order').hidden = !session || $('dashboard').hidden || !orderForm.hidden || ['done', 'actions', 'orders'].includes(currentView); }
+function syncQuickOrder() { $('quick-order').hidden = !session || $('dashboard').hidden || !orderForm.hidden || ['done', 'actions', 'orders', 'receivables'].includes(currentView); }
 $('quick-order').addEventListener('click', () => {
   if (!['actions', 'orders', 'done'].includes(currentView)) selectView('actions');
   if (orderForm.hidden) openOrder();

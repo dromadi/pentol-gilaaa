@@ -299,6 +299,10 @@ Pola Selesai dipasang di **Perlu tindakan** (semua tombol cepat: Semua/Belum bay
 
 Pola yang sama dipasang di **Semua pesanan**: satu baris per pesanan (`nama` | `tanggal pesan · status · total`), status: **✓ Selesai** (hijau), **Batal** (abu), atau **Antar/Bayar** yang belum; jumlah baris mengikuti tinggi layar, tombol halaman di atas, tekan = kotak rincian. Lipatan **Tanggal & status** kini tertutup bawaan dan judulnya menampilkan pilihan aktif (mis. "Tanggal & status · 16–22 Nov 2026 · Belum lunas"); ganti tanggal/status/minggu = kembali ke halaman 1. Tabel lama tidak dipakai lagi di Pesanan. Tombol melayang disembunyikan di ketiga daftar Pesanan. Versi `semua-45`. Uji: `Semua pesanan: baris ringkas…`.
 
+## Tagihan: baris ringkas per pelanggan + halaman (16 Nov)
+
+Pola yang sama di **Pesanan → Tagihan**: satu baris per pelanggan (`nama · n invoice` | umur tagihan tertua dalam hari — merah bila ≥ 7 hari — dan total sisa), tagihan paling lama di atas, kotak cari (nama/WA/invoice), tombol halaman di atas, jumlah baris mengikuti tinggi layar. Tekan baris = kartu pelanggan lengkap di kotak tersendiri (per invoice: Bayar, Ingatkan via WA, ⋯; untuk >1 invoice: Bayar sekaligus, Ingatkan semua). Ringkasan atas: total sisa + jumlah pelanggan. Daftar memakai helper umum `pagedList` (operations.js) yang bisa dipakai halaman lain. Tombol melayang disembunyikan di Tagihan. Versi `tagihan-46`. Uji lama disesuaikan.
+
 ## Input lewat ChatGPT (tahap 1: tempel)
 
 Keputusan: **aplikasi (Supabase) tetap sumber kebenaran**; ChatGPT hanya pintu masuk. Tidak ada data yang tersimpan tanpa konfirmasi admin di form aplikasi, sehingga semua validasi database tetap berlaku.

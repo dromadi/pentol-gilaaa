@@ -877,9 +877,10 @@ export function initOperations({ $, request, status, products, prices, today, fo
       .sort((a,b) => (b.days ?? -1) - (a.days ?? -1));
     const customers = groupBy(sorted, ({order}) =>
       JSON.stringify([order.customer.trim().replace(/\s+/g,' ').toLocaleLowerCase('id'), (order.contact || '').replace(/\D/g,'')]));
-    const summary = el('strong', money(orders.reduce((sum, order) => sum + balance(order), 0)) + ' total sisa tagihan');
+    const summary = el('strong', money(orders.reduce((sum, order) => sum + balance(order), 0)) + ' total sisa tagihan · ' + customers.size + ' pelanggan');
     target.replaceChildren(block([summary], 'ops-filters'));
-    if (!orders.length) target.append(el('p', 'Belum ada tagihan untuk pesanan yang sudah diantar.'));
+    if (!orders.length) { target.append(el('p', 'Belum ada tagihan untuk pesanan yang sudah diantar.')); return; }
+    const entries = [];
     for (const invoices of customers.values()) {
       const customer = el('section', undefined, 'ops-card');
       const subtotal = invoices.reduce((sum, {order}) => sum + balance(order), 0);
@@ -900,8 +901,67 @@ export function initOperations({ $, request, status, products, prices, today, fo
         orderButtons(order, item, 'receivables');
         customer.append(item);
       }
-      target.append(customer);
+      const oldest = invoices[0].days;
+      entries.push({ customer, name: invoices[0].order.customer, contact: invoices[0].order.contact || '', count: invoices.length, subtotal, oldest,
+        invoices: invoices.map(({order}) => invoiceNumber(order)).join(' ') });
     }
+    // Satu baris per pelanggan (tagihan paling lama di atas), tekan = kartu lengkap di kotak tersendiri.
+    target.append(pagedList({
+      items: entries,
+      placeholder: 'Cari nama, WA, atau invoice…',
+      search: entry => [entry.name, entry.contact, entry.invoices].join(' '),
+      row: entry => {
+        const row = el('button', undefined, 'po-row');
+        row.type = 'button';
+        const left = el('span');
+        left.append(el('strong', entry.name), el('small', ' · ' + entry.count + ' invoice'));
+        const meta = el('span', undefined, 'po-row-meta todo-meta');
+        if (entry.oldest !== null) meta.append(el('span', entry.oldest + ' hari', 'todo-tag' + (entry.oldest >= 7 ? ' late' : '')));
+        meta.append(' ' + money(entry.subtotal));
+        row.append(left, meta);
+        row.setAttribute('aria-label', 'Tagihan ' + entry.name);
+        row.addEventListener('click', () => showPoDetail(null, entry.customer));
+        return row;
+      },
+      empty: 'Tidak ada tagihan yang cocok.'
+    }));
+  }
+
+  // Daftar ringkas umum: kotak cari, tombol halaman di atas, jumlah baris mengikuti tinggi layar (tanpa menggulir).
+  function pagedList({ items, search, row, placeholder, empty }) {
+    const wrap = el('div', undefined, 'paged-list');
+    const input = el('input');
+    input.type = 'search';
+    input.placeholder = placeholder;
+    input.setAttribute('aria-label', placeholder);
+    input.className = 'po-search';
+    const pager = el('div', undefined, 'po-pager');
+    const prev = button('‹ Sebelumnya', () => { page--; render(); });
+    const next = button('Berikutnya ›', () => { page++; render(); });
+    const where = el('span', '', 'po-page');
+    pager.append(prev, where, next);
+    const rows = el('div', undefined, 'po-rows');
+    wrap.append(input, pager, rows);
+    let page = 0;
+    function render() {
+      const query = input.value.trim().toLocaleLowerCase('id');
+      const list = items.filter(item => !query || search(item).toLocaleLowerCase('id').includes(query));
+      const top = pager.getBoundingClientRect().top + scrollY;
+      const reserved = 56 + (innerWidth <= 900 ? 96 : 24);
+      const perPage = top > 0 ? Math.min(8, Math.max(3, Math.floor((innerHeight - top - reserved) / 52))) : 5;
+      const pages = Math.max(1, Math.ceil(list.length / perPage));
+      page = Math.min(Math.max(page, 0), pages - 1);
+      rows.replaceChildren(...list.slice(page * perPage, page * perPage + perPage).map(row));
+      if (!list.length) rows.append(el('p', empty, 'result-count'));
+      where.textContent = (page + 1) + ' / ' + pages;
+      prev.disabled = page === 0;
+      next.disabled = page >= pages - 1;
+      pager.hidden = pages <= 1;
+    }
+    input.addEventListener('input', () => { page = 0; render(); });
+    // Ukur posisi setelah masuk halaman.
+    queueMicrotask(render);
+    return wrap;
   }
 
   // kind 'packing': apa yang bisa dikemas (total per varian). kind 'delivery': siapa yang perlu diantar.

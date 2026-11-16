@@ -274,7 +274,8 @@ export function adminTests(browser, devices, baseUrl) {
     equal(await s.page.$eval('#delivery [name=pack_filter]', select => select.value), 'due', 'mode bawaan');
     assert(/Antar (Sen|Sel|Rab|Kam|Jum|Sab|Min)/.test(await s.page.textContent('#delivery-body')), 'tanggal mudah dibaca');
     await goSub(s.page, 'orders', 'Tagihan');
-    const gina = s.page.locator('#receivables-body > .ops-card').filter({ hasText: 'Gina Belum Bayar' });
+    await s.page.locator('#receivables-body .po-row', { hasText: 'Gina Belum Bayar' }).click();
+    const gina = s.page.locator('.po-detail > .ops-card');
     const remind = decodeURIComponent(await gina.locator('.wa-link', { hasText: 'Ingatkan semua (2)' }).getAttribute('href'));
     assert(remind.includes('Invoice 00007') && remind.includes('Invoice 00008') && remind.includes('Total sisa Rp180.000'), 'satu pesan untuk 2 invoice');
     await gina.locator('button', { hasText: 'Bayar sekaligus' }).click();
@@ -289,7 +290,8 @@ export function adminTests(browser, devices, baseUrl) {
   test('aksi langsung dan tautan WhatsApp berisi tagihan', async () => {
     const s = await open();
     await goSub(s.page, 'orders', 'Tagihan');
-    const card = s.page.locator('#receivables-body article.ops-card').filter({ hasText: 'Invoice' }).first();
+    await s.page.locator('#receivables-body .po-row').first().click();
+    const card = s.page.locator('.po-detail article.ops-card').filter({ hasText: 'Invoice' }).first();
     const primary = await card.locator('.primary-actions > *').allTextContents();
     equal(primary, ['Bayar', 'Ingatkan via WA'], 'aksi utama di Tagihan');
     const href = decodeURIComponent(await card.locator('.wa-link').getAttribute('href'));
@@ -1072,7 +1074,7 @@ export function adminTests(browser, devices, baseUrl) {
   test('HP lama tanpa Map.groupBy: Tagihan tetap tampil', async () => {
     const s = await open(defaultData(), { oldBrowser: true });
     await goSub(s.page, 'orders', 'Tagihan');
-    equal(await s.page.locator('#receivables-body > .ops-card').count(), 2, 'dua pelanggan dengan tagihan');
+    equal(await s.page.locator('#receivables-body .po-row').count(), 2, 'dua pelanggan dengan tagihan');
     equal(s.problems, [], 'tanpa error');
     await s.close();
   });
