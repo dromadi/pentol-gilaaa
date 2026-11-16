@@ -636,3 +636,19 @@ input[type="file"]::file-selector-button { margin-right: 10px; padding: 8px 14px
   .period-chips { max-width: none; }
 }
 @media (min-width: 1101px) { .order-table { overflow: visible; } }
+
+/* Laporan: rincian laba per hari / minggu / bulan */
+.period-chips { grid-template-columns: repeat(5, minmax(0, 1fr)); max-width: 640px; }
+.breakdown-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.breakdown-head h3 { margin: 0 !important; }
+.breakdown-switch { display: flex; gap: 6px; }
+.breakdown-switch button { border-radius: 999px; min-height: 34px; padding: 4px 12px; font-size: 12px; }
+.breakdown-switch button[aria-pressed="true"] { background: var(--wine); color: #fff; border-color: var(--wine); }
+.report-breakdown .total-row td { font-weight: 800; background: #f6efe6; }
+.breakdown-note { margin: 10px 0 0; font-size: 11px; color: var(--muted); }
+@media (max-width: 620px) { .period-chips button { font-size: 11px; padding: 6px 2px; } }
+@media (max-width: 620px) {
+  .report-breakdown th:nth-child(2), .report-breakdown td:nth-child(2) { display: none; }
+  .report-breakdown th, .report-breakdown td { padding: 10px 8px; font-size: 12px; white-space: nowrap; }
+  .report-breakdown .breakdown-head h3 { font-size: 14px; }
+}

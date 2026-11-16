@@ -223,6 +223,13 @@ Pemilik (dibantu Claude di browser) menjalankan 8 file SQL berurutan di Supabase
 
 Setelah itu: fallback sementara di form koreksi stok (PATCH langsung ke `pentol_batch_stock` bila `pentol_correct_received` belum ada) dihapus; koreksi stok kini hanya lewat fungsi beralasan. Pemeriksaan 404 lain dibiarkan karena hanya menampilkan pesan dan tidak menulis apa pun. Versi `live-27`.
 
+## Laporan: Tahun ini + laba per hari/minggu/bulan (16 Nov)
+
+- Tombol periode ke-5: **Tahun ini** (1 Januari s.d. hari ini).
+- Kartu baru **Laba per hari / minggu / bulan** di bawah angka utama: kolom Periode, Pack diantar (disembunyikan di HP), Penjualan, Laba (penjualan − HPP − ongkir toko; "belum lengkap" bila HPP kurang), Uang masuk, plus baris **Total**. Urut terbaru di atas; periode kosong tetap tampil. Bawaan: ≤14 hari → per hari, ≤92 hari → per minggu, lebih → per bulan; bisa diganti lewat tombol (per hari maks 62 hari). Label minggu = rentang yang masuk periode (mis. "9–15 Nov", "1 Nov").
+- Data dari catatan yang sama dengan angka utama (pengiriman per tanggal antar + ongkir pesanan selesai; pembayaran per tanggal bayar). Tanpa SQL.
+- Excel laporan kini 8 lembar: tambah **Laba per periode** (mengikuti pilihan hari/minggu/bulan yang tampil). Versi `laba-28`. Uji: `laporan: Tahun ini + rincian laba…` dan uji Excel 8 lembar.
+
 ## Input lewat ChatGPT (tahap 1: tempel)
 
 Keputusan: **aplikasi (Supabase) tetap sumber kebenaran**; ChatGPT hanya pintu masuk. Tidak ada data yang tersimpan tanpa konfirmasi admin di form aplikasi, sehingga semua validasi database tetap berlaku.

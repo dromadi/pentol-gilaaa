@@ -1155,7 +1155,8 @@ export function initOperations({ $, request, status, products, prices, today, fo
       const prevEnd = new Date(monthStart + 'T00:00:00Z');
       prevEnd.setUTCDate(0);
       const prevLast = prevEnd.toISOString().slice(0, 10);
-      return [['Hari ini', t, t], ['Minggu ini', weekStart(t), t], ['Bulan ini', monthStart, t], ['Bulan lalu', prevLast.slice(0, 8) + '01', prevLast]];
+      return [['Hari ini', t, t], ['Minggu ini', weekStart(t), t], ['Bulan ini', monthStart, t], ['Bulan lalu', prevLast.slice(0, 8) + '01', prevLast],
+        ['Tahun ini', t.slice(0, 4) + '-01-01', t]];
     };
     function markPeriod() {
       const ranges = periodRanges();
@@ -1275,7 +1276,10 @@ export function initOperations({ $, request, status, products, prices, today, fo
             return [row.batch_code, products.get(row.sku) || row.sku, received, reserved, delivered, free,
               unit === undefined ? '' : Math.round(unit), unit === undefined ? '' : Math.round(free * unit)];
           })];
-        const bytes = await closeDayWorkbook([['Ringkasan', summary], ['Laba per varian', variants], ['Penjualan per minggu', weekly],
+        const bd = r.breakdown || { mode: 'day', rows: breakdownRows(r, 'day') };
+        const perPeriod = [['Periode (' + (bd.mode === 'day' ? 'hari' : bd.mode === 'week' ? 'minggu mulai Senin' : 'bulan') + ')', 'Pack diantar', 'Penjualan (Rp)', 'HPP (Rp)', 'Ongkir toko (Rp)', 'Laba (Rp)', 'Uang masuk (Rp)'],
+          ...bd.rows.map(m => [m.key, m.qty, m.sales, Math.round(m.cost), m.ship, m.missing ? 'Belum lengkap' : Math.round(m.profit), m.cash])];
+        const bytes = await closeDayWorkbook([['Ringkasan', summary], ['Laba per periode', perPeriod], ['Laba per varian', variants], ['Penjualan per minggu', weekly],
           ['Pesanan', orderRows], ['Pembayaran', paymentRows], ['Tagihan terbuka', openRows], ['Stok', stockRows]], window.JSZip);
         if (getSession() !== session) return;
         const url = URL.createObjectURL(new Blob([bytes], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
@@ -1287,6 +1291,75 @@ export function initOperations({ $, request, status, products, prices, today, fo
       } finally {
         trigger.disabled = !report;
       }
+    }
+
+    // ===== Rincian laba per hari / minggu / bulan =====
+    const spanDays = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 864e5) + 1;
+    const monthName = new Intl.DateTimeFormat('id-ID', { month:'short', year:'numeric', timeZone:'UTC' });
+    let breakdownMode = '';
+    function bucketKey(date, mode) {
+      return mode === 'day' ? date : mode === 'week' ? weekStart(date) : date.slice(0, 7);
+    }
+    const shortDay = new Intl.DateTimeFormat('id-ID', { day:'numeric', month:'short', timeZone:'UTC' });
+    // Minggu ditampilkan sebagai rentang yang benar-benar masuk periode, mis. "1 Nov" atau "9–15 Nov".
+    function bucketLabel(key, mode, r) {
+      if (mode === 'day') return dayLabel(key);
+      if (mode === 'week') {
+        const endDay = new Date(Date.parse(key + 'T00:00:00Z') + 6 * 864e5).toISOString().slice(0, 10);
+        const from = key < r.a ? r.a : key, to = endDay > r.b ? r.b : endDay;
+        const f = shortDay.format(new Date(from + 'T00:00:00Z')), t = shortDay.format(new Date(to + 'T00:00:00Z'));
+        if (from === to) return f;
+        return from.slice(0, 7) === to.slice(0, 7) ? f.split(' ')[0] + '–' + t : f + ' – ' + t;
+      }
+      return monthName.format(new Date(key + '-01T00:00:00Z'));
+    }
+    function breakdownRows(r, mode) {
+      // Semua periode dalam rentang ikut tampil (juga yang kosong), urut dari yang terbaru.
+      const keys = [];
+      for (let t = Date.parse(r.a + 'T00:00:00Z'); t <= Date.parse(r.b + 'T00:00:00Z'); t += 864e5) {
+        const key = bucketKey(new Date(t).toISOString().slice(0, 10), mode);
+        if (keys[keys.length - 1] !== key) keys.push(key);
+      }
+      const sums = new Map(keys.map(key => [key, {qty:0, sales:0, cost:0, ship:0, missing:0, cash:0}]));
+      for (const e of r.dated) {
+        const m = sums.get(bucketKey(e.date, mode));
+        if (!m) continue;
+        m.qty += e.qty || 0; m.sales += e.sales || 0; m.cost += e.cost || 0; m.ship += e.ship || 0; m.missing += e.missing || 0;
+      }
+      for (const p of r.payments) {
+        const m = p.paid_on && sums.get(bucketKey(p.paid_on, mode));
+        if (m) m.cash += Number(p.amount);
+      }
+      return [...sums].reverse().map(([key, m]) => ({ key, label: bucketLabel(key, mode, r), ...m, profit: m.sales - m.cost - m.ship }));
+    }
+    function renderBreakdown(box, r) {
+      const days = spanDays(r.a, r.b);
+      const allowed = [['day', 'Per hari', days <= 62], ['week', 'Per minggu', days > 1 && days <= 400], ['month', 'Per bulan', days > 27]]
+        .filter(([, , ok]) => ok);
+      const preferred = days <= 14 ? 'day' : days <= 92 ? 'week' : 'month';
+      const mode = allowed.some(([id]) => id === breakdownMode) ? breakdownMode : allowed.some(([id]) => id === preferred) ? preferred : allowed[0][0];
+      const head = el('div', undefined, 'breakdown-head');
+      head.append(el('h3', 'Laba per ' + (mode === 'day' ? 'hari' : mode === 'week' ? 'minggu' : 'bulan')));
+      if (allowed.length > 1) {
+        const switcher = el('div', undefined, 'breakdown-switch');
+        for (const [id, text] of allowed) {
+          const b = button(text, () => { breakdownMode = id; renderBreakdown(box, r); });
+          b.setAttribute('aria-pressed', String(id === mode));
+          switcher.append(b);
+        }
+        head.append(switcher);
+      }
+      const rows = breakdownRows(r, mode);
+      const totalRow = rows.reduce((t, m) => ({ qty:t.qty+m.qty, sales:t.sales+m.sales, profit:t.profit+m.profit, cash:t.cash+m.cash, missing:t.missing+m.missing }),
+        {qty:0, sales:0, profit:0, cash:0, missing:0});
+      const profitText = m => m.missing ? 'belum lengkap' : money(m.profit);
+      const grid = table(['Periode', 'Pack diantar', 'Penjualan', 'Laba', 'Uang masuk'],
+        [...rows.map(m => [m.label, m.qty, money(m.sales), profitText(m), money(m.cash)]),
+         ['Total', totalRow.qty, money(totalRow.sales), profitText(totalRow), money(totalRow.cash)]], '');
+      grid.querySelector('tbody tr:last-child')?.classList.add('total-row');
+      box.replaceChildren(head, grid, el('p', 'Laba = penjualan − harga beli (HPP) − ongkir toko. "Belum lengkap" bila harga beli batch belum ada di Restok.', 'breakdown-note'));
+      box.dataset.mode = mode;
+      r.breakdown = { mode, rows };
     }
 
     let generation = 0;
@@ -1324,7 +1397,10 @@ export function initOperations({ $, request, status, products, prices, today, fo
       const cash = payments.reduce((sum, payment) => sum + payment.amount, 0);
       let unpaid=0, billed=0, revenue=0, cost=0, shipping=0, missing=0, unsold=0, stockUnknown=0;
       const byVariant = new Map();
-      const addSold = (stockId, qty, price) => {
+      // Catatan bertanggal untuk rincian laba per hari/minggu/bulan.
+      const dated = [];
+      const wibDay = new Intl.DateTimeFormat('sv-SE', {timeZone:'Asia/Jakarta'});
+      const addSold = (stockId, qty, price, date) => {
         const s = stock(stockId);
         const unit = s ? hpp.get(s.batch_code+'|'+s.sku) : undefined;
         revenue += qty*price;
@@ -1335,18 +1411,25 @@ export function initOperations({ $, request, status, products, prices, today, fo
         v.sales += qty*price;
         if (unit === undefined) v.missing += qty; else v.cost += qty*unit;
         byVariant.set(s?.sku, v);
+        dated.push({ date, qty, sales: qty*price, cost: unit === undefined ? 0 : qty*unit, missing: unit === undefined ? qty : 0 });
       };
       for (const o of orders) {
         billed += total(o);
         unpaid += balance(o);
         for (const i of o.pentol_order_items) {
-          if (!byShipDate) addSold(i.stock_id, i.shipped, i.unit_price);
+          if (!byShipDate) addSold(i.stock_id, i.shipped, i.unit_price, o.order_date);
         }
-        if (!byShipDate && o.delivered) { revenue += o.shipping_charge; shipping += o.shipping_cost; }
+        if (!byShipDate && o.delivered) {
+          revenue += o.shipping_charge; shipping += o.shipping_cost;
+          dated.push({ date: o.order_date, sales: Number(o.shipping_charge), ship: Number(o.shipping_cost) });
+        }
       }
       if (byShipDate) {
-        for (const x of ships) addSold(x.stock_id, x.quantity, x.unit_price);
-        for (const o of done) { revenue += Number(o.shipping_charge); shipping += Number(o.shipping_cost); }
+        for (const x of ships) addSold(x.stock_id, x.quantity, x.unit_price, x.shipped_on);
+        for (const o of done) {
+          revenue += Number(o.shipping_charge); shipping += Number(o.shipping_cost);
+          dated.push({ date: wibDay.format(new Date(o.delivered_at)), sales: Number(o.shipping_charge), ship: Number(o.shipping_cost) });
+        }
       }
       const jakartaDay = new Intl.DateTimeFormat('sv-SE', {timeZone:'Asia/Jakarta'});
       const chartEntries = byShipDate
@@ -1363,7 +1446,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
       const net = gross-shipping;
       const range = a === b ? dayLabel(a) : dayLabel(a) + ' – ' + dayLabel(b);
       report = { a, b, range, byShipDate, revenue, cost, gross, net, shipping, cash, unpaid, billed, missing, unsold, stockUnknown,
-        byVariant, chartEntries, orders, payments, hpp };
+        byVariant, chartEntries, orders, payments, hpp, dated };
       exportButton.disabled = false;
       const headline = el('section', undefined, 'report-headline');
       const stat = (name, value, note, key) => {
@@ -1389,7 +1472,9 @@ export function initOperations({ $, request, status, products, prices, today, fo
       chartBox.append(el('h3', 'Penjualan diantar per minggu' + (byShipDate ? '' : ' (menurut tanggal pesanan)')), weeklyChart(chartEntries));
       const detail = el('details', undefined, 'report-details');
       detail.append(el('summary', 'Rincian laporan'));
-      out.replaceChildren(headline, variantBox, chartBox, detail);
+      const breakdownBox = el('section', undefined, 'report-variants report-breakdown');
+      renderBreakdown(breakdownBox, report);
+      out.replaceChildren(headline, breakdownBox, variantBox, chartBox, detail);
       detail.append(table(['Metrik','Nilai'],[
         ['Tagihan pesanan',money(billed)],['Kas diterima (tanggal bayar tercatat)',money(cash)],
         ['Penjualan yang sudah diantar',money(revenue)],['HPP pack yang diantar',money(cost)],

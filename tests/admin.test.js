@@ -508,7 +508,36 @@ export function adminTests(browser, devices, baseUrl) {
     await s.close();
   });
 
-  test('laporan: Unduh Excel berisi 7 lembar untuk periode yang dipilih', async () => {
+  test('laporan: Tahun ini + rincian laba per hari/minggu/bulan', async () => {
+    const data = defaultData();
+    const t = todayJakarta();
+    data.shipments = [{ order_id: 'o6', stock_id: 's1', quantity: 2, unit_price: 36000, shipped_on: t }];
+    data.purchases = [{ batch_code:'BATCH-02', supplier:'', reference:'', ordered_on:shiftDay(-9), expected_on:null, shipping:0, packaging:0, other_cost:0,
+      pentol_purchase_items:[{ batch_code:'BATCH-02', sku:'UR', quantity:30, unit_cost:20000 }] }];
+    const s = await open(data);
+    await goSub(s.page, 'finance');
+    const mode = () => s.page.getAttribute('.report-breakdown', 'data-mode');
+    await s.page.click('.period-chips >> text=Tahun ini');
+    await s.page.waitForTimeout(500);
+    equal(await s.page.inputValue('#finance [name=first]'), t.slice(0, 4) + '-01-01', 'tahun ini mulai 1 Januari');
+    equal(await mode(), 'month', 'tahun ini: per bulan');
+    await s.page.click('.period-chips >> text=Bulan ini');
+    await s.page.waitForTimeout(500);
+    equal(await mode(), 'week', 'bulan ini: per minggu');
+    await s.page.click('.breakdown-switch >> text=Per hari');
+    equal(await mode(), 'day', 'bisa pindah ke per hari');
+    const todayRow = s.page.locator('.report-breakdown tbody tr').first();
+    assert((await todayRow.textContent()).includes('Rp32.000'), 'baris hari ini: laba 72.000 − 2×20.000');
+    const total = await s.page.textContent('.report-breakdown .total-row');
+    assert(total.includes('Total') && total.includes('Rp72.000') && total.includes('Rp32.000'), 'baris total: ' + total);
+    await s.page.click('.period-chips >> text=Hari ini');
+    await s.page.waitForTimeout(500);
+    equal(await mode(), 'day', 'hari ini: per hari');
+    equal(await s.page.locator('.report-breakdown tbody tr').count(), 2, 'satu hari + total');
+    await s.close();
+  });
+
+  test('laporan: Unduh Excel berisi 8 lembar untuk periode yang dipilih', async () => {
     const data = defaultData();
     const t = todayJakarta();
     data.shipments = [{ order_id: 'o6', stock_id: 's1', quantity: 2, unit_price: 36000, shipped_on: t }];
@@ -523,14 +552,15 @@ export function adminTests(browser, devices, baseUrl) {
     equal(download.suggestedFilename(), 'Laporan-Pentol-Gilaaa-' + t + '_' + t + '.xlsx', 'nama file');
     const zip = await JSZip.loadAsync(await (await download.createReadStream()).toArray().then(Buffer.concat));
     const names = [...(await zip.file('xl/workbook.xml').async('string')).matchAll(/name="([^"]+)"/g)].map(m => m[1]);
-    equal(names, ['Ringkasan', 'Laba per varian', 'Penjualan per minggu', 'Pesanan', 'Pembayaran', 'Tagihan terbuka', 'Stok'], 'lembar');
+    equal(names, ['Ringkasan', 'Laba per periode', 'Laba per varian', 'Penjualan per minggu', 'Pesanan', 'Pembayaran', 'Tagihan terbuka', 'Stok'], 'lembar');
     const sheet = n => zip.file('xl/worksheets/sheet' + n + '.xml').async('string');
     const summary = await sheet(1);
     assert(summary.includes('<v>72000</v>') && summary.includes('<v>32000</v>') && summary.includes('<v>50000</v>'), 'penjualan, laba, uang masuk');
-    assert((await sheet(2)).includes('Pentol Urat'), 'laba per varian');
-    assert((await sheet(5)).includes('Gina Belum Bayar'), 'pembayaran dengan nama pelanggan');
-    assert((await sheet(6)).includes('Eka Antar Sebagian'), 'tagihan terbuka');
-    assert((await sheet(7)).includes('BATCH-02') && (await sheet(7)).includes('<v>20000</v>'), 'stok + harga beli');
+    assert((await sheet(2)).includes(t) && (await sheet(2)).includes('<v>32000</v>'), 'laba per periode (hari ini)');
+    assert((await sheet(3)).includes('Pentol Urat'), 'laba per varian');
+    assert((await sheet(6)).includes('Gina Belum Bayar'), 'pembayaran dengan nama pelanggan');
+    assert((await sheet(7)).includes('Eka Antar Sebagian'), 'tagihan terbuka');
+    assert((await sheet(8)).includes('BATCH-02') && (await sheet(8)).includes('<v>20000</v>'), 'stok + harga beli');
     await s.close();
   });
 
