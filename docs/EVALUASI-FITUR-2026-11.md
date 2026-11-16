@@ -253,6 +253,10 @@ Keluhan pemilik: setelah masuk admin, tombol back HP langsung kembali ke katalog
 
 Sub menu ke-6 **Selesai** (`#done`, panel `#orders`): pesanan aktif yang sudah lunas **dan** sudah diantar semua (`paid=true&delivered=true&cancelled=false`), terbaru di atas, dengan kotak cari; tanpa permintaan katalog, tombol cepat, atau filter tanggal. Ringkasan: "N pesanan selesai · RpX terjual & dibayar". Grid sub menu di HP memakai `--tabs` (jumlah tab grup). Versi `selesai-32`. Uji: `Pesanan → Selesai…`.
 
+## Stok → Per batch & koreksi jadi tab (16 Nov)
+
+Lipatan "Rincian per batch & koreksi" di halaman Stok dipindah menjadi sub menu sendiri **Per batch & koreksi** (`#batches`, panel `#stock` yang sama): ringkasan angka, filter batch/cari varian, tabel per batch, dan tombol Koreksi. Tab **Stok** kini hanya kartu per varian. Urutan sub menu: Stok · Per batch & koreksi · Restok & PO. Versi `batch-33`.
+
 ## Input lewat ChatGPT (tahap 1: tempel)
 
 Keputusan: **aplikasi (Supabase) tetap sumber kebenaran**; ChatGPT hanya pintu masuk. Tidak ada data yang tersimpan tanpa konfirmasi admin di form aplikasi, sehingga semua validasi database tetap berlaku.

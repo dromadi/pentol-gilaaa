@@ -28,7 +28,7 @@ export function adminTests(browser, devices, baseUrl) {
 
   test('semua halaman terbuka tanpa error dan tanpa geser ke samping', async () => {
     const s = await open();
-    const pages = [['today'], ['orders'], ['orders', 'Semua pesanan'], ['orders', 'Packing'], ['orders', 'Antar'], ['orders', 'Tagihan'], ['stock'], ['stock', 'Restok & PO'],
+    const pages = [['today'], ['orders'], ['orders', 'Semua pesanan'], ['orders', 'Packing'], ['orders', 'Antar'], ['orders', 'Tagihan'], ['stock'], ['stock', 'Per batch & koreksi'], ['stock', 'Restok & PO'],
       ['finance'], ['finance', 'Tutup hari']];
     for (const [nav, tab] of pages) {
       await goSub(s.page, nav, tab);
@@ -451,7 +451,11 @@ export function adminTests(browser, devices, baseUrl) {
     await goSub(s.page, 'stock');
     const levels = await s.page.$$eval('.variant-card', cs => Object.fromEntries(cs.map(c => [c.querySelector('h3').textContent, c.dataset.level])));
     equal([levels['Pentol Urat'], levels['Pentol Jamur'], levels['Pentol Kecil']], ['ok', 'low', 'out'], 'level stok');
-    await s.page.click('#stock-batches summary');
+    assert(await s.page.isHidden('#stock-batches'), 'tab Stok: tanpa tabel batch');
+    await goSub(s.page, 'stock', 'Per batch & koreksi');
+    assert(await s.page.isHidden('#stock-variants'), 'tab batch: tanpa kartu varian');
+    equal(await s.page.textContent('#stock-title'), 'Stok per batch', 'judul tab batch');
+    assert(s.page.url().endsWith('#batches'), 'alamat #batches');
     await s.page.locator('#stock-rows tr').first().locator('button').click();
     await s.page.fill('[name=received]', '29');
     await s.page.fill('[name=reason]', '1 pack rusak');

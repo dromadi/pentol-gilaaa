@@ -401,8 +401,6 @@ body { background: radial-gradient(1100px 480px at 105% -10%, #fbe7d9 0, transpa
 .variant-card[data-level="out"] { background: #fdebe7; border-color: #efc4bb; }
 .variant-card[data-level="out"] > strong { color: #a44337; }
 .variant-card button { margin-top: 8px; min-height: 36px; padding: 6px 16px; border-radius: 999px; font-size: 12px; }
-.stock-batches > summary { font-size: 13px; font-weight: 650; color: #80634a; padding: 10px 2px; }
-.stock-batches[open] > summary { margin-bottom: 10px; }
 @media (max-width: 620px) { .stock-variants { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } .variant-card > strong { font-size: 34px; } }
 .report-headline { padding: 20px 22px; border-radius: var(--radius); background: linear-gradient(140deg, var(--mint), #f3faf5); border: 1px solid #cfe4d7; box-shadow: var(--shadow); margin-bottom: 14px; }
 .report-headline .report-label { margin: 0; font-size: 12px; font-weight: 650; color: var(--mint-ink); }

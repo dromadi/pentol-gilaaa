@@ -1,5 +1,5 @@
 import { supabaseUrl, supabasePublishableKey } from './config.js';
-import { initOperations } from './operations.js?v=selesai-32';
+import { initOperations } from './operations.js?v=batch-33';
 
 const products = new Map([
   ['UR','Pentol Urat'], ['PK','Pentol Kecil'], ['TP','Tahu Pentol'],
@@ -585,17 +585,17 @@ document.addEventListener('keydown', event => {
 // Menu utama dengan beberapa bagian ditampilkan sebagai tab di atas halaman.
 const viewGroups = {
   orders: [['actions', 'Perlu tindakan'], ['orders', 'Semua pesanan'], ['packing', 'Packing'], ['delivery', 'Antar'], ['receivables', 'Tagihan'], ['done', 'Selesai']],
-  stock: [['stock', 'Stok'], ['purchasing', 'Restok & PO']],
+  stock: [['stock', 'Stok'], ['batches', 'Per batch & koreksi'], ['purchasing', 'Restok & PO']],
   finance: [['finance', 'Laba & harga'], ['closeDay', 'Tutup hari']],
   reconcile: [['reconcile', 'Rekonsiliasi'], ['dataExcel', 'Impor & ekspor']]
 };
 const groupOf = view => Object.keys(viewGroups).find(group => viewGroups[group].some(([id]) => id === view));
 const lastInGroup = Object.fromEntries(Object.keys(viewGroups).map(group => [group, viewGroups[group][0][0]]));
 // "Perlu tindakan" dan "Semua pesanan" memakai panel yang sama (#orders) dengan tampilan berbeda.
-const panelOf = view => view === 'actions' || view === 'done' ? 'orders' : view;
+const panelOf = view => view === 'actions' || view === 'done' ? 'orders' : view === 'batches' ? 'stock' : view;
 const deliveryModes = ['due', 'pending', 'unscheduled', 'date'];
 // Halaman terakhir disimpan di alamat (#tagihan dsb.) agar refresh browser membuka halaman yang sama.
-const knownViews = () => [...Array.from(document.querySelectorAll('.admin-content > .panel'), panel => panel.id), 'actions', 'done'];
+const knownViews = () => [...Array.from(document.querySelectorAll('.admin-content > .panel'), panel => panel.id), 'actions', 'done', 'batches'];
 let currentView = (() => {
   const wanted = decodeURIComponent(location.hash.slice(1));
   return knownViews().includes(wanted) && wanted !== 'signin' ? wanted : 'today';
@@ -639,6 +639,7 @@ function selectView(view, packingMode, { keepScroll = false, fromHistory = false
     scrollTo({top:0});
     $(panelOf(view)).querySelector('h2').focus({preventScroll:true});
   }
+  if (view === 'stock' || view === 'batches') setStockMode(view);
   if (view === 'orders' || view === 'actions' || view === 'done') { setOrdersMode(view); loadOrders(); ops.inbox(); }
   else ops.open(view, packingMode);
 }
@@ -851,6 +852,18 @@ const chipFilters = {
 const chipLabels = { action:'Perlu tindakan', unpaid:'Belum bayar', pending:'Belum antar', done:'Selesai', all:'Per tanggal' };
 // Perlu tindakan: permintaan katalog + pesanan belum bayar/antar (tombol cepat).
 // Semua pesanan: per tanggal/minggu dengan filter status.
+// Stok: kartu per varian. Per batch & koreksi: tabel per batch dengan tombol Koreksi (panel #stock yang sama).
+function setStockMode(view) {
+  const batches = view === 'batches';
+  $('stock-variants').hidden = batches;
+  $('stock-batches').hidden = !batches;
+  $('stock-title').textContent = batches ? 'Stok per batch' : 'Stok';
+  $('stock-desc').textContent = batches
+    ? 'Rincian tiap batch: diterima, terpesan, diantar, dan sisa jual. Koreksi hanya untuk salah hitung atau barang rusak (alasan wajib, tercatat di Riwayat).'
+    : 'Stok bertambah lewat Terima barang di Restok & Supplier, dan berkurang lewat pesanan.';
+  if (!batches) resetEditor();
+}
+
 // Selesai: pesanan aktif yang sudah lunas dan sudah diantar semua, terbaru di atas.
 function setOrdersMode(view) {
   const actions = view === 'actions';
