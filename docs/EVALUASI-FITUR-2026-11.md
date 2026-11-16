@@ -295,6 +295,10 @@ Pola PO selesai dipasang di Pesanan → Selesai (`renderDoneList`, `#done-list`;
 
 Pola Selesai dipasang di **Perlu tindakan** (semua tombol cepat: Semua/Belum bayar/Belum antar): satu baris per pesanan dengan tanda yang masih perlu dikerjakan (**Antar**, **Antar · telat** merah, **Bayar**) + total; tekan = kotak rincian (status bayar/antar, jadwal, isi, pembayaran, kontak) berisi tombol **Antar · Bayar · ⋯** (`showOrderDetail`, dipakai juga oleh Selesai). **Permintaan dari katalog** juga diringkas jadi satu baris per permintaan (nama · varian | pack · waktu), tekan = kartu lengkap (Proses, Ubah, Balas WA, Hapus) di kotak tersendiri. **Jumlah baris per halaman mengikuti tinggi layar** (3–8, dihitung dari posisi daftar sampai menu bawah) sehingga tanpa menggulir; tombol halaman di atas daftar; baris ringkasan ganda disembunyikan; tombol melayang "+ Catat pesanan" disembunyikan di Perlu tindakan & Selesai (tombol besar di kepala halaman tetap). "Semua pesanan" tetap tabel. Versi `tindakan-44`. Uji lama disesuaikan (hitung baris di semua halaman; aksi lewat kotak rincian).
 
+## Semua pesanan: baris ringkas + halaman (16 Nov)
+
+Pola yang sama dipasang di **Semua pesanan**: satu baris per pesanan (`nama` | `tanggal pesan · status · total`), status: **✓ Selesai** (hijau), **Batal** (abu), atau **Antar/Bayar** yang belum; jumlah baris mengikuti tinggi layar, tombol halaman di atas, tekan = kotak rincian. Lipatan **Tanggal & status** kini tertutup bawaan dan judulnya menampilkan pilihan aktif (mis. "Tanggal & status · 16–22 Nov 2026 · Belum lunas"); ganti tanggal/status/minggu = kembali ke halaman 1. Tabel lama tidak dipakai lagi di Pesanan. Tombol melayang disembunyikan di ketiga daftar Pesanan. Versi `semua-45`. Uji: `Semua pesanan: baris ringkas…`.
+
 ## Input lewat ChatGPT (tahap 1: tempel)
 
 Keputusan: **aplikasi (Supabase) tetap sumber kebenaran**; ChatGPT hanya pintu masuk. Tidak ada data yang tersimpan tanpa konfirmasi admin di form aplikasi, sehingga semua validasi database tetap berlaku.

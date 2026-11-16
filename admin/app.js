@@ -1,5 +1,5 @@
 import { supabaseUrl, supabasePublishableKey } from './config.js';
-import { initOperations } from './operations.js?v=tindakan-44';
+import { initOperations } from './operations.js?v=semua-45';
 
 const products = new Map([
   ['UR','Pentol Urat'], ['PK','Pentol Kecil'], ['TP','Tahu Pentol'],
@@ -881,7 +881,8 @@ function setOrdersMode(view) {
   $('checkout-inbox').hidden = !actions;
   document.querySelector('.order-chips').hidden = !actions;
   $('order-filters').hidden = view !== 'orders';
-  if (view === 'orders') $('order-filters').open = true;
+  // Filter tanggal & status dilipat agar daftar muat satu layar; ringkasannya tampil di judul lipatan.
+  if (view === 'orders') $('order-filters').open = false;
   // Pertama kali dibuka: minggu ini (harian sering kosong).
   if (view === 'orders' && !ordersModeSeen) { ordersModeSeen = true; orderPeriod.value = 'week'; }
 }
@@ -965,6 +966,18 @@ function renderDoneList(list, query) {
     left.append(node('strong', order.customer), node('small', ' · ' + ops.invoiceNumber(order)));
     if (orderChip === 'done') {
       row.append(left, node('span', shortDate.format(new Date(order.order_date + 'T00:00:00Z')) + ' · Rp' + format.format(ops.total(order)), 'po-row-meta'));
+    } else if (orderChip === 'all') {
+      // Semua pesanan: tanggal pesan + status singkat + total.
+      const meta = node('span', null, 'po-row-meta todo-meta');
+      meta.append(shortDate.format(new Date(order.order_date + 'T00:00:00Z')) + ' ');
+      if (order.cancelled) meta.append(node('span', 'Batal', 'todo-tag cancelled'));
+      else if (order.paid && order.delivered) meta.append(node('span', '✓ Selesai', 'todo-tag done'));
+      else {
+        if (!order.delivered) meta.append(node('span', 'Antar', 'todo-tag'));
+        if (!order.paid) meta.append(node('span', 'Bayar', 'todo-tag pay'));
+      }
+      meta.append(' Rp' + format.format(ops.total(order)));
+      row.append(left, meta);
     } else {
       // Perlu tindakan: tanda apa yang belum (Antar / Bayar) + total.
       const meta = node('span', null, 'po-row-meta todo-meta');
@@ -982,7 +995,9 @@ function renderDoneList(list, query) {
   if (!list.length) rowsBox.append(node('p', searching ? 'Tidak ada pesanan yang cocok dengan pencarian.'
     : orderChip === 'done' ? 'Belum ada pesanan yang lunas dan sudah diantar.'
     : orderChip === 'unpaid' ? 'Tidak ada pesanan yang belum dibayar.'
-    : orderChip === 'pending' ? 'Tidak ada pesanan yang belum diantar.' : 'Semua pesanan sudah dibayar dan diantar. 🎉', 'result-count'));
+    : orderChip === 'pending' ? 'Tidak ada pesanan yang belum diantar.'
+    : orderChip === 'all' ? (orderPeriod.value === 'week' ? 'Belum ada pesanan pada minggu ini.' : 'Belum ada pesanan pada tanggal ini.')
+    : 'Semua pesanan sudah dibayar dan diantar. 🎉', 'result-count'));
   const pager = node('div', null, 'po-pager');
   const prev = node('button', '‹ Sebelumnya');
   const next = node('button', 'Berikutnya ›');
@@ -1047,8 +1062,8 @@ function renderOrderList() {
       text.includes(digits) || text.includes(digits.replace(/^0/, '62')) || text.replace(/^62/, '0').includes(digits)));
   const selectedStatus = orderStatus.value;
   if (orderChip === 'done') loadedOrders.sort((a, b) => b.order_date.localeCompare(a.order_date) || b.invoice_no - a.invoice_no);
-  // Perlu tindakan & Selesai: baris ringkas per halaman. Semua pesanan (per tanggal): tetap tabel.
-  const doneMode = orderChip !== 'all';
+  // Semua tampilan Pesanan memakai baris ringkas per halaman (tabel lama tidak dipakai lagi).
+  const doneMode = true;
   document.querySelector('.order-table').hidden = doneMode;
   $('done-list').hidden = !doneMode;
   const visible = loadedOrders.filter(order => {
@@ -1065,7 +1080,11 @@ function renderOrderList() {
   const target = $('order-rows');
   if (doneMode) {
     target.replaceChildren();
-    renderDoneList(visible, orderChip + '|' + query);
+    if (orderChip === 'all') {
+      const statusText = orderStatus.value !== 'all' ? ' · ' + orderStatus.selectedOptions[0].text : '';
+      $('order-filters').querySelector('summary').textContent = 'Tanggal & status · ' + period.replace(/ · $/, '') + statusText;
+    }
+    renderDoneList(visible, [orderChip, query, orderDate.value, orderPeriod.value, orderStatus.value].join('|'));
     $('orders-summary').hidden = true;
     $('orders-summary').textContent = period + visible.length + ' dari ' + loadedOrders.length + ' pesanan · ' + format.format(packs) + ' pack';
     return;
@@ -1218,8 +1237,8 @@ function openOrder(order = null, inboxEntry = null) {
 }
 $('new-order').addEventListener('click', () => { if (orderForm.hidden) openOrder(); });
 // Tombol besar "+ Catat pesanan" di semua halaman: buka Pesanan → form pesanan baru, langsung ke kolom nama.
-// Di Pesanan → Perlu tindakan & Selesai tombol besar di kepala halaman sudah ada; tombol melayang disembunyikan agar tidak menutupi daftar.
-function syncQuickOrder() { $('quick-order').hidden = !session || $('dashboard').hidden || !orderForm.hidden || currentView === 'done' || currentView === 'actions'; }
+// Di daftar Pesanan (Perlu tindakan, Semua pesanan, Selesai) tombol besar di kepala halaman sudah ada; tombol melayang disembunyikan agar tidak menutupi daftar.
+function syncQuickOrder() { $('quick-order').hidden = !session || $('dashboard').hidden || !orderForm.hidden || ['done', 'actions', 'orders'].includes(currentView); }
 $('quick-order').addEventListener('click', () => {
   if (!['actions', 'orders', 'done'].includes(currentView)) selectView('actions');
   if (orderForm.hidden) openOrder();

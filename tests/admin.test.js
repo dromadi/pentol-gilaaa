@@ -131,7 +131,10 @@ export function adminTests(browser, devices, baseUrl) {
     assert(await s.page.isHidden('#order-filters'), 'tanpa filter tanggal');
     await goSub(s.page, 'orders', 'Semua pesanan');
     assert(await s.page.isHidden('#checkout-inbox') && await s.page.isHidden('.order-chips'), 'semua pesanan: tanpa permintaan & tombol cepat');
-    assert(await s.page.isVisible('#order-filters input[type=date]'), 'filter tanggal terbuka');
+    assert(await s.page.isVisible('#order-filters') && await s.page.isHidden('#order-filters input[type=date]'), 'filter tanggal ada, terlipat');
+    assert((await s.page.textContent('#order-filters summary')).startsWith('Tanggal & status · '), 'ringkasan filter di judul lipatan');
+    await s.page.click('#order-filters summary');
+    assert(await s.page.isVisible('#order-filters input[type=date]'), 'filter tanggal bisa dibuka');
     equal(await s.page.textContent('#orders-title'), 'Semua pesanan', 'judul');
     assert(s.page.url().endsWith('#orders'), 'alamat #orders');
     await goSub(s.page, 'orders', 'Packing');
@@ -210,6 +213,27 @@ export function adminTests(browser, devices, baseUrl) {
     await s.page.fill('#order-search', 'Selesai 3');
     await s.page.waitForTimeout(200);
     equal(await names(), ['Selesai 3'], 'cari langsung ketemu');
+    await s.close();
+  });
+
+  test('Semua pesanan: baris ringkas dengan tanggal & status, termasuk selesai dan batal', async () => {
+    const data = defaultData();
+    data.orders.push(order('o9', 'Zara Batal', { cancelled: true, order_date: todayJakarta() }));
+    data.orders.forEach(o => { o.order_date = todayJakarta(); });
+    const s = await open(data);
+    await goSub(s.page, 'orders', 'Semua pesanan');
+    await s.page.waitForTimeout(400);
+    assert(await s.page.isHidden('.order-table'), 'tabel diganti baris ringkas');
+    const rows = [];
+    for (;;) {
+      rows.push(...await s.page.$$eval('#done-list .po-row', xs => xs.map(x => x.textContent)));
+      const next = s.page.locator('#done-list >> text=Berikutnya ›');
+      if (await next.isVisible() && await next.isEnabled()) await next.click(); else break;
+    }
+    equal(rows.length, 8, 'semua pesanan minggu ini (7 + 1 batal)');
+    assert(rows.some(r => r.includes('Fajar Lunas') && r.includes('✓ Selesai')), 'selesai bertanda');
+    assert(rows.some(r => r.includes('Zara Batal') && r.includes('Batal')), 'batal bertanda');
+    assert(rows.some(r => r.includes('Ani Hari Ini') && r.includes('Antar') && r.includes('Bayar')), 'belum selesai bertanda');
     await s.close();
   });
 

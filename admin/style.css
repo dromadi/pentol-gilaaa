@@ -747,3 +747,7 @@ input[type="file"]::file-selector-button { margin-right: 10px; padding: 8px 14px
 #inbox-list .inbox-row { margin-bottom: 6px; background: #fffdf9; }
 #inbox-list .inbox-row small { display: inline; }
 @media (max-width: 620px) { #inbox-list .inbox-row small { display: none; } }
+.todo-tag.done { background: #edf6f1; color: #387660; }
+.todo-tag.cancelled { background: #eee7e2; color: #7a675c; }
+.po-row > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.po-row-meta { flex-shrink: 0; }
