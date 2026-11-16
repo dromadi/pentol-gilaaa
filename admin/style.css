@@ -728,3 +728,12 @@ input[type="file"]::file-selector-button { margin-right: 10px; padding: 8px 14px
 .vp-warn { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 12px; padding: 10px 14px; border-radius: 12px; background: #fff4e0; border: 1px solid #f0d7a8; }
 .vp-warn p { margin: 0; flex: 1 1 240px; font-size: 12px; color: #6b4a12; }
 .vp-warn button { border-radius: 999px; min-height: 36px; }
+
+/* Tombol besar "+ Catat pesanan" di semua halaman (dipakai tiap hari) */
+.quick-order { position: fixed; right: 28px; bottom: 28px; z-index: 29; min-height: 58px; padding: 0 26px; border: 0; border-radius: 999px;
+  background: var(--wine); color: #fff; font-size: 16px; font-weight: 800; box-shadow: 0 14px 34px #57231e55; }
+.quick-order:hover { background: #612320; }
+@media (max-width: 900px) {
+  .quick-order { right: 14px; bottom: calc(86px + env(safe-area-inset-bottom)); min-height: 54px; padding: 0 22px; font-size: 15px; }
+  .admin-main { padding-bottom: 180px; }
+}

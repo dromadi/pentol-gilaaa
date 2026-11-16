@@ -151,6 +151,27 @@ export function adminTests(browser, devices, baseUrl) {
     await s.close();
   });
 
+  test('tombol besar + Catat pesanan: tampil di semua halaman, langsung membuka form', async () => {
+    const s = await open();
+    for (const nav of ['today', 'stock', 'finance']) {
+      await s.page.click(`.bottom-nav [data-go=${nav}]`);
+      await s.page.waitForTimeout(200);
+      assert(await s.page.isVisible('#quick-order'), 'tombol tampil di ' + nav);
+    }
+    const box = await s.page.locator('#quick-order').boundingBox();
+    const nav = await s.page.locator('.bottom-nav').boundingBox();
+    assert(box.height >= 50 && box.y + box.height <= nav.y, 'besar dan di atas menu bawah');
+    await s.page.click('#quick-order');
+    await s.page.waitForTimeout(400);
+    assert(await s.page.isVisible('#order-form'), 'form pesanan terbuka');
+    assert(await s.page.isVisible('#orders'), 'pindah ke Pesanan');
+    equal(await s.page.evaluate(() => document.activeElement?.name), 'customer', 'langsung ke kolom nama');
+    assert(await s.page.isHidden('#quick-order'), 'tombol sembunyi selama form terbuka');
+    await s.page.click('#cancel-order');
+    assert(await s.page.isVisible('#quick-order'), 'muncul lagi setelah form ditutup');
+    await s.close();
+  });
+
   test('Pesanan: cari nama/WA/invoice; permintaan katalog punya Balas WA', async () => {
     const s = await open();
     await goSub(s.page, 'orders');

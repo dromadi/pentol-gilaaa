@@ -283,6 +283,10 @@ Sub menu Laporan: **Laba waktu · Laba varian · Harga jual · Tutup hari** (ver
 - **Laba varian** (`#profitVariant`): periode + daftar varian urut laba terbesar: pack & penjualan, laba, margin (laba ÷ penjualan varian, sebelum ongkir toko), porsi dari total laba (bilah). **⚠ margin < 15%** disorot + kotak saran dengan tombol **Ubah harga →** (ke Harga jual). Tekan varian = tren varian itu per hari/minggu/bulan (mengikuti panjang periode). Catatan bertanggal (`dated`) kini menyimpan `sku`.
 - Uji: `Laba varian: urut laba terbesar…`; uji laporan lama disesuaikan.
 
+## Tombol besar "+ Catat pesanan" di semua halaman (16 Nov)
+
+Keluhan pemilik: Catat pesanan "ngumpet" (hanya kecil di kepala halaman Pesanan), padahal dipakai tiap hari. Sekarang ada tombol melayang `#quick-order` di semua halaman admin: di HP tepat di atas menu bawah (kanan), di laptop pojok kanan bawah. Tekan = pindah ke Pesanan → Perlu tindakan (bila belum di Pesanan), form pesanan baru terbuka, kursor di kolom nama. Tombol sembunyi selama form terbuka dan muncul lagi setelah Simpan/Batal (`syncQuickOrder`). Ruang bawah halaman HP ditambah agar tidak menutupi isi. Versi `catat-39`. Uji: `tombol besar + Catat pesanan…`.
+
 ## Input lewat ChatGPT (tahap 1: tempel)
 
 Keputusan: **aplikasi (Supabase) tetap sumber kebenaran**; ChatGPT hanya pintu masuk. Tidak ada data yang tersimpan tanpa konfirmasi admin di form aplikasi, sehingga semua validasi database tetap berlaku.

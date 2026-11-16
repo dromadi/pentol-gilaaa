@@ -1,5 +1,5 @@
 import { supabaseUrl, supabasePublishableKey } from './config.js';
-import { initOperations } from './operations.js?v=varian-38';
+import { initOperations } from './operations.js?v=catat-39';
 
 const products = new Map([
   ['UR','Pentol Urat'], ['PK','Pentol Kecil'], ['TP','Tahu Pentol'],
@@ -467,6 +467,7 @@ async function showDashboard() {
   status('');
   armHistory(currentView);
   selectView(currentView);
+  syncQuickOrder();
   startBadges();
 }
 
@@ -681,6 +682,7 @@ function resetOrderForm() {
   $('order-estimate').textContent = '';
   orderForm.hidden = true;
   $('new-order').setAttribute('aria-expanded', 'false');
+  syncQuickOrder();
 }
 
 function populateOrderStock(select) {
@@ -1109,10 +1111,20 @@ function openOrder(order = null, inboxEntry = null) {
   ].filter(Boolean).join(' ') || (inboxEntry ? 'Dari katalog: ubah varian, jumlah, jadwal, atau data pembeli sesuai permintaan terbaru, lalu Simpan pesanan.' : '');
   updateOrderEstimate();
   $('new-order').setAttribute('aria-expanded', 'true');
+  syncQuickOrder();
   $('save-order').textContent = order ? 'Simpan perubahan' : 'Simpan pesanan';
   e.customer.focus();
 }
 $('new-order').addEventListener('click', () => { if (orderForm.hidden) openOrder(); });
+// Tombol besar "+ Catat pesanan" di semua halaman: buka Pesanan → form pesanan baru, langsung ke kolom nama.
+function syncQuickOrder() { $('quick-order').hidden = !session || $('dashboard').hidden || !orderForm.hidden; }
+$('quick-order').addEventListener('click', () => {
+  if (!['actions', 'orders', 'done'].includes(currentView)) selectView('actions');
+  if (orderForm.hidden) openOrder();
+  syncQuickOrder();
+  orderForm.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  orderForm.elements.customer.focus({ preventScroll: true });
+});
 $('add-item').addEventListener('click', () => { if (!busy) { addOrderItem(); renderQuickPick(); } });
 $('cancel-order').addEventListener('click', () => {
   if (busy) return;
