@@ -604,3 +604,35 @@ input[type="file"]::file-selector-button { margin-right: 10px; padding: 8px 14px
 .gpt-head { flex-wrap: wrap; }
 .gpt-head .primary-action { flex: 1 1 100%; order: 3; }
 .ops-filters .report-export { align-self: end; border-radius: 999px; }
+
+/* ===== Tablet & laptop: tabel pesanan rapi ===== */
+@media (min-width: 621px) {
+  /* Sel Status tetap sel tabel (flex merusak garis baris). */
+  .order-table td[data-label="Status"] { display: table-cell; width: 1%; white-space: nowrap; }
+  .order-table td[data-label="Status"] .status-chip { margin: 0 4px 4px 0; }
+  .order-table td[data-label="Status"] .order-when { display: block; margin-top: 2px; }
+  .order-table td[data-label="Tanggal"], .order-table td[data-label="Tagihan"] { width: 1%; }
+  .order-table td[data-label="Pelanggan"] { min-width: 180px; }
+  .order-table td[data-label="Pesanan"] { min-width: 200px; }
+  /* Aksi: tombol berdampingan rapat, menu ⋯ melayang (tidak mendorong tinggi baris). */
+  .order-table td[data-label="Aksi"] { width: 1%; white-space: nowrap; }
+  .order-table .order-action-bar { min-width: 0; flex-wrap: nowrap; align-items: center; }
+  .order-table .order-action-bar .ops-actions { min-width: 0; }
+  .more-actions[open] > .ops-actions { position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; margin: 0;
+    padding: 8px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 12px 30px #3b231a26; }
+}
+#finance-body .report-variants h3 { margin-top: 0; }
+@media (min-width: 621px) and (max-width: 1100px) {
+  .order-table td[data-label="Status"] { white-space: normal; width: auto; min-width: 120px; }
+  .order-table td[data-label="Pelanggan"], .order-table td[data-label="Pesanan"] { min-width: 130px; }
+  .order-table .order-action-bar { flex-direction: column; align-items: stretch; }
+  .order-table .order-action-bar .primary-actions { flex-direction: column; }
+  .order-table .more-actions > summary { width: 100%; }
+}
+@media (min-width: 1101px) {
+  .order-table .order-action-bar .primary-actions { flex-wrap: nowrap; }
+}
+@media (max-width: 1100px) {
+  .period-chips { max-width: none; }
+}
+@media (min-width: 1101px) { .order-table { overflow: visible; } }

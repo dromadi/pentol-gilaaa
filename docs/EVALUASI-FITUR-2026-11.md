@@ -209,6 +209,14 @@ Untuk memasukkan rekap lama (31 pesanan diantar & lunas) tanpa 62 kali Simpan.
 
 Tombol **⬇ Unduh Excel** di Laporan → Laba & harga, mengikuti periode yang tampil (Hari ini/Minggu ini/Bulan ini/Bulan lalu/tanggal bebas). File `Laporan-Pentol-Gilaaa-<dari>_<sampai>.xlsx`, 7 lembar: **Ringkasan** (penjualan, HPP, laba, margin, uang masuk, tagihan, belum dibayar, nilai stok + catatan dasar tanggal), **Laba per varian**, **Penjualan per minggu** (4 minggu terakhir), **Pesanan** (pesanan periode: invoice, pelanggan, WA, isi, total, dibayar, sisa, status, jadwal), **Pembayaran** (tanggal bayar, pelanggan, invoice, nominal; nama dari embed `pentol_orders`), **Tagihan terbuka** (semua yang belum lunas saat ini, urut paling lama sejak diantar), **Stok** (per batch + harga beli & nilai siap jual). Angka rupiah disimpan sebagai angka agar bisa dijumlah di Excel. Tanpa SQL baru. Versi `excel-25`. Uji: `laporan: Unduh Excel berisi 7 lembar…`.
 
+## Tampilan tablet & laptop (16 Nov)
+
+Laporan pemilik: tabel Pesanan di laptop/tablet tidak rapi. Diperbaiki (versi `rapi-26`, hanya CSS ≥621px; HP tidak berubah):
+- Sel **Status** sebelumnya `display:flex` sehingga keluar dari baris tabel (garis bawah tidak sejajar). Kini tetap sel tabel, chip berjajar dengan jarak.
+- **Aksi**: tombol berdampingan rapat (Invoice/Antar/Bayar + ⋯), menu ⋯ melayang di atas tabel (tidak mendorong tinggi baris), kolom selebar isinya. Tanggal/Tagihan/Status selebar isi; Pelanggan & Pesanan mendapat sisa ruang.
+- **Tablet (621–1100px)**: status boleh 2 baris, tombol aksi bertumpuk agar kolom Aksi tidak terpotong.
+- **Laporan**: tombol periode satu baris penuh di tablet; jarak kosong di atas "Laba per varian" dihapus.
+
 ## Input lewat ChatGPT (tahap 1: tempel)
 
 Keputusan: **aplikasi (Supabase) tetap sumber kebenaran**; ChatGPT hanya pintu masuk. Tidak ada data yang tersimpan tanpa konfirmasi admin di form aplikasi, sehingga semua validasi database tetap berlaku.
