@@ -1,5 +1,5 @@
 import { supabaseUrl, supabasePublishableKey } from './config.js';
-import { initOperations } from './operations.js?v=data-29';
+import { initOperations } from './operations.js?v=back-30';
 
 const products = new Map([
   ['UR','Pentol Urat'], ['PK','Pentol Kecil'], ['TP','Tahu Pentol'],
@@ -213,6 +213,7 @@ function endSession(message) {
   $('stock-metrics').replaceChildren();
   setMenuExpanded(false);
   $('dashboard').hidden = true;
+  releaseHistory();
   $('logout').hidden = true;
   $('refresh-view').hidden = true;
   $('stock-rows').replaceChildren();
@@ -410,6 +411,52 @@ async function run(button, action) {
   finally { busy = false; button.disabled = false; }
 }
 
+// ===== Tombol back: selama masuk, back berpindah antar menu admin dan tidak keluar ke katalog =====
+// Riwayat: [katalog?] [penjaga depth 0] [menu depth 1] [menu depth 2] ... Back di penjaga = tetap di admin.
+let historyArmed = false;
+function armHistory(view) {
+  if (historyArmed) return;
+  historyArmed = true;
+  try {
+    history.replaceState({ pentolAdmin: 'guard', view, depth: 0 }, '', '#' + view);
+    history.pushState({ pentolAdmin: 'view', view, depth: 1 }, '', '#' + view);
+  } catch {}
+}
+function rememberView(view) {
+  try {
+    const state = history.state;
+    if (historyArmed && state?.pentolAdmin === 'view' && state.view !== view) {
+      history.pushState({ pentolAdmin: 'view', view, depth: (state.depth || 1) + 1 }, '', '#' + view);
+    } else {
+      history.replaceState(state?.pentolAdmin ? { ...state, view } : null, '', '#' + view);
+    }
+  } catch {}
+}
+addEventListener('popstate', event => {
+  if (!historyArmed || !session || $('dashboard').hidden) return;
+  const state = event.state;
+  const stay = () => { try { history.pushState({ pentolAdmin: 'view', view: currentView, depth: (state?.depth || 0) + 1 }, '', '#' + currentView); } catch {} };
+  // Kotak dialog terbuka: back cukup menutupnya.
+  const dialog = Array.from(document.querySelectorAll('dialog')).find(node => node.open);
+  if (dialog) { dialog.close(); stay(); return; }
+  if (state?.pentolAdmin === 'view' && knownViews().includes(state.view)) {
+    selectView(state.view, undefined, { fromHistory: true });
+    return;
+  }
+  stay();
+  status('Masih di admin. Untuk ke katalog, tekan Keluar dulu.');
+});
+// Setelah Keluar: buang riwayat menu admin agar back berikutnya kembali ke katalog.
+function releaseHistory() {
+  if (!historyArmed) return;
+  historyArmed = false;
+  try {
+    const depth = history.state?.depth || 0;
+    if (depth > 0) history.go(-depth);
+    setTimeout(() => { try { history.replaceState(null, '', location.pathname); } catch {} }, depth > 0 ? 300 : 0);
+  } catch {}
+}
+
 async function showDashboard() {
   await loadRows();
   await ops.loadPrices().catch(() => {});
@@ -418,6 +465,7 @@ async function showDashboard() {
   $('logout').hidden = false;
   $('refresh-view').hidden = false;
   status('');
+  armHistory(currentView);
   selectView(currentView);
   startBadges();
 }
@@ -570,7 +618,7 @@ function renderSubtabs(group, view) {
   bar.querySelector('[aria-current]')?.scrollIntoView({ inline:'nearest', block:'nearest' });
 }
 
-function selectView(view, packingMode, { keepScroll = false } = {}) {
+function selectView(view, packingMode, { keepScroll = false, fromHistory = false } = {}) {
   if (view === 'packing' && deliveryModes.includes(packingMode)) view = 'delivery';
   const group = groupOf(view);
   if (group) lastInGroup[group] = view;
@@ -584,7 +632,7 @@ function selectView(view, packingMode, { keepScroll = false } = {}) {
   $('mobile-view-label').textContent = navLabel;
   document.title = (badgeTotal ? '(' + badgeTotal + ') ' : '') + (subLabel && subLabel !== navLabel ? subLabel + ' · ' : '') + navLabel + ' · Admin Pentol Gilaaa';
   syncQuickNav(navView);
-  try { history.replaceState(null, '', '#' + view); } catch {}
+  if (!fromHistory) rememberView(view);
   if (isMobile() && !keepScroll) {
     setMenuExpanded(false);
     scrollTo({top:0});

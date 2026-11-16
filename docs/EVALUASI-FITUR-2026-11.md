@@ -245,6 +245,10 @@ Claude di browser menjalankan migrasi `perbaikan-temuan-2026-11-16.sql` langsung
 
 Dampak ke kode: `hapus-transaksi-2026-11.sql` kini menghapus inbox **sebelum** pesanan (FK `converted_order_id`) dan ikut menghapus `pentol_expenses` bila ada; uji SQL meniru kedua perubahan itu. Yang perlu dicek setelah isi file diterima: apakah `method` boleh kosong/ber-default (fungsi bayar lama menyisipkan 4 kolom secara posisi); bila wajib tanpa default, pencatatan bayar di produksi gagal.
 
+## Tombol back tetap di admin (16 Nov)
+
+Keluhan pemilik: setelah masuk admin, tombol back HP langsung kembali ke katalog. Penyebab: pindah menu memakai `history.replaceState`, jadi riwayat browser hanya berisi [katalog, admin]. Sekarang (versi `back-30`): saat dasbor tampil, riwayat diberi entri penjaga + entri menu (`armHistory`), setiap pindah menu menambah entri (`pushState`), back berpindah ke menu sebelumnya, back di menu pertama tertahan dengan pesan "tekan Keluar dulu", back saat kotak dialog terbuka hanya menutup dialog. Setelah **Keluar**, entri admin dibuang (`releaseHistory`) sehingga back berikutnya kembali ke katalog. "Lihat katalog ↗" tetap membuka tab baru. Uji: `tombol back: …`.
+
 ## Input lewat ChatGPT (tahap 1: tempel)
 
 Keputusan: **aplikasi (Supabase) tetap sumber kebenaran**; ChatGPT hanya pintu masuk. Tidak ada data yang tersimpan tanpa konfirmasi admin di form aplikasi, sehingga semua validasi database tetap berlaku.

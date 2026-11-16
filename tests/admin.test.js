@@ -727,6 +727,34 @@ export function adminTests(browser, devices, baseUrl) {
     await s.close();
   });
 
+  test('tombol back: pindah antar menu admin, tertahan di admin, setelah Keluar kembali ke katalog', async () => {
+    const context = await browser.newContext(devices['Pixel 7']);
+    const page = await context.newPage();
+    const data = defaultData();
+    await mockSupabase(page, data);
+    await page.goto(baseUrl + '/');
+    await page.waitForTimeout(300);
+    await login(page, baseUrl);
+    const back = async () => { await page.evaluate(() => history.back()); await page.waitForTimeout(400); };
+    const visible = () => page.evaluate(() => [...document.querySelectorAll('.admin-content > .panel')].find(p => !p.hidden)?.id);
+    await page.click('.bottom-nav [data-go=orders]'); await page.waitForTimeout(300);
+    await page.click('.bottom-nav [data-go=finance]'); await page.waitForTimeout(300);
+    equal(await visible(), 'finance', 'di Laporan');
+    await back();
+    equal(await visible(), 'orders', 'back = menu sebelumnya');
+    await page.click('#subtabs >> text=Antar'); await page.waitForTimeout(300);
+    await back(); await back(); await back(); await back();
+    assert(page.url().includes('/admin/'), 'back berkali-kali tetap di admin: ' + page.url());
+    assert(await page.isVisible('#dashboard'), 'dasbor tetap tampil');
+    assert((await page.textContent('#status')).includes('tekan Keluar'), 'pesan petunjuk');
+    await page.click('#logout');
+    await page.waitForTimeout(800);
+    await page.evaluate(() => history.back());
+    await page.waitForURL(url => !String(url).includes('/admin/'), { timeout: 5000 });
+    assert(!page.url().includes('/admin/'), 'setelah Keluar, back ke katalog');
+    await context.close();
+  });
+
   test('sesi: tetap masuk setelah aplikasi ditutup; Keluar mencabut sesi dan ikut di tab lain', async () => {
     const context = await browser.newContext(devices['Pixel 7']);
     const data = defaultData();
