@@ -615,12 +615,27 @@ export function adminTests(browser, devices, baseUrl) {
     await s.page.click('#ops-form button:has-text("Hapus semua")');
     await s.page.waitForTimeout(300);
     assert((await s.page.textContent('#ops-error')).includes('HAPUS SEMUA'), 'konfirmasi salah ditolak');
-    equal(s.data.writes.filter(w => w.fn === 'pentol_wipe_transactions').length, 0, 'belum dihapus');
+    equal(s.data.writes.filter(w => w.fn === 'pentol_wipe_transactions' && w.body.confirm_text === 'HAPUS SEMUA').length, 0, 'belum dihapus');
     await s.page.fill('#ops-form [name=confirm_text]', 'HAPUS SEMUA');
     const [backup] = await Promise.all([s.page.waitForEvent('download'), s.page.click('#ops-form button:has-text("Hapus semua")')]);
     assert(backup.suggestedFilename().startsWith('Cadangan-Pentol-Gilaaa-'), 'cadangan diunduh dulu');
     await s.page.waitForTimeout(800);
-    equal(s.data.writes.filter(w => w.fn === 'pentol_wipe_transactions').map(w => w.body.confirm_text), ['HAPUS SEMUA'], 'fungsi hapus dipanggil sekali');
+    equal(s.data.writes.filter(w => w.fn === 'pentol_wipe_transactions').map(w => w.body.confirm_text), ['cek', 'HAPUS SEMUA'], 'cek dulu, lalu hapus sekali');
+    await s.close();
+  });
+
+  test('hapus semua sebelum SQL: langsung diberi tahu, tanpa unduh cadangan atau hapus', async () => {
+    const data = defaultData();
+    data.missingRpc = ['pentol_wipe_transactions'];
+    const s = await open(data);
+    await s.page.click('#more-menu');
+    await s.page.click('#admin-menu [data-view=reconcile]');
+    await s.page.click('#subtabs >> text=Impor & ekspor');
+    await s.page.click('text=Hapus semua transaksi…');
+    await s.page.waitForTimeout(400);
+    equal(await s.page.textContent('#ops-title'), 'Fitur hapus belum aktif', 'judul pemberitahuan');
+    assert((await s.page.textContent('#ops-dialog')).includes('hapus-transaksi-2026-11.sql'), 'nama file SQL');
+    equal(await s.page.locator('#ops-form [name=confirm_text]').count(), 0, 'tidak meminta ketik HAPUS SEMUA');
     await s.close();
   });
 

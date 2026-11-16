@@ -2065,7 +2065,24 @@ export function initOperations({ $, request, status, products, prices, today, fo
 
     const danger = card('Hapus semua transaksi', 'Menghapus semua pesanan, pembayaran, pengantaran, permintaan katalog, stok batch, PO, dan riwayat. Harga jual, daftar varian, dan akun admin tetap. Nomor invoice mulai lagi dari 00001. Cadangan Excel diunduh otomatis lebih dulu.');
     danger.classList.add('data-danger');
-    const wipe = button('Hapus semua transaksi…', () => {
+    // Cek dulu apakah fungsi hapus sudah ada di database (teks konfirmasi salah: tidak menghapus apa pun).
+    async function wipeReady() {
+      try {
+        await request(root + 'rpc/pentol_wipe_transactions', {method:'POST', body:{confirm_text:'cek'}});
+        return true;
+      } catch (error) { return error.status !== 404; }
+    }
+    const wipe = button('Hapus semua transaksi…', async () => {
+      wipe.disabled = true;
+      const ready = await wipeReady();
+      wipe.disabled = false;
+      if (!ready) {
+        showDialog('Fitur hapus belum aktif', [
+          el('p', 'Fungsi hapus belum ada di database, jadi tidak ada data yang terhapus.'),
+          el('p', 'Jalankan sekali file admin/hapus-transaksi-2026-11.sql di Supabase → SQL Editor (salin dari link raw GitHub, tempel, Run). Setelah itu tombol ini bisa dipakai.')
+        ], async () => {}, { submitLabel: 'Mengerti' });
+        return;
+      }
       const confirmBox = control('Ketik HAPUS SEMUA untuk melanjutkan', 'confirm_text', {props:{autocomplete:'off'}});
       showDialog('Hapus semua transaksi?', [
         el('p', 'Tindakan ini tidak bisa dibatalkan dari aplikasi. Data hanya bisa dikembalikan dari file cadangan.'),
