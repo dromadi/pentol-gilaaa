@@ -1,5 +1,5 @@
 import { supabaseUrl, supabasePublishableKey } from './config.js';
-import { initOperations } from './operations.js?v=hapus-31';
+import { initOperations } from './operations.js?v=selesai-32';
 
 const products = new Map([
   ['UR','Pentol Urat'], ['PK','Pentol Kecil'], ['TP','Tahu Pentol'],
@@ -584,7 +584,7 @@ document.addEventListener('keydown', event => {
 
 // Menu utama dengan beberapa bagian ditampilkan sebagai tab di atas halaman.
 const viewGroups = {
-  orders: [['actions', 'Perlu tindakan'], ['orders', 'Semua pesanan'], ['packing', 'Packing'], ['delivery', 'Antar'], ['receivables', 'Tagihan']],
+  orders: [['actions', 'Perlu tindakan'], ['orders', 'Semua pesanan'], ['packing', 'Packing'], ['delivery', 'Antar'], ['receivables', 'Tagihan'], ['done', 'Selesai']],
   stock: [['stock', 'Stok'], ['purchasing', 'Restok & PO']],
   finance: [['finance', 'Laba & harga'], ['closeDay', 'Tutup hari']],
   reconcile: [['reconcile', 'Rekonsiliasi'], ['dataExcel', 'Impor & ekspor']]
@@ -592,10 +592,10 @@ const viewGroups = {
 const groupOf = view => Object.keys(viewGroups).find(group => viewGroups[group].some(([id]) => id === view));
 const lastInGroup = Object.fromEntries(Object.keys(viewGroups).map(group => [group, viewGroups[group][0][0]]));
 // "Perlu tindakan" dan "Semua pesanan" memakai panel yang sama (#orders) dengan tampilan berbeda.
-const panelOf = view => view === 'actions' ? 'orders' : view;
+const panelOf = view => view === 'actions' || view === 'done' ? 'orders' : view;
 const deliveryModes = ['due', 'pending', 'unscheduled', 'date'];
 // Halaman terakhir disimpan di alamat (#tagihan dsb.) agar refresh browser membuka halaman yang sama.
-const knownViews = () => [...Array.from(document.querySelectorAll('.admin-content > .panel'), panel => panel.id), 'actions'];
+const knownViews = () => [...Array.from(document.querySelectorAll('.admin-content > .panel'), panel => panel.id), 'actions', 'done'];
 let currentView = (() => {
   const wanted = decodeURIComponent(location.hash.slice(1));
   return knownViews().includes(wanted) && wanted !== 'signin' ? wanted : 'today';
@@ -605,6 +605,7 @@ function renderSubtabs(group, view) {
   const bar = $('subtabs');
   bar.hidden = !group;
   bar.classList.toggle('many', Boolean(group) && viewGroups[group].length > 3);
+  bar.style.setProperty('--tabs', group ? viewGroups[group].length : 1);
   if (!group) return bar.replaceChildren();
   bar.replaceChildren(...viewGroups[group].map(([id, label]) => {
     const tab = document.createElement('button');
@@ -638,7 +639,7 @@ function selectView(view, packingMode, { keepScroll = false, fromHistory = false
     scrollTo({top:0});
     $(panelOf(view)).querySelector('h2').focus({preventScroll:true});
   }
-  if (view === 'orders' || view === 'actions') { setOrdersMode(view); loadOrders(); ops.inbox(); }
+  if (view === 'orders' || view === 'actions' || view === 'done') { setOrdersMode(view); loadOrders(); ops.inbox(); }
   else ops.open(view, packingMode);
 }
 
@@ -844,24 +845,29 @@ let orderChip = 'action';
 const chipFilters = {
   action: '&cancelled=eq.false&or=(paid.eq.false,delivered.eq.false)',
   unpaid: '&cancelled=eq.false&paid=eq.false',
-  pending: '&cancelled=eq.false&delivered=eq.false'
+  pending: '&cancelled=eq.false&delivered=eq.false',
+  done: '&cancelled=eq.false&paid=eq.true&delivered=eq.true'
 };
-const chipLabels = { action:'Perlu tindakan', unpaid:'Belum bayar', pending:'Belum antar', all:'Per tanggal' };
+const chipLabels = { action:'Perlu tindakan', unpaid:'Belum bayar', pending:'Belum antar', done:'Selesai', all:'Per tanggal' };
 // Perlu tindakan: permintaan katalog + pesanan belum bayar/antar (tombol cepat).
 // Semua pesanan: per tanggal/minggu dengan filter status.
+// Selesai: pesanan aktif yang sudah lunas dan sudah diantar semua, terbaru di atas.
 function setOrdersMode(view) {
   const actions = view === 'actions';
-  if (actions && orderChip === 'all') setOrderChip('action');
-  if (!actions) setOrderChip('all');
-  $('orders-title').textContent = actions ? 'Perlu tindakan' : 'Semua pesanan';
+  const done = view === 'done';
+  if (actions && ['all', 'done'].includes(orderChip)) setOrderChip('action');
+  if (done) setOrderChip('done');
+  if (view === 'orders') setOrderChip('all');
+  $('orders-title').textContent = actions ? 'Perlu tindakan' : done ? 'Pesanan selesai' : 'Semua pesanan';
   $('orders-desc').textContent = actions ? 'Permintaan baru dan pesanan yang belum dibayar atau belum diantar.'
+    : done ? 'Sudah lunas dan sudah diantar semua. Tidak ada lagi yang perlu dikerjakan.'
     : 'Semua pesanan per tanggal atau minggu, termasuk yang selesai dan dibatalkan.';
   $('checkout-inbox').hidden = !actions;
   document.querySelector('.order-chips').hidden = !actions;
-  $('order-filters').hidden = actions;
-  if (!actions) $('order-filters').open = true;
+  $('order-filters').hidden = view !== 'orders';
+  if (view === 'orders') $('order-filters').open = true;
   // Pertama kali dibuka: minggu ini (harian sering kosong).
-  if (!actions && !ordersModeSeen) { ordersModeSeen = true; orderPeriod.value = 'week'; }
+  if (view === 'orders' && !ordersModeSeen) { ordersModeSeen = true; orderPeriod.value = 'week'; }
 }
 let ordersModeSeen = false;
 function setOrderChip(chip) {
@@ -925,7 +931,8 @@ function renderOrderList() {
   const active = loadedOrders.filter(order => !order.cancelled);
   const charges = active.reduce((sum, order) => sum + ops.total(order), 0);
   const packs = active.reduce((sum, order) => sum + order.pentol_order_items.reduce((qty, item) => qty + item.quantity, 0), 0);
-  $('order-metrics').textContent = active.length + ' aktif · ' + active.filter(order => !order.paid).length + ' belum bayar · '
+  $('order-metrics').textContent = orderChip === 'done' ? active.length + ' pesanan selesai · Rp' + format.format(charges) + ' terjual & dibayar'
+    : active.length + ' aktif · ' + active.filter(order => !order.paid).length + ' belum bayar · '
     + active.filter(order => !order.delivered).length + ' belum antar · Rp' + format.format(charges) + ' tagihan';
   const query = orderSearch.value.trim().toLocaleLowerCase('id');
   const digits = query.replace(/\D/g, '');
@@ -935,6 +942,7 @@ function renderOrderList() {
     || (digits.length >= 3 && [(order.contact || '').replace(/\D/g, ''), String(order.invoice_no)].some(text =>
       text.includes(digits) || text.includes(digits.replace(/^0/, '62')) || text.replace(/^62/, '0').includes(digits)));
   const selectedStatus = orderStatus.value;
+  if (orderChip === 'done') loadedOrders.sort((a, b) => b.order_date.localeCompare(a.order_date) || b.invoice_no - a.invoice_no);
   const visible = loadedOrders.filter(order => {
     if (!matchesQuery(order)) return false;
     if (orderChip !== 'all') return true;
@@ -987,6 +995,7 @@ function renderOrderList() {
   emptyRow(target, weekly ? 6 : 5, loadedOrders.length
     ? 'Tidak ada pesanan yang cocok dengan pencarian.'
     : orderChip === 'action' ? 'Semua pesanan sudah dibayar dan diantar. 🎉'
+    : orderChip === 'done' ? 'Belum ada pesanan yang lunas dan sudah diantar.'
     : orderChip === 'unpaid' ? 'Tidak ada pesanan yang belum dibayar.'
     : orderChip === 'pending' ? 'Tidak ada pesanan yang belum diantar.'
     : orderPeriod.value === 'week' ? 'Belum ada pesanan pada minggu ini.' : 'Belum ada pesanan pada tanggal ini.');

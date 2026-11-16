@@ -7,7 +7,7 @@ import { parseGptText, gptInstructions } from './gpt.js?v=1';
 export function initOperations({ $, request, status, products, prices, today, format,
   tableRow, emptyRow, quantities, getRows, getSession, getView, openOrder, refresh, selectView, loadRows }) {
   // Buka form pesanan tanpa pindah dari "Perlu tindakan" ke "Semua pesanan" (atau sebaliknya).
-  const toOrders = () => { if (!['actions', 'orders'].includes(getView())) selectView('actions'); };
+  const toOrders = () => { if (!['actions', 'orders', 'done'].includes(getView())) selectView('actions'); };
   const root = '/rest/v1/';
   const ordersSelect = '*,pentol_order_items(*),pentol_payments(*)';
   const dialog = $('ops-dialog');

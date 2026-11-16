@@ -249,6 +249,10 @@ Dampak ke kode: `hapus-transaksi-2026-11.sql` kini menghapus inbox **sebelum** p
 
 Keluhan pemilik: setelah masuk admin, tombol back HP langsung kembali ke katalog. Penyebab: pindah menu memakai `history.replaceState`, jadi riwayat browser hanya berisi [katalog, admin]. Sekarang (versi `back-30`): saat dasbor tampil, riwayat diberi entri penjaga + entri menu (`armHistory`), setiap pindah menu menambah entri (`pushState`), back berpindah ke menu sebelumnya, back di menu pertama tertahan dengan pesan "tekan Keluar dulu", back saat kotak dialog terbuka hanya menutup dialog. Setelah **Keluar**, entri admin dibuang (`releaseHistory`) sehingga back berikutnya kembali ke katalog. "Lihat katalog ↗" tetap membuka tab baru. Uji: `tombol back: …`.
 
+## Pesanan → Selesai (16 Nov)
+
+Sub menu ke-6 **Selesai** (`#done`, panel `#orders`): pesanan aktif yang sudah lunas **dan** sudah diantar semua (`paid=true&delivered=true&cancelled=false`), terbaru di atas, dengan kotak cari; tanpa permintaan katalog, tombol cepat, atau filter tanggal. Ringkasan: "N pesanan selesai · RpX terjual & dibayar". Grid sub menu di HP memakai `--tabs` (jumlah tab grup). Versi `selesai-32`. Uji: `Pesanan → Selesai…`.
+
 ## Input lewat ChatGPT (tahap 1: tempel)
 
 Keputusan: **aplikasi (Supabase) tetap sumber kebenaran**; ChatGPT hanya pintu masuk. Tidak ada data yang tersimpan tanpa konfirmasi admin di form aplikasi, sehingga semua validasi database tetap berlaku.

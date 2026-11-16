@@ -113,11 +113,11 @@ export function adminTests(browser, devices, baseUrl) {
     await s.close();
   });
 
-  test('Pesanan: 5 sub menu, Perlu tindakan vs Semua pesanan, Packing vs Antar', async () => {
+  test('Pesanan: 6 sub menu, Perlu tindakan vs Semua pesanan, Packing vs Antar', async () => {
     const s = await open();
     await goSub(s.page, 'orders');
     equal(await s.page.$$eval('#subtabs button', b => b.map(x => x.textContent)),
-      ['Perlu tindakan', 'Semua pesanan', 'Packing', 'Antar', 'Tagihan'], 'sub menu');
+      ['Perlu tindakan', 'Semua pesanan', 'Packing', 'Antar', 'Tagihan', 'Selesai'], 'sub menu');
     assert(await s.page.isVisible('#checkout-inbox') && await s.page.isVisible('.order-chips'), 'perlu tindakan: permintaan + tombol cepat');
     assert(await s.page.isHidden('#order-filters'), 'tanpa filter tanggal');
     await goSub(s.page, 'orders', 'Semua pesanan');
@@ -133,6 +133,21 @@ export function adminTests(browser, devices, baseUrl) {
     assert(s.page.url().endsWith('#delivery'), 'alamat #delivery');
     await s.page.reload(); await s.page.waitForTimeout(800);
     assert(await s.page.isVisible('#delivery'), 'refresh tetap di Antar');
+    await s.close();
+  });
+
+  test('Pesanan → Selesai: hanya yang lunas dan sudah diantar, terbaru di atas', async () => {
+    const data = defaultData();
+    data.orders.push(order('o9', 'Zaki Selesai Baru', { paid: true, delivered: true, items: [[1, 1]], order_date: shiftDay(-1) }));
+    const s = await open(data);
+    await goSub(s.page, 'orders', 'Selesai');
+    await s.page.waitForTimeout(400);
+    equal(await s.page.textContent('#orders-title'), 'Pesanan selesai', 'judul');
+    const names = await s.page.$$eval('#order-rows tr td[data-label="Pelanggan"] strong', xs => xs.map(x => x.textContent));
+    equal(names, ['Zaki Selesai Baru', 'Fajar Lunas'], 'hanya selesai, terbaru dulu');
+    assert(await s.page.isHidden('#checkout-inbox') && await s.page.isHidden('.order-chips') && await s.page.isHidden('#order-filters'), 'tanpa permintaan, tombol cepat, filter');
+    assert(s.page.url().endsWith('#done'), 'alamat #done');
+    assert(!await s.page.evaluate(() => document.documentElement.scrollWidth > innerWidth), 'tanpa geser ke samping');
     await s.close();
   });
 
