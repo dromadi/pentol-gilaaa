@@ -29,6 +29,8 @@ Katalog pelanggan (`/index.html`) memakai GitHub Pages. Area admin (`/admin/`) m
 5. **Jika Project URL berubah, ubah juga `connect-src` di tag Content-Security-Policy pada `admin/index.html`**, kalau tidak admin tidak bisa memuat data.
 6. Commit konfigurasi dan buka `/pentol-gilaaa/admin/`. Coba masuk sebagai admin dan sebagai akun biasa. Akun biasa tidak boleh melihat atau mengubah stok.
 
+> **Produksi:** file 4–11 di atas sudah dijalankan di Supabase produksi pada 16 Nov 2026 (berurutan, tanpa galat). File SQL baru berikutnya cukup dijalankan sendiri sesuai keterangannya.
+
 ## Pencatatan
 
 - **Stok per batch:** satu baris per kode batch + varian, dibuat dari **Catat restok**. Diterima bertambah lewat **Terima barang**; terpesan dan diantar berubah otomatis dari pesanan. Admin tidak bisa mengubah tabel stok langsung. Salah hitung atau barang rusak: tombol **Koreksi** (alasan wajib, tercatat di Riwayat Perubahan).

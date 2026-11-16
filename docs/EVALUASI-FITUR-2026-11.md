@@ -217,6 +217,12 @@ Laporan pemilik: tabel Pesanan di laptop/tablet tidak rapi. Diperbaiki (versi `r
 - **Tablet (621–1100px)**: status boleh 2 baris, tombol aksi bertumpuk agar kolom Aksi tidak terpotong.
 - **Laporan**: tombol periode satu baris penuh di tablet; jarak kosong di atas "Laba per varian" dihapus.
 
+## Migrasi produksi selesai (16 Nov)
+
+Pemilik (dibantu Claude di browser) menjalankan 8 file SQL berurutan di Supabase produksi, tanpa galat: security → receipts → invoice-reference → reconciliation-history → stock-integrity → operasional → ubah-pesanan → tanggal-antar. Pengecekan di database: 11 fungsi baru ada, 3 tabel baru ada, kolom `excel_invoice_no` ada, `pentol_shipments` terisi 39 baris dari data lama, tulis langsung ke tabel stok ditolak, data utuh (21 pesanan, diterima 107 pack). Dari luar: `pentol_catalog_v2` menjawab dengan `max_qty`, tabel pesanan tertutup untuk anon (401).
+
+Setelah itu: fallback sementara di form koreksi stok (PATCH langsung ke `pentol_batch_stock` bila `pentol_correct_received` belum ada) dihapus; koreksi stok kini hanya lewat fungsi beralasan. Pemeriksaan 404 lain dibiarkan karena hanya menampilkan pesan dan tidak menulis apa pun. Versi `live-27`.
+
 ## Input lewat ChatGPT (tahap 1: tempel)
 
 Keputusan: **aplikasi (Supabase) tetap sumber kebenaran**; ChatGPT hanya pintu masuk. Tidak ada data yang tersimpan tanpa konfirmasi admin di form aplikasi, sehingga semua validasi database tetap berlaku.
