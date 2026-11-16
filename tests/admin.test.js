@@ -623,6 +623,28 @@ export function adminTests(browser, devices, baseUrl) {
     await s.close();
   });
 
+  test('laporan: 4 kartu laba hari/minggu/bulan/tahun selalu tampil; per tahun', async () => {
+    const data = defaultData();
+    const t = todayJakarta();
+    data.shipments = [{ order_id: 'o6', stock_id: 's1', quantity: 2, unit_price: 36000, shipped_on: t }];
+    data.purchases = [{ batch_code:'BATCH-02', supplier:'', reference:'', ordered_on:shiftDay(-9), expected_on:null, shipping:0, packaging:0, other_cost:0,
+      pentol_purchase_items:[{ batch_code:'BATCH-02', sku:'UR', quantity:30, unit_cost:20000 }] }];
+    const s = await open(data);
+    await goSub(s.page, 'finance');
+    await s.page.waitForTimeout(600);
+    const tiles = await s.page.$$eval('.profit-tile', xs => xs.map(x => [x.dataset.period, x.querySelector('strong').textContent]));
+    equal(tiles, [['Hari ini', 'Rp32.000'], ['Minggu ini', 'Rp32.000'], ['Bulan ini', 'Rp32.000'], ['Tahun ini', 'Rp32.000']], 'empat kartu laba');
+    await s.page.click('.profit-tile[data-period="Hari ini"]');
+    await s.page.waitForTimeout(500);
+    equal(await s.page.inputValue('#finance [name=first]'), t, 'kartu membuka periode itu');
+    await s.page.click('.period-chips >> text=Tahun ini');
+    await s.page.waitForTimeout(500);
+    await s.page.click('.breakdown-switch >> text=Per tahun');
+    equal(await s.page.getAttribute('.report-breakdown', 'data-mode'), 'year', 'per tahun');
+    assert((await s.page.textContent('.report-breakdown tbody tr')).includes('Tahun ' + t.slice(0, 4)), 'baris tahun');
+    await s.close();
+  });
+
   test('laporan: Unduh Excel berisi 8 lembar untuk periode yang dipilih', async () => {
     const data = defaultData();
     const t = todayJakarta();

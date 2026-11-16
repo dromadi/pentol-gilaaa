@@ -1264,7 +1264,57 @@ export function initOperations({ $, request, status, products, prices, today, fo
     exportButton.classList.add('report-export');
     exportButton.disabled = true;
     filters.append(exportButton);
-    target.replaceChildren(filters, out);
+    const quick = el('section', undefined, 'profit-quick');
+    quick.setAttribute('aria-label', 'Laba hari ini, minggu ini, bulan ini, tahun ini');
+    target.replaceChildren(quick, filters, out);
+    // Empat angka laba yang selalu tampil (tidak bergantung periode di bawah). Tekan = buka periode itu.
+    async function loadQuick() {
+      const t = today();
+      const yearStart = t.slice(0, 4) + '-01-01';
+      const byShipDate = await hasOpsTools();
+      const wib = day => day + 'T00:00:00%2B07:00';
+      const tomorrow = new Date(Date.parse(t + 'T00:00:00Z') + 864e5).toISOString().slice(0, 10);
+      const [data, ships, done, orders] = await Promise.all([
+        purchases(),
+        byShipDate ? list('pentol_shipments?select=stock_id,quantity,unit_price,shipped_on', '&shipped_on=gte.' + yearStart + '&shipped_on=lte.' + t + '&order=id') : [],
+        byShipDate ? list('pentol_orders?select=id,shipping_charge,shipping_cost,delivered_at', '&cancelled=eq.false&delivered=eq.true&delivered_at=gte.' + wib(yearStart) + '&delivered_at=lt.' + wib(tomorrow) + '&order=id') : [],
+        byShipDate ? [] : list('pentol_orders?select=' + ordersSelect, '&cancelled=eq.false&order_date=gte.' + yearStart + '&order=order_date,id')
+      ]);
+      const hpp = costs(data);
+      const wibDay = new Intl.DateTimeFormat('sv-SE', {timeZone:'Asia/Jakarta'});
+      const entries = [];
+      const sold = (stockId, qty, price, date) => {
+        const row = stock(stockId);
+        const unit = row ? hpp.get(row.batch_code + '|' + row.sku) : undefined;
+        entries.push({ date, sales: qty * price, cost: unit === undefined ? 0 : qty * unit, missing: unit === undefined ? qty : 0 });
+      };
+      if (byShipDate) {
+        ships.forEach(x => sold(x.stock_id, x.quantity, x.unit_price, x.shipped_on));
+        done.forEach(o => entries.push({ date: wibDay.format(new Date(o.delivered_at)), sales: Number(o.shipping_charge), ship: Number(o.shipping_cost) }));
+      } else for (const o of orders) {
+        o.pentol_order_items.forEach(i => sold(i.stock_id, i.shipped, i.unit_price, o.order_date));
+        if (o.delivered) entries.push({ date: o.order_date, sales: Number(o.shipping_charge), ship: Number(o.shipping_cost) });
+      }
+      const ranges = periodRanges();
+      const pick = ['Hari ini', 'Minggu ini', 'Bulan ini', 'Tahun ini'].map(name => ranges.find(([label]) => label === name));
+      quick.replaceChildren(...pick.map(([name, from, to]) => {
+        const m = entries.filter(e => e.date >= from && e.date <= to)
+          .reduce((sum, e) => ({ sales: sum.sales + (e.sales || 0), cost: sum.cost + (e.cost || 0), ship: sum.ship + (e.ship || 0), missing: sum.missing + (e.missing || 0) }),
+            { sales: 0, cost: 0, ship: 0, missing: 0 });
+        const tile = el('button', undefined, 'profit-tile');
+        tile.type = 'button';
+        tile.dataset.period = name;
+        tile.append(el('span', 'Laba ' + name.toLocaleLowerCase('id')), el('strong', m.missing ? 'Belum lengkap' : money(m.sales - m.cost - m.ship)),
+          el('small', 'Penjualan ' + money(m.sales)));
+        tile.addEventListener('click', () => {
+          first.lastChild.value = from;
+          last.lastChild.value = to;
+          reload().then(() => out.scrollIntoView({ block: 'start', behavior: 'smooth' }));
+        });
+        return tile;
+      }));
+    }
+    loadQuick().catch(() => quick.replaceChildren(el('p', 'Ringkasan laba belum bisa dimuat.')));
     // Penjualan diantar per minggu (Senin–Minggu), 4 minggu terakhir, menurut tanggal pesanan.
     function weekStart(day) {
       const date = new Date(day + 'T00:00:00Z');
@@ -1351,7 +1401,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
               unit === undefined ? '' : Math.round(unit), unit === undefined ? '' : Math.round(free * unit)];
           })];
         const bd = r.breakdown || { mode: 'day', rows: breakdownRows(r, 'day') };
-        const perPeriod = [['Periode (' + (bd.mode === 'day' ? 'hari' : bd.mode === 'week' ? 'minggu mulai Senin' : 'bulan') + ')', 'Pack diantar', 'Penjualan (Rp)', 'HPP (Rp)', 'Ongkir toko (Rp)', 'Laba (Rp)', 'Uang masuk (Rp)'],
+        const perPeriod = [['Periode (' + ({ day: 'hari', week: 'minggu mulai Senin', month: 'bulan', year: 'tahun' })[bd.mode] + ')', 'Pack diantar', 'Penjualan (Rp)', 'HPP (Rp)', 'Ongkir toko (Rp)', 'Laba (Rp)', 'Uang masuk (Rp)'],
           ...bd.rows.map(m => [m.key, m.qty, m.sales, Math.round(m.cost), m.ship, m.missing ? 'Belum lengkap' : Math.round(m.profit), m.cash])];
         const bytes = await closeDayWorkbook([['Ringkasan', summary], ['Laba per periode', perPeriod], ['Laba per varian', variants], ['Penjualan per minggu', weekly],
           ['Pesanan', orderRows], ['Pembayaran', paymentRows], ['Tagihan terbuka', openRows], ['Stok', stockRows]], window.JSZip);
@@ -1372,12 +1422,13 @@ export function initOperations({ $, request, status, products, prices, today, fo
     const monthName = new Intl.DateTimeFormat('id-ID', { month:'short', year:'numeric', timeZone:'UTC' });
     let breakdownMode = '';
     function bucketKey(date, mode) {
-      return mode === 'day' ? date : mode === 'week' ? weekStart(date) : date.slice(0, 7);
+      return mode === 'day' ? date : mode === 'week' ? weekStart(date) : mode === 'year' ? date.slice(0, 4) : date.slice(0, 7);
     }
     const shortDay = new Intl.DateTimeFormat('id-ID', { day:'numeric', month:'short', timeZone:'UTC' });
     // Minggu ditampilkan sebagai rentang yang benar-benar masuk periode, mis. "1 Nov" atau "9–15 Nov".
     function bucketLabel(key, mode, r) {
       if (mode === 'day') return dayLabel(key);
+      if (mode === 'year') return 'Tahun ' + key;
       if (mode === 'week') {
         const endDay = new Date(Date.parse(key + 'T00:00:00Z') + 6 * 864e5).toISOString().slice(0, 10);
         const from = key < r.a ? r.a : key, to = endDay > r.b ? r.b : endDay;
@@ -1408,12 +1459,12 @@ export function initOperations({ $, request, status, products, prices, today, fo
     }
     function renderBreakdown(box, r) {
       const days = spanDays(r.a, r.b);
-      const allowed = [['day', 'Per hari', days <= 62], ['week', 'Per minggu', days > 1 && days <= 400], ['month', 'Per bulan', days > 27]]
+      const allowed = [['day', 'Per hari', days <= 62], ['week', 'Per minggu', days > 1 && days <= 400], ['month', 'Per bulan', days > 27], ['year', 'Per tahun', days > 27]]
         .filter(([, , ok]) => ok);
       const preferred = days <= 14 ? 'day' : days <= 92 ? 'week' : 'month';
       const mode = allowed.some(([id]) => id === breakdownMode) ? breakdownMode : allowed.some(([id]) => id === preferred) ? preferred : allowed[0][0];
       const head = el('div', undefined, 'breakdown-head');
-      head.append(el('h3', 'Laba per ' + (mode === 'day' ? 'hari' : mode === 'week' ? 'minggu' : 'bulan')));
+      head.append(el('h3', 'Laba per ' + ({ day: 'hari', week: 'minggu', month: 'bulan', year: 'tahun' })[mode]));
       if (allowed.length > 1) {
         const switcher = el('div', undefined, 'breakdown-switch');
         for (const [id, text] of allowed) {

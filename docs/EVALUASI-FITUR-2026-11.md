@@ -272,6 +272,10 @@ Sub menu Laporan kini **Laba · Harga jual · Tutup hari** (versi `harga-36`).
 - **Harga jual** (`#prices`, `priceList`): tabel Varian · Harga jual · Harga beli terakhir (HPP batch terbaru, termasuk bagian ongkir/kemasan) · Untung/pack (%) · Ubah. Dialog ubah harga menampilkan harga beli terakhir. Di HP kolom harga beli disembunyikan agar muat satu layar.
 - **Cadangan data** pindah ke Rekonsiliasi Excel → Impor & ekspor (bersama ekspor/impor/hapus). Pengingat cadangan di Hari Ini tetap. `docs/CADANGAN-OTOMATIS.md` dan `AGENTS.md` ikut diperbarui.
 
+## Laba hari ini / minggu ini / bulan ini / tahun ini (16 Nov)
+
+Di atas halaman Laporan → Laba ada 4 kartu yang selalu tampil: **Laba hari ini · minggu ini · bulan ini · tahun ini** (laba = penjualan − HPP − ongkir toko, plus penjualannya; "Belum lengkap" bila HPP kurang). Data diambil sekali untuk 1 Januari s.d. hari ini (`loadQuick`, cara hitung sama dengan laporan: tanggal antar bila `pentol_shipments` ada). Tekan kartu = periode di bawah ikut berganti. Rincian kini juga punya pilihan **Per tahun** (untuk periode > 27 hari). Versi `laba-37`. Uji: `laporan: 4 kartu laba…`.
+
 ## Input lewat ChatGPT (tahap 1: tempel)
 
 Keputusan: **aplikasi (Supabase) tetap sumber kebenaran**; ChatGPT hanya pintu masuk. Tidak ada data yang tersimpan tanpa konfirmasi admin di form aplikasi, sehingga semua validasi database tetap berlaku.
