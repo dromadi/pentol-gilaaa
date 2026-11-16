@@ -291,6 +291,10 @@ Keluhan pemilik: Catat pesanan "ngumpet" (hanya kecil di kepala halaman Pesanan)
 
 Pola PO selesai dipasang di Pesanan → Selesai (`renderDoneList`, `#done-list`; tabel disembunyikan di mode ini): satu baris per pesanan (`nama · invoice` | `tanggal pesan · total`), **6 per halaman di HP / 8 di laptop**, tombol ‹ Sebelumnya · n/m · Berikutnya › **di atas daftar** (agar tidak tertutup), kotak cari yang sama (cari baru = kembali ke halaman 1). Tekan baris = rincian di kotak tersendiri (dipesan, diantar, ✓ Selesai, isi, total, pembayaran, kontak) dengan tombol Invoice dan ⋯ (Ubah/Koreksi; rincian ditutup dulu). Tombol melayang "+ Catat pesanan" disembunyikan khusus di tab ini (tombol besar di kepala halaman tetap). Versi `selesai-40`. Uji: `Pesanan → Selesai: 6 per halaman…`.
 
+## Perlu tindakan: baris ringkas + halaman (16 Nov)
+
+Pola Selesai dipasang di **Perlu tindakan** (semua tombol cepat: Semua/Belum bayar/Belum antar): satu baris per pesanan dengan tanda yang masih perlu dikerjakan (**Antar**, **Antar · telat** merah, **Bayar**) + total; tekan = kotak rincian (status bayar/antar, jadwal, isi, pembayaran, kontak) berisi tombol **Antar · Bayar · ⋯** (`showOrderDetail`, dipakai juga oleh Selesai). **Permintaan dari katalog** juga diringkas jadi satu baris per permintaan (nama · varian | pack · waktu), tekan = kartu lengkap (Proses, Ubah, Balas WA, Hapus) di kotak tersendiri. **Jumlah baris per halaman mengikuti tinggi layar** (3–8, dihitung dari posisi daftar sampai menu bawah) sehingga tanpa menggulir; tombol halaman di atas daftar; baris ringkasan ganda disembunyikan; tombol melayang "+ Catat pesanan" disembunyikan di Perlu tindakan & Selesai (tombol besar di kepala halaman tetap). "Semua pesanan" tetap tabel. Versi `tindakan-44`. Uji lama disesuaikan (hitung baris di semua halaman; aksi lewat kotak rincian).
+
 ## Input lewat ChatGPT (tahap 1: tempel)
 
 Keputusan: **aplikasi (Supabase) tetap sumber kebenaran**; ChatGPT hanya pintu masuk. Tidak ada data yang tersimpan tanpa konfirmasi admin di form aplikasi, sehingga semua validasi database tetap berlaku.

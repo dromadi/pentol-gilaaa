@@ -1,5 +1,5 @@
 import { supabaseUrl, supabasePublishableKey } from './config.js';
-import { initOperations } from './operations.js?v=selesai-40';
+import { initOperations } from './operations.js?v=tindakan-44';
 
 const products = new Map([
   ['UR','Pentol Urat'], ['PK','Pentol Kecil'], ['TP','Tahu Pentol'],
@@ -949,8 +949,11 @@ const shortDate = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'sho
 const wibDate = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Jakarta' });
 function renderDoneList(list, query) {
   if (query !== doneQuery) { doneQuery = query; donePage = 0; }
+  // Jumlah baris mengikuti tinggi layar: daftar + tombol halaman berhenti di atas menu bawah (tanpa menggulir).
   const box = $('done-list');
-  const perPage = innerWidth <= 620 ? 6 : 8;
+  const top = box.getBoundingClientRect().top + scrollY;
+  const reserved = 56 + (innerWidth <= 900 ? 96 : 24);
+  const perPage = top > 0 ? Math.min(8, Math.max(3, Math.floor((innerHeight - top - reserved) / 52))) : 5;
   const pages = Math.max(1, Math.ceil(list.length / perPage));
   donePage = Math.min(Math.max(donePage, 0), pages - 1);
   const node = (tag, text, className) => { const n = document.createElement(tag); if (text != null) n.textContent = text; if (className) n.className = className; return n; };
@@ -960,12 +963,26 @@ function renderDoneList(list, query) {
     row.type = 'button';
     const left = node('span');
     left.append(node('strong', order.customer), node('small', ' · ' + ops.invoiceNumber(order)));
-    row.append(left, node('span', shortDate.format(new Date(order.order_date + 'T00:00:00Z')) + ' · Rp' + format.format(ops.total(order)), 'po-row-meta'));
+    if (orderChip === 'done') {
+      row.append(left, node('span', shortDate.format(new Date(order.order_date + 'T00:00:00Z')) + ' · Rp' + format.format(ops.total(order)), 'po-row-meta'));
+    } else {
+      // Perlu tindakan: tanda apa yang belum (Antar / Bayar) + total.
+      const meta = node('span', null, 'po-row-meta todo-meta');
+      const late = !order.delivered && order.delivery_on && order.delivery_on < today();
+      if (!order.delivered) meta.append(node('span', late ? 'Antar · telat' : 'Antar', 'todo-tag' + (late ? ' late' : '')));
+      if (!order.paid) meta.append(node('span', 'Bayar', 'todo-tag pay'));
+      meta.append(' Rp' + format.format(ops.total(order)));
+      row.append(left, meta);
+    }
     row.setAttribute('aria-label', 'Rincian pesanan ' + order.customer);
-    row.addEventListener('click', () => showDoneDetail(order));
+    row.addEventListener('click', () => showOrderDetail(order));
     rowsBox.append(row);
   }
-  if (!list.length) rowsBox.append(node('p', doneQuery ? 'Tidak ada pesanan selesai yang cocok.' : 'Belum ada pesanan yang lunas dan sudah diantar.', 'result-count'));
+  const searching = doneQuery.split('|')[1];
+  if (!list.length) rowsBox.append(node('p', searching ? 'Tidak ada pesanan yang cocok dengan pencarian.'
+    : orderChip === 'done' ? 'Belum ada pesanan yang lunas dan sudah diantar.'
+    : orderChip === 'unpaid' ? 'Tidak ada pesanan yang belum dibayar.'
+    : orderChip === 'pending' ? 'Tidak ada pesanan yang belum diantar.' : 'Semua pesanan sudah dibayar dan diantar. 🎉', 'result-count'));
   const pager = node('div', null, 'po-pager');
   const prev = node('button', '‹ Sebelumnya');
   const next = node('button', 'Berikutnya ›');
@@ -979,7 +996,7 @@ function renderDoneList(list, query) {
   // Tombol halaman di atas daftar: tidak tertutup tombol + Catat pesanan di HP.
   box.replaceChildren(pager, rowsBox);
 }
-function showDoneDetail(order) {
+function showOrderDetail(order) {
   if (!doneDetail) {
     doneDetail = document.createElement('dialog');
     doneDetail.className = 'po-detail';
@@ -990,12 +1007,14 @@ function showDoneDetail(order) {
   const card = node('article', null, 'ops-card');
   const shipped = order.delivered_at ? shortDate.format(new Date(wibDate.format(new Date(order.delivered_at)) + 'T00:00:00Z')) : '';
   card.append(node('strong', order.customer + ' · ' + ops.invoiceNumber(order)),
-    node('p', 'Dipesan ' + shortDate.format(new Date(order.order_date + 'T00:00:00Z')) + (shipped ? ' · diantar ' + shipped : '') + ' · ✓ Selesai'),
+    node('p', 'Dipesan ' + shortDate.format(new Date(order.order_date + 'T00:00:00Z')) + (shipped ? ' · diantar ' + shipped : '')
+      + (order.paid && order.delivered ? ' · ✓ Selesai'
+        : ' · ' + ops.paymentLabel(order) + ' · ' + ops.deliveryLabel(order) + (order.delivery_on && !order.delivered ? ' · jadwal ' + shortDate.format(new Date(order.delivery_on + 'T00:00:00Z')) : ''))),
     node('p', order.pentol_order_items.map(item => (products.get(stockById.get(item.stock_id)?.sku) || 'Varian') + ' × ' + item.quantity).join(', ')),
     node('p', 'Total Rp' + format.format(ops.total(order)) + (Number(order.shipping_charge) ? ' (termasuk ongkir Rp' + format.format(order.shipping_charge) + ')' : '')),
     node('p', (order.pentol_payments || []).length
       ? 'Dibayar: ' + order.pentol_payments.map(p => shortDate.format(new Date(p.paid_on + 'T00:00:00Z')) + ' Rp' + format.format(p.amount)).join(', ')
-      : 'Ditandai lunas'));
+      : order.paid ? 'Ditandai lunas' : 'Belum ada pembayaran'));
   const extra = [order.contact, order.delivery_location, order.delivery_note].filter(Boolean).join(' · ');
   if (extra) card.append(node('p', extra));
   ops.orderButtons(order, card);
@@ -1028,7 +1047,8 @@ function renderOrderList() {
       text.includes(digits) || text.includes(digits.replace(/^0/, '62')) || text.replace(/^62/, '0').includes(digits)));
   const selectedStatus = orderStatus.value;
   if (orderChip === 'done') loadedOrders.sort((a, b) => b.order_date.localeCompare(a.order_date) || b.invoice_no - a.invoice_no);
-  const doneMode = orderChip === 'done';
+  // Perlu tindakan & Selesai: baris ringkas per halaman. Semua pesanan (per tanggal): tetap tabel.
+  const doneMode = orderChip !== 'all';
   document.querySelector('.order-table').hidden = doneMode;
   $('done-list').hidden = !doneMode;
   const visible = loadedOrders.filter(order => {
@@ -1045,10 +1065,12 @@ function renderOrderList() {
   const target = $('order-rows');
   if (doneMode) {
     target.replaceChildren();
-    renderDoneList(visible, query);
+    renderDoneList(visible, orderChip + '|' + query);
+    $('orders-summary').hidden = true;
     $('orders-summary').textContent = period + visible.length + ' dari ' + loadedOrders.length + ' pesanan · ' + format.format(packs) + ' pack';
     return;
   }
+  $('orders-summary').hidden = false;
   target.replaceChildren(...visible.map(order => {
     // Ringkas: varian tanpa kode batch; jadwal, lokasi, invoice, dan WA di satu baris info.
     const items = order.pentol_order_items.map(item => {
@@ -1196,8 +1218,8 @@ function openOrder(order = null, inboxEntry = null) {
 }
 $('new-order').addEventListener('click', () => { if (orderForm.hidden) openOrder(); });
 // Tombol besar "+ Catat pesanan" di semua halaman: buka Pesanan → form pesanan baru, langsung ke kolom nama.
-// Di Pesanan → Selesai tombol besar di kepala halaman sudah ada; tombol melayang disembunyikan agar tidak menutupi daftar.
-function syncQuickOrder() { $('quick-order').hidden = !session || $('dashboard').hidden || !orderForm.hidden || currentView === 'done'; }
+// Di Pesanan → Perlu tindakan & Selesai tombol besar di kepala halaman sudah ada; tombol melayang disembunyikan agar tidak menutupi daftar.
+function syncQuickOrder() { $('quick-order').hidden = !session || $('dashboard').hidden || !orderForm.hidden || currentView === 'done' || currentView === 'actions'; }
 $('quick-order').addEventListener('click', () => {
   if (!['actions', 'orders', 'done'].includes(currentView)) selectView('actions');
   if (orderForm.hidden) openOrder();

@@ -104,7 +104,16 @@ export function adminTests(browser, devices, baseUrl) {
   test('Pesanan: tombol cepat mengubah filter data', async () => {
     const s = await open();
     await goSub(s.page, 'orders');
-    const count = () => s.page.$$eval('#order-rows tr', rows => rows.filter(r => !r.querySelector('td[colspan]')).length);
+    const count = async () => {
+      // Jumlah baris di semua halaman.
+      let n = 0;
+      for (;;) {
+        n += await s.page.$$eval('#done-list .po-row', rows => rows.length);
+        const next = s.page.locator('#done-list >> text=Berikutnya ›');
+        if (await next.isVisible() && await next.isEnabled()) await next.click(); else break;
+      }
+      return n;
+    };
     equal(await count(), 6, 'Perlu tindakan = semua kecuali yang lunas & diantar');
     await s.page.click('.order-chips [data-chip=unpaid]'); await s.page.waitForTimeout(400);
     equal(await count(), 6, 'Belum bayar');
@@ -173,7 +182,10 @@ export function adminTests(browser, devices, baseUrl) {
     equal(await s.page.evaluate(() => document.activeElement?.name), 'customer', 'langsung ke kolom nama');
     assert(await s.page.isHidden('#quick-order'), 'tombol sembunyi selama form terbuka');
     await s.page.click('#cancel-order');
-    assert(await s.page.isVisible('#quick-order'), 'muncul lagi setelah form ditutup');
+    assert(await s.page.isHidden('#quick-order'), 'di Perlu tindakan memakai tombol besar di kepala halaman');
+    await s.page.click('.bottom-nav [data-go=today]');
+    await s.page.waitForTimeout(200);
+    assert(await s.page.isVisible('#quick-order'), 'muncul lagi di halaman lain setelah form ditutup');
     await s.close();
   });
 
@@ -184,11 +196,17 @@ export function adminTests(browser, devices, baseUrl) {
     await goSub(s.page, 'orders', 'Selesai');
     await s.page.waitForTimeout(400);
     const names = () => s.page.$$eval('#done-list .po-row strong', xs => xs.map(x => x.textContent));
-    equal((await names()).length, 6, 'halaman 1: 6 baris');
+    const firstPage = (await names()).length;
+    assert(firstPage >= 3 && firstPage < 9, 'halaman 1 dibatasi: ' + firstPage);
     assert(await s.page.isHidden('#quick-order'), 'tombol melayang tidak menutupi daftar Selesai');
-    assert(await s.page.evaluate(() => document.querySelector('#done-list .po-pager').getBoundingClientRect().bottom <= innerHeight + 400), 'tombol halaman dekat');
+    const fits = await s.page.evaluate(() => {
+      const rows = [...document.querySelectorAll('#done-list .po-row')];
+      return rows.at(-1).getBoundingClientRect().bottom <= document.querySelector('.bottom-nav').getBoundingClientRect().top;
+    });
+    assert(fits, 'baris terakhir di atas menu bawah (tanpa menggulir)');
     await s.page.click('#done-list >> text=Berikutnya ›');
-    equal((await names()).length, 3, 'halaman 2: sisa 3 (9 selesai)');
+    const second = (await names()).length;
+    assert(firstPage + second >= 9 || await s.page.isVisible('#done-list >> text=Berikutnya ›'), 'halaman berikutnya berisi sisanya');
     await s.page.fill('#order-search', 'Selesai 3');
     await s.page.waitForTimeout(200);
     equal(await names(), ['Selesai 3'], 'cari langsung ketemu');
@@ -198,16 +216,28 @@ export function adminTests(browser, devices, baseUrl) {
   test('Pesanan: cari nama/WA/invoice; permintaan katalog punya Balas WA', async () => {
     const s = await open();
     await goSub(s.page, 'orders');
-    const count = () => s.page.$$eval('#order-rows tr', rows => rows.filter(r => !r.querySelector('td[colspan]')).length);
+    const count = async () => {
+      // Jumlah baris di semua halaman.
+      let n = 0;
+      for (;;) {
+        n += await s.page.$$eval('#done-list .po-row', rows => rows.length);
+        const next = s.page.locator('#done-list >> text=Berikutnya ›');
+        if (await next.isVisible() && await next.isEnabled()) await next.click(); else break;
+      }
+      return n;
+    };
     await s.page.fill('#order-search', '00002'); await s.page.waitForTimeout(150);
     equal(await count(), 1, 'cari nomor invoice');
     await s.page.fill('#order-search', '0812 3456'); await s.page.waitForTimeout(150);
     equal(await count(), 6, 'cari nomor WA');
     await s.page.fill('#order-search', 'ani'); await s.page.waitForTimeout(150);
     equal(await count(), 1, 'cari nama');
-    const meta = await s.page.textContent('#order-rows .order-meta');
-    assert(meta.startsWith('Invoice 00001') && meta.includes('Gedung B'), 'baris info: ' + meta);
-    const reply = decodeURIComponent(await s.page.getAttribute('#inbox-list .wa-link', 'href'));
+    assert((await s.page.textContent('#done-list .po-row')).includes('00001'), 'baris memuat invoice');
+    await s.page.click('#done-list .po-row');
+    assert((await s.page.textContent('.po-detail')).includes('Gedung B'), 'rincian memuat lokasi');
+    await s.page.click('.po-detail >> text=Tutup');
+    await s.page.click('#inbox-list .inbox-row');
+    const reply = decodeURIComponent(await s.page.getAttribute('.po-detail .wa-link', 'href'));
     assert(reply.includes('wa.me/6281234567890') && reply.includes('Pentol Urat × 2'), 'Balas WA berisi pesanan');
     await s.close();
   });
@@ -302,16 +332,19 @@ export function adminTests(browser, devices, baseUrl) {
   test('hapus permintaan katalog: kotak konfirmasi, Tutup = batal, Ya = hapus; Ubah membuka form', async () => {
     const s = await open();
     await goSub(s.page, 'orders');
-    const card = s.page.locator('#inbox-list .ops-card').first();
+    const card = s.page.locator('.po-detail .ops-card');
+    await s.page.click('#inbox-list .inbox-row');
     await card.locator('button', { hasText: 'Hapus' }).click();
     assert(await s.page.isVisible('#ops-dialog'), 'kotak konfirmasi muncul');
     assert((await s.page.textContent('#ops-dialog')).includes('Yakin hapus'), 'pertanyaan yakin');
     await s.page.click('#ops-close');
     equal(s.data.writes.filter(w => w.body?.action === 'dismiss').length, 0, 'Tutup tidak menghapus');
+    await s.page.click('#inbox-list .inbox-row');
     await card.locator('button', { hasText: 'Hapus' }).click();
     await s.page.click('#ops-form button:has-text("Ya, hapus")');
     await s.page.waitForTimeout(400);
     equal(s.data.writes.filter(w => w.body?.action === 'dismiss').length, 1, 'terhapus');
+    await s.page.click('#inbox-list .inbox-row');
     await card.locator('button', { hasText: 'Ubah' }).click();
     assert((await s.page.textContent('#order-editor-title')).includes('Pesanan dari katalog'), 'form ubah terbuka');
     assert(await s.page.isVisible('#order-edit-note'), 'petunjuk ubah tampil');
@@ -341,7 +374,8 @@ export function adminTests(browser, devices, baseUrl) {
     data.inbox[0].note = 'Diantar · Jadwal: ' + day + ' · titip satpam';
     const s = await open(data);
     await goSub(s.page, 'orders');
-    const card = s.page.locator('#inbox-list .ops-card').first();
+    await s.page.click('#inbox-list .inbox-row');
+    const card = s.page.locator('.po-detail .ops-card');
     assert((await card.textContent()).includes('Jadwal '), 'jadwal tampil');
     assert(!(await card.textContent()).includes('Jadwal: '), 'tanpa format mentah');
     await card.locator('button', { hasText: 'Proses pesanan' }).click();
@@ -357,9 +391,9 @@ export function adminTests(browser, devices, baseUrl) {
       pentol_payments: [{ id:'p1', order_id:'o5', amount:50000, paid_on:shiftDay(-1) }] })];
     const s = await open(data);
     await goSub(s.page, 'orders');
-    const row = s.page.locator('#order-rows tr', { hasText: 'Eka Antar Sebagian' }).first();
-    await row.locator('.more-actions summary').click();
-    await row.locator('.more-actions button', { hasText: 'Ubah pesanan' }).click();
+    await s.page.locator('#done-list .po-row', { hasText: 'Eka Antar Sebagian' }).click();
+    await s.page.click('.po-detail .more-actions summary');
+    await s.page.locator('.po-detail .more-actions button', { hasText: 'Ubah pesanan' }).click();
     const note = await s.page.textContent('#order-edit-note');
     assert(note.includes('Sudah diantar') && note.includes('2 pack') && note.includes('Rp50.000'), 'catatan antar & bayar: ' + note);
     const minus = s.page.locator('[aria-label="Kurangi Pentol Urat"]');
@@ -382,9 +416,9 @@ export function adminTests(browser, devices, baseUrl) {
     data.orders = [order('o5', 'Eka Antar Sebagian', { items: [[4, 2]] })];
     const s = await open(data);
     await goSub(s.page, 'orders');
-    const row = s.page.locator('#order-rows tr', { hasText: 'Eka' }).first();
-    await row.locator('.more-actions summary').click();
-    await row.locator('.more-actions button', { hasText: 'Ubah pesanan' }).click();
+    await s.page.locator('#done-list .po-row', { hasText: 'Eka' }).click();
+    await s.page.click('.po-detail .more-actions summary');
+    await s.page.locator('.po-detail .more-actions button', { hasText: 'Ubah pesanan' }).click();
     await s.page.click('[aria-label="Tambah Pentol Urat"]');
     await s.page.click('#save-order');
     await s.page.waitForTimeout(500);
@@ -819,8 +853,9 @@ export function adminTests(browser, devices, baseUrl) {
     const s = await open(data);
     await goSub(s.page, 'orders');
     const openFix = async () => {
-      await s.page.locator('#order-rows .more-actions summary').first().click();
-      await s.page.locator('#order-rows .more-actions[open] button', { hasText: 'Koreksi' }).click();
+      await s.page.locator('#done-list .po-row').first().click();
+      await s.page.click('.po-detail .more-actions summary');
+      await s.page.locator('.po-detail .more-actions[open] button', { hasText: 'Koreksi' }).click();
       await s.page.waitForTimeout(200);
     };
     await openFix();
@@ -867,8 +902,10 @@ export function adminTests(browser, devices, baseUrl) {
     await goSub(s.page, 'stock');
     assert(await s.page.isHidden('#opname-start'), 'Hitung stok tersembunyi');
     await goSub(s.page, 'orders');
-    await s.page.locator('#order-rows .more-actions summary').first().click();
-    equal(await s.page.locator('#order-rows .more-actions[open] button:visible', { hasText: 'Koreksi' }).count(), 0, 'Koreksi tersembunyi');
+    await s.page.locator('#done-list .po-row').first().click();
+    await s.page.click('.po-detail .more-actions summary');
+    equal(await s.page.locator('.po-detail .more-actions[open] button:visible', { hasText: 'Koreksi' }).count(), 0, 'Koreksi tersembunyi');
+    await s.page.click('.po-detail >> text=Tutup');
     await goSub(s.page, 'finance');
     await s.page.waitForTimeout(400);
     assert((await s.page.textContent('.report-chart h3')).includes('menurut tanggal pesanan'), 'laporan cara lama');

@@ -739,3 +739,11 @@ input[type="file"]::file-selector-button { margin-right: 10px; padding: 8px 14px
 }
 #done-list .po-pager { margin: 0 0 10px; }
 #done-list .po-pager button { min-height: 42px; }
+.todo-meta { display: inline-flex; align-items: center; gap: 4px; }
+.todo-meta::after { margin-left: 2px; }
+.todo-tag { padding: 2px 7px; border-radius: 6px; font-size: 10px; font-weight: 700; background: #fcf0d8; color: #9a6a16; }
+.todo-tag.pay { background: #f4e5e3; color: #9c5351; }
+.todo-tag.late { background: #f7d9d3; color: #a42d23; }
+#inbox-list .inbox-row { margin-bottom: 6px; background: #fffdf9; }
+#inbox-list .inbox-row small { display: inline; }
+@media (max-width: 620px) { #inbox-list .inbox-row small { display: none; } }

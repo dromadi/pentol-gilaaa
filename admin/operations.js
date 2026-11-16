@@ -655,7 +655,15 @@ export function initOperations({ $, request, status, products, prices, today, fo
           el('p', entry.items.map(i => products.get(i.sku) + ' × ' + i.quantity).join(', ')),
           block([process, button('Ubah', () => openOrder(null, entry)),
             waAnchor(entry.phone, confirmMessage(entry), 'Balas WA') || '', remove], 'ops-actions'));
-        return card;
+        // Ringkas: satu baris per permintaan, tekan = kartu lengkap di kotak tersendiri (hemat layar).
+        const row = el('button', undefined, 'po-row inbox-row');
+        row.type = 'button';
+        const left = el('span');
+        left.append(el('strong', entry.customer), el('small', ' · ' + entry.items.map(i => (products.get(i.sku) || i.sku).replace(/^Pentol /, '') + ' × ' + i.quantity).join(', ')));
+        row.append(left, el('span', entry.items.reduce((sum, i) => sum + i.quantity, 0) + ' pack · ' + sinceText(entry.created_at), 'po-row-meta'));
+        row.setAttribute('aria-label', 'Permintaan ' + entry.customer);
+        row.addEventListener('click', () => showPoDetail(null, card));
+        return row;
       }));
       if (!entries.length) target.append(el('p', 'Belum ada permintaan baru.'));
       if (archived.length) {
