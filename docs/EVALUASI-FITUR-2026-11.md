@@ -239,6 +239,12 @@ Permintaan pemilik: menu baru di Rekonsiliasi untuk ekspor/impor Excel dan hapus
 - **Hapus semua transaksi:** `pentol_wipe_transactions('HAPUS SEMUA')` dari **`admin/hapus-transaksi-2026-11.sql`** menghapus pesanan, item, pembayaran, pengantaran, permintaan katalog, penerimaan, riwayat, stok batch, PO; harga/varian & admin tetap; nomor invoice mulai dari 1. Aplikasi meminta ketik HAPUS SEMUA, mengunduh cadangan Excel dulu (gagal unduh = batal), baru memanggil fungsi.
 - Uji: unit (tanggal/angka, baca template, alokasi stok), browser `impor & ekspor…`, SQL `hapus semua transaksi…`. Versi `data-29`.
 
+## Migrasi produksi di luar repo: perbaikan-temuan-2026-11-16 (16 Nov)
+
+Claude di browser menjalankan migrasi `perbaikan-temuan-2026-11-16.sql` langsung di Supabase produksi. **File-nya belum ada di repo** (minta pemilik menempelkan isinya). Menurut laporannya: `delivered_at` diisi dari `pentol_shipments` (17 pesanan), riwayat Terima barang Batch 1 & 2 ditambahkan ke `pentol_purchase_receipts` (stok tidak berubah), kolom `pentol_payments.method` (tunai/bni/gopay/transfer_lain/lainnya) + `created_at`, tabel `pentol_expenses` (kategori plastik, kemasan, ongkir antar, es batu, listrik freezer, promosi, lainnya; admin saja), kolom `pentol_inbox.converted_order_id`, dan relasi wajib stok → produk & PO.
+
+Dampak ke kode: `hapus-transaksi-2026-11.sql` kini menghapus inbox **sebelum** pesanan (FK `converted_order_id`) dan ikut menghapus `pentol_expenses` bila ada; uji SQL meniru kedua perubahan itu. Yang perlu dicek setelah isi file diterima: apakah `method` boleh kosong/ber-default (fungsi bayar lama menyisipkan 4 kolom secara posisi); bila wajib tanpa default, pencatatan bayar di produksi gagal.
+
 ## Input lewat ChatGPT (tahap 1: tempel)
 
 Keputusan: **aplikasi (Supabase) tetap sumber kebenaran**; ChatGPT hanya pintu masuk. Tidak ada data yang tersimpan tanpa konfirmasi admin di form aplikasi, sehingga semua validasi database tetap berlaku.

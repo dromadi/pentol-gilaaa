@@ -150,7 +150,17 @@ select pg_temp.expect_error($$select public.pentol_wipe_transactions('HAPUS SEMU
 select set_config('request.uid','11111111-1111-1111-1111-111111111111',false);
 select pg_temp.expect_error($$select public.pentol_wipe_transactions('hapus')$$, 'Konfirmasi salah');
 do $$ begin assert (select count(*) from public.pentol_orders) > 0, 'masih ada pesanan sebelum hapus'; end $$;
+reset role;
+-- Tiru migrasi produksi 16 Nov: inbox.converted_order_id -> pesanan, dan tabel biaya harian.
+alter table public.pentol_inbox add column if not exists converted_order_id uuid references public.pentol_orders(id);
+update public.pentol_inbox set converted_order_id = (select id from public.pentol_orders limit 1) where id = 'eeeeeeee-0000-0000-0000-000000000001';
+create table if not exists public.pentol_expenses (id bigint generated always as identity primary key, spent_on date not null, amount integer not null);
+insert into public.pentol_expenses (spent_on, amount) values (current_date, 5000);
+set role authenticated;
 select public.pentol_wipe_transactions('HAPUS SEMUA');
+reset role;
+do $$ begin assert (select count(*) from public.pentol_expenses) = 0, 'biaya harian ikut terhapus'; end $$;
+set role authenticated;
 do $$ begin
   assert (select count(*) from public.pentol_orders) + (select count(*) from public.pentol_payments)
     + (select count(*) from public.pentol_batch_stock) + (select count(*) from public.pentol_purchases)

@@ -2,7 +2,7 @@
 -- Aman dijalankan ulang. Jalankan SETELAH tanggal-antar-2026-11.sql.
 --
 -- pentol_wipe_transactions: menghapus pesanan, pembayaran, pengantaran, permintaan katalog, stok batch, PO,
--- penerimaan, dan riwayat koreksi. Harga jual/daftar varian (pentol_products) dan akun admin TIDAK dihapus.
+-- penerimaan, riwayat koreksi, dan biaya harian (bila ada). Harga jual/daftar varian (pentol_products) dan akun admin TIDAK dihapus.
 -- Nomor invoice mulai lagi dari 1. Wajib teks konfirmasi persis 'HAPUS SEMUA'.
 -- Aplikasi mengunduh cadangan Excel lebih dulu sebelum memanggil fungsi ini.
 begin;
@@ -27,11 +27,16 @@ begin
     'stok_batch', (select count(*) from public.pentol_batch_stock),
     'po', (select count(*) from public.pentol_purchases),
     'riwayat', (select count(*) from public.pentol_reconciliation_history)) into counts;
+  -- Permintaan katalog dihapus sebelum pesanan: kolom converted_order_id (migrasi 16 Nov) bisa merujuk ke pesanan.
+  delete from public.pentol_inbox where true;
   delete from public.pentol_shipments where true;
   delete from public.pentol_payments where true;
   delete from public.pentol_order_items where true;
   delete from public.pentol_orders where true;
-  delete from public.pentol_inbox where true;
+  -- Biaya harian (pentol_expenses, migrasi 16 Nov) ikut terhapus bila tabelnya ada.
+  if to_regclass('public.pentol_expenses') is not null then
+    execute 'delete from public.pentol_expenses where true';
+  end if;
   delete from public.pentol_purchase_receipts where true;
   delete from public.pentol_reconciliation_history where true;
   delete from public.pentol_batch_stock where true;
