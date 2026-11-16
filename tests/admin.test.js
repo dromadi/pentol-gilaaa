@@ -28,7 +28,7 @@ export function adminTests(browser, devices, baseUrl) {
 
   test('semua halaman terbuka tanpa error dan tanpa geser ke samping', async () => {
     const s = await open();
-    const pages = [['today'], ['orders'], ['orders', 'Semua pesanan'], ['orders', 'Packing'], ['orders', 'Antar'], ['orders', 'Tagihan'], ['stock'], ['stock', 'Per batch & koreksi'], ['stock', 'Restok & PO'],
+    const pages = [['today'], ['orders'], ['orders', 'Semua pesanan'], ['orders', 'Packing'], ['orders', 'Antar'], ['orders', 'Tagihan'], ['stock'], ['stock', 'Per batch & koreksi'], ['stock', 'Restok & PO'], ['stock', 'PO selesai'],
       ['finance'], ['finance', 'Tutup hari']];
     for (const [nav, tab] of pages) {
       await goSub(s.page, nav, tab);
@@ -485,7 +485,13 @@ export function adminTests(browser, devices, baseUrl) {
     await s.page.waitForTimeout(500);
     const pos = await s.page.$$eval('#purchasing-body > article.ops-card > strong', xs => xs.map(x => x.textContent));
     equal(pos, ['BATCH-03 · Pusat'], 'hanya PO yang menunggu kiriman di atas');
-    assert((await s.page.textContent('.po-done summary')).includes('PO selesai (1)'), 'PO selesai dilipat');
+    assert((await s.page.textContent('.po-done-hint')).includes('1 PO sudah selesai'), 'petunjuk PO selesai');
+    await s.page.click('#subtabs >> text=PO selesai');
+    await s.page.waitForTimeout(500);
+    equal(await s.page.$$eval('#poDone-body > article.ops-card > strong', xs => xs.map(x => x.textContent)), ['BATCH-02 · Pusat'], 'tab PO selesai');
+    equal(await s.page.locator('#poDone-body >> text=+ Catat restok').count(), 0, 'tanpa tombol catat restok');
+    await s.page.click('#subtabs >> text=Restok & PO');
+    await s.page.waitForTimeout(500);
     await s.page.locator('#purchasing-body article.ops-card', { hasText: 'BATCH-03' }).locator('button', { hasText: 'Terima barang' }).click();
     equal(await s.page.inputValue('#ops-fields input[name=JM]'), '10', 'terima barang terisi sisa PO');
     await s.page.click('#ops-close');

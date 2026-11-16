@@ -1060,7 +1060,8 @@ export function initOperations({ $, request, status, products, prices, today, fo
     });
   }
 
-  async function purchasing(target) {
+  // mode 'active': Catat restok + PO yang menunggu kiriman. mode 'done': PO yang sudah diterima semua.
+  async function purchasing(target, mode = 'active') {
     const session = getSession();
     const [data, receipts] = await Promise.all([
       purchases(),
@@ -1075,8 +1076,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
     knownPurchases = data;
     const add = button('+ Catat restok', () => purchaseDialog(null));
     add.classList.add('primary-action');
-    target.replaceChildren(block([add], 'ops-actions'));
-    const doneBox = el('details', undefined, 'po-done');
+    target.replaceChildren(mode === 'active' ? block([add], 'ops-actions') : '');
     const active = [];
     const done = [];
     if (!receipts) target.append(el('p', 'Terima Barang dari PO tersedia setelah migrasi penerimaan di Supabase dijalankan.'));
@@ -1115,14 +1115,17 @@ export function initOperations({ $, request, status, products, prices, today, fo
           })], 'ops-actions'));
       (items.some(item => item.remaining > 0) ? active : done).push([p, card]);
     }
-    // Menunggu kiriman di atas (estimasi tiba terdekat dulu); PO selesai dilipat.
+    if (mode === 'done') {
+      // PO selesai: terbaru di atas.
+      if (done.length) target.append(el('h3', 'PO selesai (' + done.length + ')'), ...done.reverse().map(([, card]) => card));
+      else target.append(el('p', 'Belum ada PO yang selesai diterima.'));
+      return;
+    }
+    // Menunggu kiriman: estimasi tiba terdekat dulu.
     active.sort(([a], [b]) => String(a.expected_on || '9999').localeCompare(String(b.expected_on || '9999')));
     if (active.length) target.append(el('h3', 'Menunggu kiriman (' + active.length + ')'), ...active.map(([, card]) => card));
     else target.append(el('p', 'Tidak ada PO yang menunggu kiriman.'));
-    if (done.length) {
-      doneBox.append(el('summary', 'PO selesai (' + done.length + ')'), ...done.reverse().map(([, card]) => card));
-      target.append(doneBox);
-    }
+    if (done.length) target.append(el('p', done.length + ' PO sudah selesai diterima · lihat sub menu PO selesai.', 'po-done-hint'));
   }
 
   function costs(data) {
@@ -1808,7 +1811,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
     return load();
   }
 
-  const views={dataExcel,today:overview,packing:(t,m)=>packing(t,m,'packing'),delivery:(t,m)=>packing(t,m,'delivery'),purchasing,finance,promotions,reconcile,history,receivables,closeDay};
+  const views={dataExcel,poDone:t=>purchasing(t,'done'),today:overview,packing:(t,m)=>packing(t,m,'packing'),delivery:(t,m)=>packing(t,m,'delivery'),purchasing,finance,promotions,reconcile,history,receivables,closeDay};
   async function open(view, packingMode) {
     if (!views[view]) return;
     const token=getSession();

@@ -257,6 +257,10 @@ Sub menu ke-6 **Selesai** (`#done`, panel `#orders`): pesanan aktif yang sudah l
 
 Lipatan "Rincian per batch & koreksi" di halaman Stok dipindah menjadi sub menu sendiri **Per batch & koreksi** (`#batches`, panel `#stock` yang sama): ringkasan angka, filter batch/cari varian, tabel per batch, dan tombol Koreksi. Tab **Stok** kini hanya kartu per varian. Urutan sub menu: Stok · Per batch & koreksi · Restok & PO. Versi `batch-33`.
 
+## Stok → PO selesai jadi tab (16 Nov)
+
+Lipatan "PO selesai" di Restok & Supplier dipindah ke sub menu sendiri **PO selesai** (`#poDone`, panel baru, `purchasing(target, 'done')`): kartu PO yang sudah diterima semua, terbaru di atas, tanpa tombol Catat restok. Tab **Restok & PO** kini hanya tombol Catat restok + PO yang menunggu kiriman, dengan petunjuk jumlah PO selesai. Sub menu Stok: Stok · Per batch & koreksi · Restok & PO · PO selesai. Versi `po-34`.
+
 ## Input lewat ChatGPT (tahap 1: tempel)
 
 Keputusan: **aplikasi (Supabase) tetap sumber kebenaran**; ChatGPT hanya pintu masuk. Tidak ada data yang tersimpan tanpa konfirmasi admin di form aplikasi, sehingga semua validasi database tetap berlaku.

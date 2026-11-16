@@ -1,5 +1,5 @@
 import { supabaseUrl, supabasePublishableKey } from './config.js';
-import { initOperations } from './operations.js?v=batch-33';
+import { initOperations } from './operations.js?v=po-34';
 
 const products = new Map([
   ['UR','Pentol Urat'], ['PK','Pentol Kecil'], ['TP','Tahu Pentol'],
@@ -585,7 +585,7 @@ document.addEventListener('keydown', event => {
 // Menu utama dengan beberapa bagian ditampilkan sebagai tab di atas halaman.
 const viewGroups = {
   orders: [['actions', 'Perlu tindakan'], ['orders', 'Semua pesanan'], ['packing', 'Packing'], ['delivery', 'Antar'], ['receivables', 'Tagihan'], ['done', 'Selesai']],
-  stock: [['stock', 'Stok'], ['batches', 'Per batch & koreksi'], ['purchasing', 'Restok & PO']],
+  stock: [['stock', 'Stok'], ['batches', 'Per batch & koreksi'], ['purchasing', 'Restok & PO'], ['poDone', 'PO selesai']],
   finance: [['finance', 'Laba & harga'], ['closeDay', 'Tutup hari']],
   reconcile: [['reconcile', 'Rekonsiliasi'], ['dataExcel', 'Impor & ekspor']]
 };

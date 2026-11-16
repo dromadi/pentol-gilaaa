@@ -667,3 +667,4 @@ input[type="file"]::file-selector-button { margin-right: 10px; padding: 8px 14px
 .data-danger h3 { color: #a42d23; }
 .data-card .ops-actions button { min-height: 42px; font-size: 13px; padding-inline: 18px; border-radius: 999px; }
 @media (max-width: 420px) { .subtabs.many button { font-size: 10.5px; padding-inline: 2px; } }
+.po-done-hint { margin-top: 14px; font-size: 12px; color: var(--muted); }
