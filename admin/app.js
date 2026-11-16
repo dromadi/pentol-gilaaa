@@ -1,5 +1,5 @@
 import { supabaseUrl, supabasePublishableKey } from './config.js';
-import { initOperations } from './operations.js?v=laba-28';
+import { initOperations } from './operations.js?v=data-29';
 
 const products = new Map([
   ['UR','Pentol Urat'], ['PK','Pentol Kecil'], ['TP','Tahu Pentol'],
@@ -538,7 +538,8 @@ document.addEventListener('keydown', event => {
 const viewGroups = {
   orders: [['actions', 'Perlu tindakan'], ['orders', 'Semua pesanan'], ['packing', 'Packing'], ['delivery', 'Antar'], ['receivables', 'Tagihan']],
   stock: [['stock', 'Stok'], ['purchasing', 'Restok & PO']],
-  finance: [['finance', 'Laba & harga'], ['closeDay', 'Tutup hari']]
+  finance: [['finance', 'Laba & harga'], ['closeDay', 'Tutup hari']],
+  reconcile: [['reconcile', 'Rekonsiliasi'], ['dataExcel', 'Impor & ekspor']]
 };
 const groupOf = view => Object.keys(viewGroups).find(group => viewGroups[group].some(([id]) => id === view));
 const lastInGroup = Object.fromEntries(Object.keys(viewGroups).map(group => [group, viewGroups[group][0][0]]));

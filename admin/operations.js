@@ -1,6 +1,7 @@
 import { closeDaySheets, closeDayWorkbook } from './close-day.js?v=2';
 import { invoiceContent, invoicePdf } from './invoice.js?v=1';
-import { openReconciliation, reconciliationRows, groupBy } from './reconcile.js?v=5';
+import { openReconciliation, reconciliationRows, groupBy, workbookSheets } from './reconcile.js?v=6';
+import { exportSheets, parseTemplate, stableUuid, allocateStock } from './data-excel.js?v=1';
 import { parseGptText, gptInstructions } from './gpt.js?v=1';
 
 export function initOperations({ $, request, status, products, prices, today, format,
@@ -95,7 +96,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
   }
 
   function errorMessage(error) {
-    const known = /^(Booking lama |Pesanan |Isi 1|Periksa varian|Gabungkan varian|Varian batch |Pilih jumlah|Jumlah |Stok fisik|Nominal |Pilih 1|Varian tidak|PO tidak |Penerimaan |Tanggal antar |Nomor invoice |Alasan koreksi |Stok berubah |Teks tidak |Aksi \d|Tidak ada aksi)/;
+    const known = /^(Booking lama |Pesanan |Isi 1|Periksa varian|Gabungkan varian|Varian batch |Pilih jumlah|Jumlah |Stok fisik|Nominal |Pilih 1|Varian tidak|PO tidak |Penerimaan |Tanggal antar |Nomor invoice |Alasan koreksi |Stok berubah |Teks tidak |Aksi \d|Tidak ada aksi|Konfirmasi salah|Ketik persis|Cadangan gagal|Fitur hapus)/;
     return known.test(error.message) ? error.message : 'Perubahan belum terkonfirmasi. Muat ulang daftar sebelum mencoba lagi.';
   }
 
@@ -1807,7 +1808,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
     return load();
   }
 
-  const views={today:overview,packing:(t,m)=>packing(t,m,'packing'),delivery:(t,m)=>packing(t,m,'delivery'),purchasing,finance,promotions,reconcile,history,receivables,closeDay};
+  const views={dataExcel,today:overview,packing:(t,m)=>packing(t,m,'packing'),delivery:(t,m)=>packing(t,m,'delivery'),purchasing,finance,promotions,reconcile,history,receivables,closeDay};
   async function open(view, packingMode) {
     if (!views[view]) return;
     const token=getSession();
@@ -1941,6 +1942,159 @@ export function initOperations({ $, request, status, products, prices, today, fo
     ['Penerimaan PO', 'pentol_purchase_receipts', 'id'], ['Permintaan katalog', 'pentol_inbox', 'id'],
     ['Harga', 'pentol_products', 'sku'], ['Riwayat koreksi', 'pentol_reconciliation_history', 'id']
   ];
+  // ===== Impor & ekspor Excel (template aplikasi) dan hapus semua transaksi =====
+  function dataExcel(target) {
+    const card = (title, text) => { const box = el('section', undefined, 'data-card'); box.append(el('h3', title), el('p', text)); return box; };
+
+    const exportCard = card('Ekspor', 'Template Excel berisi data saat ini: lembar Petunjuk, PO (stok per batch), dan Pesanan. Bisa dibuka di Excel/Google Sheets, lalu dipakai untuk impor.');
+    const exportButton = button('⬇ Unduh template + data', async () => {
+      exportButton.disabled = true;
+      status('Menyiapkan template…');
+      try {
+        const [pos, orders] = await Promise.all([purchases(), list('pentol_orders?select=' + ordersSelect, '&order=order_date,created_at,id'), loadRows()]);
+        const bytes = await closeDayWorkbook(exportSheets({ purchases: pos, stocks: getRows(), orders, products, total, paid, invoiceNumber }), window.JSZip);
+        const url = URL.createObjectURL(new Blob([bytes], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+        download(url, 'Data-Pentol-Gilaaa-' + today() + '.xlsx');
+        setTimeout(() => URL.revokeObjectURL(url), 30_000);
+        status('Template diunduh.');
+      } catch { status('Template belum bisa dibuat. Coba lagi.', true); }
+      finally { exportButton.disabled = false; }
+    });
+    exportButton.classList.add('primary-action');
+    exportCard.append(block([exportButton], 'ops-actions'));
+
+    const importCard = card('Impor', 'Pilih file template yang sudah diisi. Aplikasi menampilkan pratinjau dulu; tidak ada yang tersimpan sebelum kamu menekan Impor sekarang. Baris yang sudah ada dilewati, jadi aman bila diimpor dua kali.');
+    const file = el('input');
+    file.type = 'file';
+    file.accept = '.xlsx';
+    file.setAttribute('aria-label', 'File template Excel');
+    const preview = el('div', undefined, 'data-preview');
+    importCard.append(file, preview);
+    file.addEventListener('change', async () => {
+      preview.replaceChildren(el('p', 'Membaca file…'));
+      if (!file.files[0]) return preview.replaceChildren();
+      try {
+        const [sheets, pos, orderIds] = await Promise.all([workbookSheets(file.files[0], /^(PO|Pesanan)$/i), purchases(),
+          list('pentol_orders?select=id', '&order=id'), loadRows()]);
+        const { plan, errors } = parseTemplate(sheets, { products, today: today(),
+          existingBatches: new Set(pos.map(p => p.batch_code.toUpperCase())), existingOrders: new Set(orderIds.map(o => o.id)) });
+        showPlan(plan, errors);
+      } catch (error) {
+        preview.replaceChildren(el('p', error.message || 'File belum bisa dibaca.', 'gpt-error'));
+      }
+    });
+    function showPlan(plan, errors) {
+      const facts = [
+        ['PO / batch baru', plan.purchases.length + (plan.skippedPurchases ? ' · ' + plan.skippedPurchases + ' sudah ada (dilewati)' : '')],
+        ['Pesanan baru', plan.orders.length + (plan.skippedOrders ? ' · ' + plan.skippedOrders + ' sudah ada (dilewati)' : '')
+          + (plan.cancelled ? ' · ' + plan.cancelled + ' batal (dilewati)' : '')],
+        ['Diantar / dibayar', plan.orders.filter(o => o.delivered).length + ' diantar · ' + plan.orders.filter(o => o.paid > 0).length + ' ada pembayaran'],
+        ['Baris bermasalah (tidak diimpor)', errors.length]
+      ];
+      const nodes = [table(['Pratinjau', 'Jumlah'], facts, '')];
+      if (errors.length) {
+        const box = el('details', undefined, 'data-errors');
+        box.open = errors.length <= 8;
+        box.append(el('summary', errors.length + ' baris perlu diperbaiki di Excel'), ...errors.slice(0, 100).map(text => el('p', text, 'gpt-error')));
+        nodes.push(box);
+      }
+      const count = plan.purchases.length + plan.orders.length;
+      if (count) {
+        const go = button('Impor sekarang (' + count + ')', () => showDialog('Impor ' + count + ' data?', [
+          el('p', plan.purchases.length + ' PO/batch dan ' + plan.orders.length + ' pesanan akan disimpan satu per satu. Proses bisa beberapa menit; jangan tutup halaman.'),
+          el('p', 'Hasil impor tidak bisa dibatalkan sekaligus. Koreksi satu per satu lewat Ubah pesanan / Koreksi, atau pakai Hapus semua transaksi lalu impor ulang.')
+        ], async () => async () => runImport(plan), { submitLabel: 'Ya, impor' }));
+        go.classList.add('primary-action');
+        nodes.push(block([go], 'ops-actions'));
+      } else nodes.push(el('p', 'Tidak ada data baru untuk diimpor.'));
+      preview.replaceChildren(...nodes);
+    }
+    async function runImport(plan) {
+      const log = el('ol', undefined, 'data-log');
+      const progress = el('p', '', 'data-progress');
+      preview.replaceChildren(progress, log);
+      const note = (text, bad = false) => { const li = el('li', text); if (bad) li.dataset.error = 'true'; log.append(li); };
+      let done = 0, failed = 0;
+      const total = plan.purchases.length + plan.orders.length;
+      const tick = () => { progress.textContent = 'Mengimpor… ' + (done + failed) + ' dari ' + total; };
+      tick();
+      for (const p of plan.purchases) {
+        try {
+          await admin('purchase', { batch_code: p.batch, supplier: p.supplier, reference: 'Impor Excel', ordered_on: p.orderedOn, expected_on: null,
+            shipping: p.shipping, packaging: p.packaging, other_cost: p.other, items: p.items });
+          for (const [date, items] of p.receipts) {
+            await request(root + 'rpc/pentol_receive_purchase', {method:'POST', body:{
+              receipt_id: await stableUuid('import-receipt|' + p.batch + '|' + date), purchase_code: p.batch, arrival_date: date, receipt_items: items }});
+          }
+          done++; note('✓ PO ' + p.batch);
+        } catch (error) { failed++; note('PO ' + p.batch + ': ' + errorMessage(error), true); }
+        tick();
+      }
+      await loadRows();
+      const free = new Map(getRows().map(row => [row.id, quantities(row)[3]]));
+      for (const o of plan.orders) {
+        const label = 'Baris ' + o.line + ' · ' + o.customer;
+        try {
+          const id = o.id || await stableUuid('import-order|' + o.key);
+          const existing = await orderQuery('&id=eq.' + id);
+          if (existing.length) { done++; note('= ' + label + ' sudah ada, dilewati'); tick(); continue; }
+          const allocation = allocateStock(o.items, getRows(), free, prices);
+          if (allocation.error) throw new Error('Stok ' + (products.get(allocation.error.sku) || allocation.error.sku) + ' kurang ' + allocation.error.missing + ' pack.');
+          await mutate('create', id, null, { date: o.date, customer: o.customer, delivery_on: o.deliveryOn, shipping_charge: o.shippingCharge,
+            shipping_cost: o.shippingCost, contact: o.contact, delivery_location: o.location, delivery_note: o.note, items: allocation.lines });
+          let [order] = await orderQuery('&id=eq.' + id);
+          if (o.delivered && order) {
+            await submitOrderAction('ship', order, { date: o.shipDate, items: order.pentol_order_items.map(i => ({ stock_id: i.stock_id, quantity: i.quantity - i.shipped })) });
+            [order] = await orderQuery('&id=eq.' + id);
+          }
+          if (o.paid > 0 && order && balance(order) > 0) {
+            await submitOrderAction('pay', order, { payment_id: await stableUuid('import-pay|' + id), date: o.payDate, amount: Math.min(o.paid, balance(order)) });
+          }
+          done++; note('✓ ' + label);
+        } catch (error) {
+          failed++;
+          note(label + ': ' + (/^Stok /.test(error.message) ? error.message : errorMessage(error)), true);
+        }
+        tick();
+      }
+      progress.textContent = 'Selesai: ' + done + ' berhasil' + (failed ? ' · ' + failed + ' gagal (lihat daftar)' : '') + '.';
+      file.value = '';
+      await refresh('Impor selesai.');
+      status('Impor selesai: ' + done + ' berhasil' + (failed ? ', ' + failed + ' gagal' : '') + '.', failed > 0 && !done);
+    }
+
+    const danger = card('Hapus semua transaksi', 'Menghapus semua pesanan, pembayaran, pengantaran, permintaan katalog, stok batch, PO, dan riwayat. Harga jual, daftar varian, dan akun admin tetap. Nomor invoice mulai lagi dari 00001. Cadangan Excel diunduh otomatis lebih dulu.');
+    danger.classList.add('data-danger');
+    const wipe = button('Hapus semua transaksi…', () => {
+      const confirmBox = control('Ketik HAPUS SEMUA untuk melanjutkan', 'confirm_text', {props:{autocomplete:'off'}});
+      showDialog('Hapus semua transaksi?', [
+        el('p', 'Tindakan ini tidak bisa dibatalkan dari aplikasi. Data hanya bisa dikembalikan dari file cadangan.'),
+        el('p', 'Langkah: 1) cadangan Excel diunduh otomatis, 2) semua transaksi dihapus.'),
+        confirmBox
+      ], async data => {
+        if (String(data.get('confirm_text')).trim() !== 'HAPUS SEMUA') throw new Error('Ketik persis HAPUS SEMUA (huruf besar).');
+        const saved = await downloadBackup();
+        if (!saved) throw new Error('Cadangan gagal diunduh, penghapusan dibatalkan. Coba lagi.');
+        let counts;
+        try {
+          counts = await request(root + 'rpc/pentol_wipe_transactions', {method:'POST', body:{confirm_text:'HAPUS SEMUA'}});
+        } catch (error) {
+          if (error.status === 404) throw new Error('Fitur hapus aktif setelah hapus-transaksi-2026-11.sql dijalankan di Supabase.');
+          throw error;
+        }
+        return async () => {
+          await loadRows();
+          await refresh('Semua transaksi dihapus.');
+          status('Semua transaksi dihapus' + (counts?.pesanan != null ? ' (' + counts.pesanan + ' pesanan, ' + counts.po + ' PO).' : '.') + ' Cadangan sudah diunduh.');
+        };
+      }, { submitLabel: 'Hapus semua', danger: true });
+    });
+    wipe.classList.add('danger-text');
+    danger.append(block([wipe], 'ops-actions'));
+
+    target.replaceChildren(exportCard, importCard, danger);
+  }
+
   function lastBackup() {
     try { return localStorage.getItem(backupKey) || ''; } catch { return ''; }
   }
@@ -1950,7 +2104,8 @@ export function initOperations({ $, request, status, products, prices, today, fo
   }
   async function downloadBackup(trigger) {
     const session = getSession();
-    if (!session) return;
+    if (!session) return false;
+    let ok = false;
     if (trigger) trigger.disabled = true;
     status('Menyiapkan cadangan…');
     try {
@@ -1975,6 +2130,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
       setTimeout(() => URL.revokeObjectURL(url), 30_000);
       try { localStorage.setItem(backupKey, today()); } catch {}
       status('Cadangan diunduh. Simpan file ini di Google Drive atau tempat aman lain.');
+      ok = true;
       document.querySelectorAll('.backup-reminder').forEach(node => node.remove());
       document.querySelectorAll('[data-backup-last]').forEach(node => { node.textContent = backupLabel(); });
     } catch {
@@ -1982,6 +2138,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
     } finally {
       if (trigger) trigger.disabled = false;
     }
+    return ok;
   }
   function backupLabel() {
     const age = backupAge();

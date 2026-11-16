@@ -3,6 +3,8 @@ import { test, assert, equal } from './harness.js';
 import { createRequire } from 'node:module';
 import { mockSupabase, login, defaultData, order, todayJakarta, shiftDay } from './mock.js';
 const JSZip = createRequire(import.meta.url)('../admin/vendor/jszip.min.js');
+import { closeDayWorkbook } from '../admin/close-day.js';
+import { orderHead, PO_HEAD } from '../admin/data-excel.js';
 
 export function adminTests(browser, devices, baseUrl) {
   async function open(data = defaultData(), options = {}) {
@@ -561,6 +563,64 @@ export function adminTests(browser, devices, baseUrl) {
     assert((await sheet(6)).includes('Gina Belum Bayar'), 'pembayaran dengan nama pelanggan');
     assert((await sheet(7)).includes('Eka Antar Sebagian'), 'tagihan terbuka');
     assert((await sheet(8)).includes('BATCH-02') && (await sheet(8)).includes('<v>20000</v>'), 'stok + harga beli');
+    await s.close();
+  });
+
+  test('impor & ekspor: unduh template, impor ulang = dilewati, baris baru disimpan, hapus semua', async () => {
+    const data = defaultData();
+    data.purchases = [{ batch_code:'BATCH-02', supplier:'Pusat', reference:'', ordered_on:shiftDay(-9), expected_on:null, shipping:0, packaging:0, other_cost:0,
+      pentol_purchase_items:[{ batch_code:'BATCH-02', sku:'UR', quantity:30, unit_cost:20000 }] }];
+    const s = await open(data);
+    await s.page.click('#more-menu');
+    await s.page.click('#admin-menu [data-view=reconcile]');
+    await s.page.click('#subtabs >> text=Impor & ekspor');
+    await s.page.waitForTimeout(300);
+    const [download] = await Promise.all([s.page.waitForEvent('download'), s.page.click('text=⬇ Unduh template + data')]);
+    const exported = await (await download.createReadStream()).toArray().then(Buffer.concat);
+    const zip = await JSZip.loadAsync(exported);
+    const names = [...(await zip.file('xl/workbook.xml').async('string')).matchAll(/name="([^"]+)"/g)].map(m => m[1]);
+    equal(names, ['Petunjuk', 'PO', 'Pesanan'], 'lembar template');
+    assert((await zip.file('xl/worksheets/sheet3.xml').async('string')).includes('Ani Hari Ini'), 'pesanan ikut diekspor');
+
+    // Impor ulang file ekspor: semua sudah ada.
+    await s.page.setInputFiles('#dataExcel input[type=file]', { name: 'data.xlsx', mimeType: 'application/octet-stream', buffer: exported });
+    await s.page.waitForTimeout(700);
+    const again = await s.page.textContent('.data-preview');
+    assert(again.includes('7 sudah ada') && again.includes('Tidak ada data baru'), 'impor ulang tidak menggandakan: ' + again);
+
+    // File baru: 1 PO baru + 1 pesanan baru (diantar & dibayar).
+    const products = new Map([['UR','Pentol Urat'],['PK','Pentol Kecil'],['TP','Tahu Pentol'],['JM','Pentol Jamur'],['MZ','Pentol Mozzarella'],
+      ['RJ','Pentol Ranjau'],['TD','Tahu Pedas'],['PG','Pentol Goreng'],['SG','Sambal Gila Tambahan']]);
+    const head = orderHead(products);
+    const day = shiftDay(-1);
+    const fresh = await closeDayWorkbook([['PO', [PO_HEAD, ['B7', 'Pusat', day, 'Pentol Jamur', 5, 24000, 5, day, 0, 0, 0]]],
+      ['Pesanan', [head, head.map(h => ({ 'Tanggal pesan': day, 'Pelanggan': 'Nina Baru', 'Pentol Urat': 2, 'Sudah diantar': 'Tidak', 'Dibayar': '' })[h] ?? '')]]], JSZip);
+    await s.page.setInputFiles('#dataExcel input[type=file]', { name: 'baru.xlsx', mimeType: 'application/octet-stream', buffer: Buffer.from(fresh) });
+    await s.page.waitForTimeout(700);
+    await s.page.click('.data-preview >> text=Impor sekarang (2)');
+    await s.page.click('#ops-form button:has-text("Ya, impor")');
+    await s.page.waitForTimeout(1500);
+    const po = s.data.writes.find(w => w.body?.action === 'purchase');
+    equal([po?.body.payload.batch_code, po?.body.payload.items], ['B7', [{ sku: 'JM', quantity: 5, unit_cost: 24000 }]], 'PO baru tersimpan');
+    const receipt = s.data.writes.find(w => w.fn === 'pentol_receive_purchase');
+    equal([receipt?.body.purchase_code, receipt?.body.arrival_date, receipt?.body.receipt_items], ['B7', day, [{ sku: 'JM', quantity: 5 }]], 'terima barang');
+    const created = s.data.writes.find(w => w.body?.action === 'create');
+    equal([created?.body.payload.customer, created?.body.payload.items], ['Nina Baru', [{ stock_id: 's1', quantity: 2, unit_price: 36000 }]], 'pesanan baru dari stok yang ada');
+    assert(/^[0-9a-f-]{36}$/.test(created.body.target), 'ID tetap');
+    assert((await s.page.textContent('.data-progress')).includes('2 berhasil'), 'ringkasan impor');
+
+    // Hapus semua: konfirmasi salah ditolak; benar = cadangan diunduh lalu fungsi dipanggil.
+    await s.page.click('text=Hapus semua transaksi…');
+    await s.page.fill('#ops-form [name=confirm_text]', 'hapus');
+    await s.page.click('#ops-form button:has-text("Hapus semua")');
+    await s.page.waitForTimeout(300);
+    assert((await s.page.textContent('#ops-error')).includes('HAPUS SEMUA'), 'konfirmasi salah ditolak');
+    equal(s.data.writes.filter(w => w.fn === 'pentol_wipe_transactions').length, 0, 'belum dihapus');
+    await s.page.fill('#ops-form [name=confirm_text]', 'HAPUS SEMUA');
+    const [backup] = await Promise.all([s.page.waitForEvent('download'), s.page.click('#ops-form button:has-text("Hapus semua")')]);
+    assert(backup.suggestedFilename().startsWith('Cadangan-Pentol-Gilaaa-'), 'cadangan diunduh dulu');
+    await s.page.waitForTimeout(800);
+    equal(s.data.writes.filter(w => w.fn === 'pentol_wipe_transactions').map(w => w.body.confirm_text), ['HAPUS SEMUA'], 'fungsi hapus dipanggil sekali');
     await s.close();
   });
 

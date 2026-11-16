@@ -230,6 +230,15 @@ Setelah itu: fallback sementara di form koreksi stok (PATCH langsung ke `pentol_
 - Data dari catatan yang sama dengan angka utama (pengiriman per tanggal antar + ongkir pesanan selesai; pembayaran per tanggal bayar). Tanpa SQL.
 - Excel laporan kini 8 lembar: tambah **Laba per periode** (mengikuti pilihan hari/minggu/bulan yang tampil). Versi `laba-28`. Uji: `laporan: Tahun ini + rincian laba…` dan uji Excel 8 lembar.
 
+## Rekonsiliasi → Impor & ekspor (16 Nov)
+
+Permintaan pemilik: menu baru di Rekonsiliasi untuk ekspor/impor Excel dan hapus seluruh data. Pilihan pemilik: impor memakai **template aplikasi**; hapus = **transaksi saja**.
+- Sub menu baru **Impor & ekspor** (`#dataExcel`) di grup Rekonsiliasi.
+- **Ekspor:** `Data-Pentol-Gilaaa-<tanggal>.xlsx` dengan lembar Petunjuk, PO (satu baris per varian per batch: dipesan, harga beli, diterima, tanggal diterima, biaya batch), Pesanan (satu baris per pesanan, kolom jumlah per varian, status antar/bayar, ID sistem). Modul murni `admin/data-excel.js`.
+- **Impor:** pratinjau dulu (jumlah PO/pesanan baru, yang dilewati, baris bermasalah beserta alasannya), lalu disimpan berurutan lewat fungsi yang sudah ada: `pentol_admin_action('purchase')`, `pentol_receive_purchase`, `pentol_order_action('create')`, antar via `submitOrderAction` (bertanggal → `pentol_ship_order`), bayar. **Idempoten:** batch yang sudah ada dilewati; pesanan memakai ID sistem atau UUID tetap dari SHA-256 isi baris (+ urutan kemunculan), penerimaan & pembayaran memakai UUID tetap → impor ulang tidak menggandakan. Stok diambil dari batch tertua (`allocateStock`). Harga = harga jual saat ini. "Sebagian" diantar tidak diimpor (diselesaikan di aplikasi). Maks 500 pesanan per impor.
+- **Hapus semua transaksi:** `pentol_wipe_transactions('HAPUS SEMUA')` dari **`admin/hapus-transaksi-2026-11.sql`** menghapus pesanan, item, pembayaran, pengantaran, permintaan katalog, penerimaan, riwayat, stok batch, PO; harga/varian & admin tetap; nomor invoice mulai dari 1. Aplikasi meminta ketik HAPUS SEMUA, mengunduh cadangan Excel dulu (gagal unduh = batal), baru memanggil fungsi.
+- Uji: unit (tanggal/angka, baca template, alokasi stok), browser `impor & ekspor…`, SQL `hapus semua transaksi…`. Versi `data-29`.
+
 ## Input lewat ChatGPT (tahap 1: tempel)
 
 Keputusan: **aplikasi (Supabase) tetap sumber kebenaran**; ChatGPT hanya pintu masuk. Tidak ada data yang tersimpan tanpa konfirmasi admin di form aplikasi, sehingga semua validasi database tetap berlaku.

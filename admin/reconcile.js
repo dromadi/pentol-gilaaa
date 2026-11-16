@@ -17,7 +17,8 @@ const isDelivered = value => ['sudah diantar', 'sudah diserahkan'].includes(norm
 const elements = (node, name) => Array.from(node.getElementsByTagNameNS('*', name));
 const signature = items => items.map(({ batch, sku, quantity }) => batch + '/' + sku + '/' + quantity).sort().join('|');
 
-async function workbookSheets(file) {
+// Lembar yang dibaca dipilih lewat pola nama (rekonsiliasi: lembar pembukuan; impor: lembar template).
+export async function workbookSheets(file, wanted = /^(Tutup Hari |Booking dan Invoice B2$|Packing$|Pesanan$)/i) {
   if (!/\.xlsx$/i.test(file.name) || file.size > 2_000_000) throw new Error('Pilih file .xlsx dengan ukuran maksimal 2 MB.');
   if (!window.JSZip) throw new Error('Pembaca Excel belum termuat. Muat ulang halaman.');
   const zip = await window.JSZip.loadAsync(await file.arrayBuffer());
@@ -48,7 +49,7 @@ async function workbookSheets(file) {
   const sheets = new Map();
   for (const sheet of elements(workbook, 'sheet')) {
     const name = sheet.getAttribute('name');
-    if (!/^(Tutup Hari |Booking dan Invoice B2$|Packing$|Pesanan$)/i.test(name)) continue;
+    if (!wanted.test(name)) continue;
     const target = paths.get(sheet.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id'));
     if (!target) continue;
     const doc = await xml(target.startsWith('/') ? target.slice(1) : 'xl/' + target);

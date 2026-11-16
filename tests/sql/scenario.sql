@@ -142,4 +142,26 @@ do $$ begin
   assert current_setting('pentol.ship_date', true) = '', 'pengaturan tanggal dibersihkan';
 end $$;
 reset role;
+
+\echo '• hapus semua transaksi: konfirmasi wajib, harga & admin tetap, invoice mulai dari 1'
+select set_config('request.uid','22222222-2222-2222-2222-222222222222',false);
+set role authenticated;
+select pg_temp.expect_error($$select public.pentol_wipe_transactions('HAPUS SEMUA')$$, 'insufficient_privilege|admin');
+select set_config('request.uid','11111111-1111-1111-1111-111111111111',false);
+select pg_temp.expect_error($$select public.pentol_wipe_transactions('hapus')$$, 'Konfirmasi salah');
+do $$ begin assert (select count(*) from public.pentol_orders) > 0, 'masih ada pesanan sebelum hapus'; end $$;
+select public.pentol_wipe_transactions('HAPUS SEMUA');
+do $$ begin
+  assert (select count(*) from public.pentol_orders) + (select count(*) from public.pentol_payments)
+    + (select count(*) from public.pentol_batch_stock) + (select count(*) from public.pentol_purchases)
+    + (select count(*) from public.pentol_inbox) + (select count(*) from public.pentol_shipments) = 0, 'semua transaksi terhapus';
+  assert (select count(*) from public.pentol_products) = 9, 'harga jual tetap';
+  assert (select count(*) from public.pentol_admins) = 1, 'admin tetap';
+end $$;
+select public.pentol_admin_action('purchase','{"batch_code":"B9","supplier":"Pusat","shipping":0,"packaging":0,"other_cost":0,"items":[{"sku":"UR","quantity":5,"unit_cost":20000}]}');
+select public.pentol_order_action('create','cccccccc-0000-0000-0000-000000000099',null,
+  (select jsonb_build_object('date',current_date,'customer','Baru','items',jsonb_build_array(jsonb_build_object('stock_id',id,'quantity',1,'unit_price',36000)))
+   from public.pentol_batch_stock where batch_code='B9'));
+do $$ begin assert (select invoice_no from public.pentol_orders where id='cccccccc-0000-0000-0000-000000000099') = 1, 'invoice mulai dari 1'; end $$;
+reset role;
 \echo 'SQL: semua pemeriksaan lolos.'

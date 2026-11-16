@@ -14,9 +14,9 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Pentol Admin">
 <title>Admin · Pentol Gilaaa Surabaya</title>
-<link rel="stylesheet" href="style.css?v=laba-28">
+<link rel="stylesheet" href="style.css?v=data-29">
 <script defer src="vendor/jszip.min.js"></script>
-<script type="module" src="app.js?v=laba-28"></script>
+<script type="module" src="app.js?v=data-29"></script>
 </head>
 <body>
 <header class="app-header"><div class="bar">
@@ -150,6 +150,10 @@
 <div class="table order-table" tabindex="0" role="region" aria-label="Daftar pesanan">
 <table><thead><tr><th id="order-date-column" hidden>Tanggal</th><th>Pelanggan</th><th>Pesanan</th><th>Tagihan</th><th>Status</th><th>Aksi</th></tr></thead><tbody id="order-rows"></tbody></table>
 </div>
+</section>
+<section id="dataExcel" class="panel" hidden>
+<div class="section-head"><div><p class="eyebrow">PEMBUKUAN EXCEL</p><h2 tabindex="-1">Impor &amp; ekspor</h2><p>Unduh data ke Excel, masukkan data dari template Excel, atau mulai dari awal.</p></div></div>
+<div id="dataExcel-body"></div>
 </section>
 <section id="reconcile" class="panel" hidden>
 <div class="section-head"><div><h2 tabindex="-1">Rekonsiliasi Excel</h2><p>Bandingkan pembukuan dengan data aplikasi saat ini.</p></div></div>
