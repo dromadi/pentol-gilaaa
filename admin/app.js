@@ -1,5 +1,5 @@
 import { supabaseUrl, supabasePublishableKey } from './config.js';
-import { initOperations } from './operations.js?v=tagihan-46';
+import { initOperations } from './operations.js?v=nama-47';
 
 const products = new Map([
   ['UR','Pentol Urat'], ['PK','Pentol Kecil'], ['TP','Tahu Pentol'],
@@ -1021,7 +1021,23 @@ function showOrderDetail(order) {
   const stockById = new Map(rows.map(row => [row.id, row]));
   const card = node('article', null, 'ops-card');
   const shipped = order.delivered_at ? shortDate.format(new Date(wibDate.format(new Date(order.delivered_at)) + 'T00:00:00Z')) : '';
-  card.append(node('strong', order.customer + ' · ' + ops.invoiceNumber(order)),
+  // Nama + tombol ✎ Ubah langsung terlihat (ganti nama pemesan, varian, jumlah, jadwal, ongkir).
+  const head = node('div', null, 'detail-head');
+  head.append(node('strong', order.customer + ' · ' + ops.invoiceNumber(order)));
+  if (!order.cancelled) {
+    const edit = node('button', '✎ Ubah', 'detail-edit');
+    edit.type = 'button';
+    edit.setAttribute('aria-label', 'Ubah pesanan atau nama ' + order.customer);
+    edit.addEventListener('click', () => {
+      doneDetail.close();
+      openOrder(order);
+      orderForm.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      orderForm.elements.customer.focus({ preventScroll: true });
+      orderForm.elements.customer.select();
+    });
+    head.append(edit);
+  }
+  card.append(head,
     node('p', 'Dipesan ' + shortDate.format(new Date(order.order_date + 'T00:00:00Z')) + (shipped ? ' · diantar ' + shipped : '')
       + (order.paid && order.delivered ? ' · ✓ Selesai'
         : ' · ' + ops.paymentLabel(order) + ' · ' + ops.deliveryLabel(order) + (order.delivery_on && !order.delivered ? ' · jadwal ' + shortDate.format(new Date(order.delivery_on + 'T00:00:00Z')) : ''))),

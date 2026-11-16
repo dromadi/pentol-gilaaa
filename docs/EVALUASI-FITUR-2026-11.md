@@ -303,6 +303,10 @@ Pola yang sama dipasang di **Semua pesanan**: satu baris per pesanan (`nama` | `
 
 Pola yang sama di **Pesanan → Tagihan**: satu baris per pelanggan (`nama · n invoice` | umur tagihan tertua dalam hari — merah bila ≥ 7 hari — dan total sisa), tagihan paling lama di atas, kotak cari (nama/WA/invoice), tombol halaman di atas, jumlah baris mengikuti tinggi layar. Tekan baris = kartu pelanggan lengkap di kotak tersendiri (per invoice: Bayar, Ingatkan via WA, ⋯; untuk >1 invoice: Bayar sekaligus, Ingatkan semua). Ringkasan atas: total sisa + jumlah pelanggan. Daftar memakai helper umum `pagedList` (operations.js) yang bisa dipakai halaman lain. Tombol melayang disembunyikan di Tagihan. Versi `tagihan-46`. Uji lama disesuaikan.
 
+## Ubah nama pemesan lebih mudah (16 Nov)
+
+Mengganti nama pemesan sebenarnya sudah bisa lewat ⋯ → Ubah pesanan (pesanan biasa via `pentol_order_action` 'edit', yang sudah dibayar/diantar via `pentol_edit_order`), tetapi tersembunyi tiga langkah. Kotak rincian pesanan kini punya tombol **✎ Ubah** di sebelah nama: membuka form ubah pesanan dengan kursor di kolom nama (teks terpilih, langsung ketik). Versi `nama-47`. Uji: `ubah nama pemesan…`.
+
 ## Input lewat ChatGPT (tahap 1: tempel)
 
 Keputusan: **aplikasi (Supabase) tetap sumber kebenaran**; ChatGPT hanya pintu masuk. Tidak ada data yang tersimpan tanpa konfirmasi admin di form aplikasi, sehingga semua validasi database tetap berlaku.

@@ -237,6 +237,29 @@ export function adminTests(browser, devices, baseUrl) {
     await s.close();
   });
 
+  test('ubah nama pemesan: tombol ✎ Ubah di rincian, nama tersimpan (juga pesanan lunas & diantar)', async () => {
+    const data = defaultData();
+    data.orders = [order('o1', 'Yuna'), order('o2', 'Fajar', { paid: true, delivered: true, items: [[2, 2]],
+      pentol_payments: [{ id: 'p', order_id: 'o2', amount: 72000, paid_on: shiftDay(-1) }] })];
+    const s = await open(data);
+    await goSub(s.page, 'orders');
+    await s.page.locator('#done-list .po-row', { hasText: 'Yuna' }).click();
+    await s.page.click('.po-detail .detail-edit');
+    equal(await s.page.evaluate(() => document.activeElement?.name), 'customer', 'kursor di kolom nama');
+    await s.page.fill('#order-form [name=customer]', 'Elyuna');
+    await s.page.click('#save-order');
+    await s.page.waitForTimeout(400);
+    equal(s.data.writes.find(w => w.body?.action === 'edit')?.body.payload.customer, 'Elyuna', 'nama baru tersimpan');
+    await goSub(s.page, 'orders', 'Selesai');
+    await s.page.locator('#done-list .po-row', { hasText: 'Fajar' }).click();
+    await s.page.click('.po-detail .detail-edit');
+    await s.page.fill('#order-form [name=customer]', 'Fajar Rahman');
+    await s.page.click('#save-order');
+    await s.page.waitForTimeout(400);
+    equal(s.data.writes.find(w => w.fn === 'pentol_edit_order')?.body.payload.customer, 'Fajar Rahman', 'pesanan lunas & diantar ikut bisa diganti nama');
+    await s.close();
+  });
+
   test('Pesanan: cari nama/WA/invoice; permintaan katalog punya Balas WA', async () => {
     const s = await open();
     await goSub(s.page, 'orders');
