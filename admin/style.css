@@ -668,3 +668,27 @@ input[type="file"]::file-selector-button { margin-right: 10px; padding: 8px 14px
 .data-card .ops-actions button { min-height: 42px; font-size: 13px; padding-inline: 18px; border-radius: 999px; }
 @media (max-width: 420px) { .subtabs.many button { font-size: 10.5px; padding-inline: 2px; } }
 .po-done-hint { margin-top: 14px; font-size: 12px; color: var(--muted); }
+
+/* PO selesai: baris ringkas + halaman, rincian di kotak tersendiri */
+.po-count { margin: 0 0 8px; font-size: 12px; color: var(--muted); }
+.po-search { width: 100%; margin: 0 0 10px; }
+.po-rows { display: grid; gap: 6px; }
+.po-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%; min-height: 52px; padding: 10px 14px;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--paper); color: inherit; text-align: left; font-size: 14px; box-shadow: none; }
+.po-row:hover { background: #f8f1e8; }
+.po-row small { color: var(--muted); font-size: 12px; font-weight: 500; }
+.po-row-meta { font-size: 12px; color: #6f5f55; white-space: nowrap; }
+.po-row-meta::after { content: ' ›'; color: var(--wine); font-weight: 700; }
+.po-pager { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; margin-top: 12px; }
+.po-pager button { min-height: 46px; border-radius: 999px; font-size: 13px; }
+.po-page { font-size: 13px; font-weight: 700; color: #6f5f55; text-align: center; min-width: 54px; }
+.po-detail { width: min(680px, calc(100% - 24px)); max-height: 88vh; padding: 16px; border: 0; border-radius: 16px; background: var(--paper); color: inherit; box-shadow: 0 25px 90px #24120d44; }
+.po-detail::backdrop { background: #32242075; backdrop-filter: blur(3px); }
+.po-detail .ops-card { margin: 0; border: 0; padding: 4px; box-shadow: none; }
+@media (max-width: 620px) {
+  .po-row { min-height: 46px; padding: 8px 12px; font-size: 13px; }
+  .po-row small { display: none; }
+  .po-packs { display: none; }
+  .po-rows { gap: 5px; }
+}
+.po-detail > .ops-actions button { min-height: 44px; min-width: 120px; }

@@ -1097,6 +1097,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
       if (!history.length) historyPanel.append(el('p', 'Belum ada penerimaan yang dicatat dari PO.'));
       const receive = button('Terima barang', () => receivePurchase(p, items));
       receive.disabled = !receipts || !items.some(item => item.remaining > 0);
+      receive.hidden = items.every(item => item.remaining === 0);
       if (!receive.disabled) receive.classList.add('primary-action');
       card.append(el('strong', p.batch_code + ' · ' + p.supplier),
         el('p', [p.reference, p.ordered_on && 'Dipesan ' + dayLabel(p.ordered_on), p.expected_on && 'Estimasi tiba ' + dayLabel(p.expected_on)].filter(Boolean).join(' · ')),
@@ -1113,12 +1114,56 @@ export function initOperations({ $, request, status, products, prices, today, fo
             try { await navigator.clipboard.writeText(lines.join('\n')); status('Pesan supplier disalin.'); }
             catch { status('Pesan supplier belum bisa disalin.',true); }
           })], 'ops-actions'));
-      (items.some(item => item.remaining > 0) ? active : done).push([p, card]);
+      const lastReceived = history[0]?.received_on || items.map(item => item.row?.received_on).filter(Boolean).sort().at(-1) || p.ordered_on || '';
+      (items.some(item => item.remaining > 0) ? active : done).push([p, card, { totalCost, lastReceived,
+        packs: items.reduce((sum, item) => sum + item.received, 0) }]);
     }
     if (mode === 'done') {
-      // PO selesai: terbaru di atas.
-      if (done.length) target.append(el('h3', 'PO selesai (' + done.length + ')'), ...done.reverse().map(([, card]) => card));
-      else target.append(el('p', 'Belum ada PO yang selesai diterima.'));
+      if (!done.length) { target.append(el('p', 'Belum ada PO yang selesai diterima.')); return; }
+      // Baris ringkas, 8 per halaman (pas satu layar HP), tekan baris = rincian di kotak tersendiri.
+      done.sort(([a, , x], [b, , y]) => String(y.lastReceived).localeCompare(String(x.lastReceived)) || b.batch_code.localeCompare(a.batch_code));
+      const perPage = innerWidth <= 620 ? 6 : 8;
+      let page = 0;
+      const search = el('input');
+      search.type = 'search';
+      search.placeholder = 'Cari ' + done.length + ' PO: batch, supplier, varian…';
+      search.setAttribute('aria-label', 'Cari PO selesai');
+      search.className = 'po-search';
+      const rows = el('div', undefined, 'po-rows');
+      const pager = el('div', undefined, 'po-pager');
+      const prev = button('‹ Sebelumnya', () => { page--; render(); });
+      const next = button('Berikutnya ›', () => { page++; render(); });
+      const where = el('span', '', 'po-page');
+      pager.append(prev, where, next);
+      const shortMoney = value => value >= 1e6 ? 'Rp' + (Math.round(value / 1e5) / 10).toString().replace('.', ',') + 'jt'
+        : value >= 1e3 ? 'Rp' + Math.round(value / 1e3) + 'rb' : money(value);
+      const text = ([p]) => [p.batch_code, p.supplier, ...p.pentol_purchase_items.map(i => products.get(i.sku) || i.sku)].join(' ').toLocaleLowerCase('id');
+      function render() {
+        const query = search.value.trim().toLocaleLowerCase('id');
+        const list = done.filter(entry => !query || text(entry).includes(query));
+        const pages = Math.max(1, Math.ceil(list.length / perPage));
+        page = Math.min(Math.max(page, 0), pages - 1);
+        rows.replaceChildren(...list.slice(page * perPage, page * perPage + perPage).map(([p, card, info]) => {
+          const row = el('button', undefined, 'po-row');
+          row.type = 'button';
+          const left = el('span');
+          left.append(el('strong', p.batch_code), el('small', ' · ' + p.supplier));
+          const meta = el('span', undefined, 'po-row-meta');
+          meta.append(info.lastReceived ? dayLabel(info.lastReceived).replace(/^\w+, /, '') + ' · ' : '', el('span', info.packs + ' pack · ', 'po-packs'), shortMoney(info.totalCost));
+          row.append(left, meta);
+          row.setAttribute('aria-label', 'Rincian ' + p.batch_code);
+          row.addEventListener('click', () => showPoDetail(p, card));
+          return row;
+        }));
+        if (!list.length) rows.append(el('p', 'Tidak ada PO yang cocok.'));
+        where.textContent = (page + 1) + ' / ' + pages;
+        prev.disabled = page === 0;
+        next.disabled = page >= pages - 1;
+        pager.hidden = pages <= 1;
+      }
+      search.addEventListener('input', () => { page = 0; render(); });
+      target.append(search, rows, pager);
+      render();
       return;
     }
     // Menunggu kiriman: estimasi tiba terdekat dulu.
@@ -1126,6 +1171,24 @@ export function initOperations({ $, request, status, products, prices, today, fo
     if (active.length) target.append(el('h3', 'Menunggu kiriman (' + active.length + ')'), ...active.map(([, card]) => card));
     else target.append(el('p', 'Tidak ada PO yang menunggu kiriman.'));
     if (done.length) target.append(el('p', done.length + ' PO sudah selesai diterima · lihat sub menu PO selesai.', 'po-done-hint'));
+  }
+
+  // Kotak rincian PO (dialog tersendiri, agar tombol Edit restok tetap bisa membuka form restok).
+  let poDetail;
+  function showPoDetail(p, card) {
+    if (!poDetail) {
+      poDetail = document.createElement('dialog');
+      poDetail.className = 'po-detail';
+      document.body.append(poDetail);
+    }
+    const close = button('Tutup', () => poDetail.close());
+    const body = card.cloneNode(false);
+    body.append(...card.childNodes);
+    poDetail.replaceChildren(body, block([close], 'ops-actions'));
+    // Tombol di dalam kartu: tutup rincian dulu lalu jalankan aksinya (Edit restok membuka form lain).
+    body.querySelectorAll('button').forEach(node => node.addEventListener('click', () => poDetail.close(), { capture: true }));
+    poDetail.addEventListener('close', () => card.append(...body.childNodes), { once: true });
+    poDetail.showModal();
   }
 
   function costs(data) {

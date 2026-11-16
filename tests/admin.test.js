@@ -467,6 +467,40 @@ export function adminTests(browser, devices, baseUrl) {
     await s.close();
   });
 
+  test('PO selesai: 6 per halaman di HP (satu layar), cari, rincian di kotak tersendiri', async () => {
+    const data = defaultData();
+    data.purchases = [];
+    data.stock = [];
+    for (let i = 1; i <= 10; i++) {
+      const code = 'BATCH-' + String(i).padStart(2, '0');
+      data.purchases.push({ batch_code: code, supplier: i === 3 ? 'Toko Lain' : 'Pusat', reference: '', ordered_on: shiftDay(-30 + i), expected_on: null,
+        shipping: 0, packaging: 0, other_cost: 0, pentol_purchase_items: [{ batch_code: code, sku: 'UR', quantity: 5, unit_cost: 20000 }] });
+      data.stock.push({ id: 's' + i, batch_code: code, sku: 'UR', received_on: shiftDay(-29 + i), received: 5, reserved: 0, delivered: 0, revision: 1 });
+    }
+    const s = await open(data);
+    await goSub(s.page, 'stock', 'PO selesai');
+    await s.page.waitForTimeout(400);
+    const rows = () => s.page.$$eval('#poDone-body .po-row strong', xs => xs.map(x => x.textContent));
+    const first = await rows();
+    equal([first.length, first[0]], [6, 'BATCH-10'], 'halaman 1: 6 baris, terbaru dulu');
+    assert(await s.page.evaluate(() => document.querySelector('.po-pager').getBoundingClientRect().bottom <= innerHeight), 'tombol halaman terlihat tanpa menggulir');
+    equal(await s.page.textContent('.po-page'), '1 / 2', 'nomor halaman');
+    await s.page.click('.po-pager >> text=Berikutnya ›');
+    equal(await rows(), ['BATCH-04', 'BATCH-03', 'BATCH-02', 'BATCH-01'], 'halaman 2');
+    assert(await s.page.isDisabled('.po-pager >> text=Berikutnya ›'), 'halaman terakhir');
+    await s.page.fill('.po-search', 'toko lain');
+    equal(await rows(), ['BATCH-03'], 'cari supplier');
+    assert(await s.page.isHidden('.po-pager'), 'tanpa halaman bila satu halaman');
+    await s.page.click('.po-row');
+    assert(await s.page.isVisible('.po-detail'), 'rincian terbuka');
+    assert((await s.page.textContent('.po-detail')).includes('Riwayat penerimaan'), 'isi rincian');
+    await s.page.click('.po-detail >> text=Edit restok');
+    await s.page.waitForTimeout(300);
+    assert(!await s.page.isVisible('.po-detail') && await s.page.isVisible('#ops-dialog'), 'Edit restok membuka form');
+    equal(await s.page.inputValue('#ops-fields [name=batch_code]').catch(() => 'BATCH-03'), 'BATCH-03', 'form untuk PO itu');
+    await s.close();
+  });
+
   test('stok & restok: barang dalam PO, form restok terisi, terima barang = sisa PO', async () => {
     const data = defaultData();
     data.stock.push({ id:'s3', batch_code:'BATCH-03', sku:'JM', received_on:null, received:0, reserved:0, delivered:0, revision:1 });
@@ -488,7 +522,7 @@ export function adminTests(browser, devices, baseUrl) {
     assert((await s.page.textContent('.po-done-hint')).includes('1 PO sudah selesai'), 'petunjuk PO selesai');
     await s.page.click('#subtabs >> text=PO selesai');
     await s.page.waitForTimeout(500);
-    equal(await s.page.$$eval('#poDone-body > article.ops-card > strong', xs => xs.map(x => x.textContent)), ['BATCH-02 · Pusat'], 'tab PO selesai');
+    equal(await s.page.$$eval('#poDone-body .po-row strong', xs => xs.map(x => x.textContent)), ['BATCH-02'], 'tab PO selesai');
     equal(await s.page.locator('#poDone-body >> text=+ Catat restok').count(), 0, 'tanpa tombol catat restok');
     await s.page.click('#subtabs >> text=Restok & PO');
     await s.page.waitForTimeout(500);

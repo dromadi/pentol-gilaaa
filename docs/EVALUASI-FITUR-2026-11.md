@@ -261,6 +261,10 @@ Lipatan "Rincian per batch & koreksi" di halaman Stok dipindah menjadi sub menu 
 
 Lipatan "PO selesai" di Restok & Supplier dipindah ke sub menu sendiri **PO selesai** (`#poDone`, panel baru, `purchasing(target, 'done')`): kartu PO yang sudah diterima semua, terbaru di atas, tanpa tombol Catat restok. Tab **Restok & PO** kini hanya tombol Catat restok + PO yang menunggu kiriman, dengan petunjuk jumlah PO selesai. Sub menu Stok: Stok · Per batch & koreksi · Restok & PO · PO selesai. Versi `po-34`.
 
+## PO selesai: baris ringkas + halaman (16 Nov)
+
+Pemilik tidak suka menggulir panjang. PO selesai kini satu baris per PO (`BATCH · tanggal diterima terakhir · total biaya`, di laptop juga supplier & jumlah pack), **6 per halaman di HP / 8 di laptop** sehingga daftar + tombol ‹ Sebelumnya · 1/n · Berikutnya › muat satu layar, kotak cari (batch/supplier/varian), terbaru di atas. Tekan baris → rincian di `<dialog class="po-detail">` tersendiri (bukan `#ops-dialog`, agar Edit restok bisa membuka form restok; rincian ditutup dulu). Tombol Terima barang disembunyikan untuk PO yang sudah diterima semua. Versi `po-35`. Uji: `PO selesai: 6 per halaman…`. Pola ini bisa dipakai juga untuk Pesanan → Selesai.
+
 ## Input lewat ChatGPT (tahap 1: tempel)
 
 Keputusan: **aplikasi (Supabase) tetap sumber kebenaran**; ChatGPT hanya pintu masuk. Tidak ada data yang tersimpan tanpa konfirmasi admin di form aplikasi, sehingga semua validasi database tetap berlaku.
