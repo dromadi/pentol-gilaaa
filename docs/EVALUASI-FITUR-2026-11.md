@@ -265,6 +265,13 @@ Lipatan "PO selesai" di Restok & Supplier dipindah ke sub menu sendiri **PO sele
 
 Pemilik tidak suka menggulir panjang. PO selesai kini satu baris per PO (`BATCH · tanggal diterima terakhir · total biaya`, di laptop juga supplier & jumlah pack), **6 per halaman di HP / 8 di laptop** sehingga daftar + tombol ‹ Sebelumnya · 1/n · Berikutnya › muat satu layar, kotak cari (batch/supplier/varian), terbaru di atas. Tekan baris → rincian di `<dialog class="po-detail">` tersendiri (bukan `#ops-dialog`, agar Edit restok bisa membuka form restok; rincian ditutup dulu). Tombol Terima barang disembunyikan untuk PO yang sudah diterima semua. Versi `po-35`. Uji: `PO selesai: 6 per halaman…`. Pola ini bisa dipakai juga untuk Pesanan → Selesai.
 
+## Laporan: Harga & Laba dipisah (16 Nov)
+
+Sub menu Laporan kini **Laba · Harga jual · Tutup hari** (versi `harga-36`).
+- **Laba** (`#finance`): periode, angka utama, laba per hari/minggu/bulan, per varian, grafik, rincian, Unduh Excel. Lipatan harga jual & kartu cadangan dikeluarkan.
+- **Harga jual** (`#prices`, `priceList`): tabel Varian · Harga jual · Harga beli terakhir (HPP batch terbaru, termasuk bagian ongkir/kemasan) · Untung/pack (%) · Ubah. Dialog ubah harga menampilkan harga beli terakhir. Di HP kolom harga beli disembunyikan agar muat satu layar.
+- **Cadangan data** pindah ke Rekonsiliasi Excel → Impor & ekspor (bersama ekspor/impor/hapus). Pengingat cadangan di Hari Ini tetap. `docs/CADANGAN-OTOMATIS.md` dan `AGENTS.md` ikut diperbarui.
+
 ## Input lewat ChatGPT (tahap 1: tempel)
 
 Keputusan: **aplikasi (Supabase) tetap sumber kebenaran**; ChatGPT hanya pintu masuk. Tidak ada data yang tersimpan tanpa konfirmasi admin di form aplikasi, sehingga semua validasi database tetap berlaku.

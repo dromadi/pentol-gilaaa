@@ -29,7 +29,7 @@ export function adminTests(browser, devices, baseUrl) {
   test('semua halaman terbuka tanpa error dan tanpa geser ke samping', async () => {
     const s = await open();
     const pages = [['today'], ['orders'], ['orders', 'Semua pesanan'], ['orders', 'Packing'], ['orders', 'Antar'], ['orders', 'Tagihan'], ['stock'], ['stock', 'Per batch & koreksi'], ['stock', 'Restok & PO'], ['stock', 'PO selesai'],
-      ['finance'], ['finance', 'Tutup hari']];
+      ['finance'], ['finance', 'Harga jual'], ['finance', 'Tutup hari']];
     for (const [nav, tab] of pages) {
       await goSub(s.page, nav, tab);
       assert(!await s.page.evaluate(() => document.documentElement.scrollWidth > innerWidth), 'geser ke samping di ' + nav + ' ' + (tab || ''));
@@ -538,6 +538,31 @@ export function adminTests(browser, devices, baseUrl) {
     await s.page.waitForTimeout(400);
     const saved = s.data.writes.find(w => w.body.action === 'purchase');
     equal([saved?.body.payload.batch_code, saved?.body.payload.items], ['BATCH-04', [{ sku:'JM', quantity:3, unit_cost:24000 }]], 'restok tersimpan');
+    await s.close();
+  });
+
+  test('Laporan → Harga jual: harga, harga beli terakhir, untung per pack, ubah harga; cadangan pindah ke Impor & ekspor', async () => {
+    const data = defaultData();
+    data.purchases = [{ batch_code:'BATCH-02', supplier:'Pusat', reference:'', ordered_on:shiftDay(-9), expected_on:null, shipping:0, packaging:0, other_cost:0,
+      pentol_purchase_items:[{ batch_code:'BATCH-02', sku:'UR', quantity:30, unit_cost:20000 }] }];
+    const s = await open(data);
+    await goSub(s.page, 'finance');
+    equal(await s.page.locator('#finance >> text=Harga jual default').count(), 0, 'harga tidak lagi di halaman Laba');
+    equal(await s.page.locator('#finance >> text=Unduh cadangan').count(), 0, 'cadangan tidak lagi di halaman Laba');
+    await goSub(s.page, 'finance', 'Harga jual');
+    const urat = s.page.locator('#prices-body tr', { hasText: 'Pentol Urat' });
+    const text = await urat.textContent();
+    assert(text.includes('Rp36.000') && text.includes('Rp20.000') && text.includes('Rp16.000 (44%)'), 'baris Urat: ' + text);
+    await urat.locator('button', { hasText: 'Ubah' }).click();
+    await s.page.fill('#ops-form [name=price]', '38000');
+    await s.page.click('#ops-form > button:not([type])');
+    await s.page.waitForTimeout(400);
+    const saved = s.data.writes.find(w => w.body?.action === 'price');
+    equal(saved?.body.payload, { sku: 'UR', price: 38000 }, 'harga tersimpan');
+    await s.page.click('#more-menu');
+    await s.page.click('#admin-menu [data-view=reconcile]');
+    await s.page.click('#subtabs >> text=Impor & ekspor');
+    assert(await s.page.isVisible('#dataExcel >> text=⬇ Unduh cadangan'), 'cadangan di Impor & ekspor');
     await s.close();
   });
 

@@ -1,5 +1,5 @@
 import { supabaseUrl, supabasePublishableKey } from './config.js';
-import { initOperations } from './operations.js?v=po-35';
+import { initOperations } from './operations.js?v=harga-36';
 
 const products = new Map([
   ['UR','Pentol Urat'], ['PK','Pentol Kecil'], ['TP','Tahu Pentol'],
@@ -586,7 +586,7 @@ document.addEventListener('keydown', event => {
 const viewGroups = {
   orders: [['actions', 'Perlu tindakan'], ['orders', 'Semua pesanan'], ['packing', 'Packing'], ['delivery', 'Antar'], ['receivables', 'Tagihan'], ['done', 'Selesai']],
   stock: [['stock', 'Stok'], ['batches', 'Per batch & koreksi'], ['purchasing', 'Restok & PO'], ['poDone', 'PO selesai']],
-  finance: [['finance', 'Laba & harga'], ['closeDay', 'Tutup hari']],
+  finance: [['finance', 'Laba'], ['prices', 'Harga jual'], ['closeDay', 'Tutup hari']],
   reconcile: [['reconcile', 'Rekonsiliasi'], ['dataExcel', 'Impor & ekspor']]
 };
 const groupOf = view => Object.keys(viewGroups).find(group => viewGroups[group].some(([id]) => id === view));

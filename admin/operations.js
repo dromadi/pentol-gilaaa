@@ -1203,18 +1203,35 @@ export function initOperations({ $, request, status, products, prices, today, fo
     return result;
   }
 
+  // Harga jual per varian, dengan harga beli (HPP) batch terakhir dan untung per pack sebagai patokan.
+  async function priceList(target) {
+    const data = await purchases();
+    const hpp = costs(data);
+    const latest = new Map();
+    for (const p of [...data].sort((a, b) => String(a.ordered_on || '').localeCompare(String(b.ordered_on || '')))) {
+      for (const item of p.pentol_purchase_items) latest.set(item.sku, { batch: p.batch_code, unit: hpp.get(p.batch_code + '|' + item.sku) });
+    }
+    const rows = [...products].map(([sku, name]) => {
+      const last = latest.get(sku);
+      const change = button('Ubah', () => showDialog('Harga jual · ' + name, [
+        control('Harga per pack (Rp)', 'price', {type:'number', value:prices[sku], props:{min:0, max:10000000}}),
+        last?.unit !== undefined ? el('p', 'Harga beli batch terakhir (' + last.batch + '): ' + money(last.unit) + ' per pack.') : ''
+      ], async form => {
+        await admin('price', {sku, price:Number(form.get('price'))});
+        return async () => { await loadPrices(); open('prices'); status('Harga ' + name + ' diperbarui. Katalog ikut berubah.'); };
+      }));
+      const margin = last?.unit !== undefined ? prices[sku] - last.unit : null;
+      return [name, money(prices[sku]), last?.unit !== undefined ? money(last.unit) : '—',
+        margin === null ? '—' : money(margin) + (prices[sku] ? ' (' + Math.round(margin / prices[sku] * 100) + '%)' : ''), change];
+    });
+    target.replaceChildren(table(['Varian', 'Harga jual', 'Harga beli terakhir', 'Untung / pack', ''], rows, 'Belum ada varian.'),
+      el('p', 'Harga jual dipakai untuk pesanan baru dan katalog pembeli. Pesanan lama tetap memakai harga saat dicatat. Harga beli = harga per pack + bagian ongkir/kemasan batch terakhir.', 'breakdown-note'));
+  }
+
   async function finance(target) {
     const first = control('Dari','first',{type:'date',value:target.querySelector('[name=first]')?.value || today().slice(0,8)+'01'});
     const last = control('Sampai','last',{type:'date',value:target.querySelector('[name=last]')?.value || today()});
     const out = el('div');
-    const priceList = el('details', undefined, 'report-details');
-    priceList.append(el('summary', 'Harga jual default'));
-    const backupCard = el('section', undefined, 'report-backup');
-    const backupText = el('p', backupLabel());
-    backupText.dataset.backupLast = '';
-    backupCard.append(el('h3', 'Cadangan data'),
-      el('p', 'Semua pesanan, pembayaran, stok, PO, dan riwayat dalam satu file Excel. Simpan di Google Drive.'), backupText,
-      button('⬇ Unduh cadangan', event => downloadBackup(event.currentTarget)));
     const periods = el('div', undefined, 'period-chips');
     const periodRanges = () => {
       const t = today();
@@ -1247,17 +1264,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
     exportButton.classList.add('report-export');
     exportButton.disabled = true;
     filters.append(exportButton);
-    target.replaceChildren(filters, out, priceList, backupCard);
-    priceList.append(
-      ...[...products].map(([sku,name]) => block([
-        el('span',name + ' · ' + money(prices[sku])),
-        button('Ubah harga', () => showDialog('Harga jual · ' + name, [
-          control('Harga per pack (Rp)','price',{type:'number',value:prices[sku],props:{min:0,max:10000000}})
-        ], async data => {
-          await admin('price',{sku,price:Number(data.get('price'))});
-          return async () => { await loadPrices(); open('finance'); };
-        }))
-      ], 'ops-actions')));
+    target.replaceChildren(filters, out);
     // Penjualan diantar per minggu (Senin–Minggu), 4 minggu terakhir, menurut tanggal pesanan.
     function weekStart(day) {
       const date = new Date(day + 'T00:00:00Z');
@@ -1874,7 +1881,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
     return load();
   }
 
-  const views={dataExcel,poDone:t=>purchasing(t,'done'),today:overview,packing:(t,m)=>packing(t,m,'packing'),delivery:(t,m)=>packing(t,m,'delivery'),purchasing,finance,promotions,reconcile,history,receivables,closeDay};
+  const views={dataExcel,prices:priceList,poDone:t=>purchasing(t,'done'),today:overview,packing:(t,m)=>packing(t,m,'packing'),delivery:(t,m)=>packing(t,m,'delivery'),purchasing,finance,promotions,reconcile,history,receivables,closeDay};
   async function open(view, packingMode) {
     if (!views[view]) return;
     const token=getSession();
@@ -2175,7 +2182,12 @@ export function initOperations({ $, request, status, products, prices, today, fo
     wipe.classList.add('danger-text');
     danger.append(block([wipe], 'ops-actions'));
 
-    target.replaceChildren(exportCard, importCard, danger);
+    const backupCard = card('Cadangan data', 'Semua pesanan, pembayaran, stok, PO, dan riwayat dalam satu file Excel (data mentah). Simpan di Google Drive seminggu sekali.');
+    const backupText = el('p', backupLabel());
+    backupText.dataset.backupLast = '';
+    const backupButton = button('⬇ Unduh cadangan', event => downloadBackup(event.currentTarget));
+    backupCard.append(backupText, block([backupButton], 'ops-actions'));
+    target.replaceChildren(exportCard, importCard, backupCard, danger);
   }
 
   function lastBackup() {

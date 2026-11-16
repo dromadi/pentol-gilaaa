@@ -41,7 +41,7 @@ Setelah itu cadangan berjalan sendiri setiap malam.
 - **Kalau gagal**, GitHub mengirim email ke pemilik repo. Penyebab umum: kata sandi database diganti (perbarui secret `SUPABASE_DB_URL`) atau project Supabase sedang di-*pause*.
 - **GitHub menonaktifkan jadwal setelah 60 hari tanpa aktivitas di repo** dan mengirim email pemberitahuan. Aktifkan lagi di tab Actions (**Enable workflow**).
 - Cadangan setiap malam kemungkinan besar juga menjaga project Supabase gratis tetap aktif. Project gratis di-*pause* setelah 7 hari tanpa aktivitas.
-- Cadangan manual tetap ada di admin: **Laporan → Unduh cadangan** (Excel, langsung ke HP).
+- Cadangan manual tetap ada di admin: **Rekonsiliasi Excel → Impor & ekspor → Unduh cadangan** (Excel, langsung ke HP).
 
 ## Memulihkan data
 
