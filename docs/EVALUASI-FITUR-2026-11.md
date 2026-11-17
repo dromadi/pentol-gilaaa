@@ -316,6 +316,10 @@ Masalah lapangan: pelanggan memesan saat stok kosong padahal restok sudah direnc
 - Katalog pembeli tidak berubah (tetap tidak bisa memesan melebihi stok).
 - Uji: `pesan dulu, tunggu restok…`, `daftar pesanan: tanda Tunggu stok…`.
 
+## Katalog: jumlah sisa stok tidak ditampilkan ke pembeli (17 Nov)
+
+Permintaan pemilik: "sisanya jangan tampil di konsumen". Label "Sisa N pack" di kartu varian dihapus. Batas tetap berlaku (dari `max_qty` katalog v2): tombol + berhenti, lalu muncul keterangan **"Jumlah maksimal tercapai"** tanpa angka. Pesan saat server menolak karena stok kini "Stok Pentol X tidak cukup untuk jumlah itu…" (angka dari server hanya dipakai di dalam untuk menyesuaikan keranjang), dan penyesuaian keranjang saat sinkron menulis "X disesuaikan dengan stok". Katalog `catalog.js?v=4`. Uji katalog diperbarui.
+
 ## Input lewat ChatGPT (tahap 1: tempel)
 
 Keputusan: **aplikasi (Supabase) tetap sumber kebenaran**; ChatGPT hanya pintu masuk. Tidak ada data yang tersimpan tanpa konfirmasi admin di form aplikasi, sehingga semua validasi database tetap berlaku.

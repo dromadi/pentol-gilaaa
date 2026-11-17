@@ -38,7 +38,7 @@ Katalog pelanggan (`/index.html`) memakai GitHub Pages. Area admin (`/admin/`) m
 - **Booking tanpa pesanan** (sisa data lama/Excel) ditampilkan di Stok per Batch. Bereskan dengan **Catat pesanan → Pakai booking lama**, sehingga booking itu menjadi milik pelanggan. Rekonsiliasi Excel tidak lagi menambah booking.
 - **Pesanan, pembayaran, pengantaran:** dicatat di menu Pesanan dan Packing & Tagihan. Setiap pembayaran disimpan dengan tanggalnya, dan laporan kas mengikuti tanggal itu.
 - **Restok, HPP, harga jual, laba:** di menu Restok & Supplier dan Harga & Laba.
-- **Checkout katalog:** pembeli mengirim permintaan ke inbox (`pentol_submit_checkout`). Batasnya 8 per nomor per jam, 40 total per jam, dan 150 yang menunggu. Jika batas tercapai, pembeli tetap diarahkan ke WhatsApp. Jumlah per varian tidak boleh melebihi stok bebas; katalog menampilkan "Sisa N pack" saat stok tinggal 1–9.
+- **Checkout katalog:** pembeli mengirim permintaan ke inbox (`pentol_submit_checkout`). Batasnya 8 per nomor per jam, 40 total per jam, dan 150 yang menunggu. Jika batas tercapai, pembeli tetap diarahkan ke WhatsApp. Jumlah per varian tidak boleh melebihi stok bebas; katalog tidak menampilkan jumlah sisa; pembeli hanya dibatasi (tombol + berhenti, keterangan "Jumlah maksimal tercapai").
 
 ### Aktifkan penerimaan PO pada produksi yang sudah berjalan
 

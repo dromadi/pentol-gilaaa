@@ -22,11 +22,14 @@ export function catalogTests(browser, devices, baseUrl) {
   const json = (route, body, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
   const card = (page, id) => page.locator(`[data-product="${id}"]`);
 
-  test('stok tipis: label "Sisa N pack" dan tombol + berhenti di batas', async () => {
+  test('stok tipis: jumlah sisa tidak ditampilkan, tombol + berhenti di batas dengan keterangan', async () => {
     const s = await open(route => json(route, catalog()));
     await card(s.page, 'JM').locator('[data-add]').click();
     await card(s.page, 'JM').locator('[data-menu-change="1"]').click();
-    equal(await card(s.page, 'JM').locator('.stock-left').textContent(), 'Sisa 2 pack', 'label');
+    assert(!(await card(s.page, 'JM').textContent()).includes('Sisa'), 'jumlah sisa tidak tampil');
+    assert(!(await s.page.textContent('#products')).match(/\d+ pack(?! ·| \/)/), 'tidak ada angka stok di katalog');
+    equal(await card(s.page, 'JM').locator('[data-max-note]').textContent(), 'Jumlah maksimal tercapai', 'keterangan batas');
+    assert(await card(s.page, 'JM').locator('[data-max-note]').isVisible(), 'keterangan tampil saat batas');
     assert(await card(s.page, 'JM').locator('[data-menu-change="1"]').isDisabled(), 'tombol + mati di batas');
     equal(s.problems, [], 'tanpa error / pelanggaran CSP');
     await s.close();
@@ -56,7 +59,8 @@ export function catalogTests(browser, devices, baseUrl) {
     await s.page.click('#whatsapp');
     await s.page.waitForTimeout(500);
     equal(await s.page.locator('#cart-items .qty span').first().textContent(), '3', 'jumlah disesuaikan');
-    assert((await s.page.textContent('#feedback')).startsWith('Stok Pentol Urat tersisa 3 pack.'), 'pesan stok');
+    const message = await s.page.textContent('#feedback');
+    assert(message.startsWith('Stok Pentol Urat tidak cukup') && !message.includes('3 pack'), 'pesan stok tanpa angka sisa: ' + message);
     await s.close();
   });
 

@@ -67,7 +67,7 @@ async function syncCatalog() {
     item.maxQty = Number.isSafeInteger(fresh.max_qty) ? fresh.max_qty : null;
     if (!before) continue;
     if (item.soldOut) { quantities.delete(item.id); changed.push(item.name + ' habis'); }
-    else if (before > maxQty(item)) { quantities.set(item.id, maxQty(item)); changed.push(item.name + ' tersisa ' + maxQty(item) + ' pack'); }
+    else if (before > maxQty(item)) { quantities.set(item.id, maxQty(item)); changed.push(item.name + ' disesuaikan dengan stok'); }
   }
   catalogFresh = true;
   document.querySelector('#stock-status').hidden = true;
@@ -92,7 +92,7 @@ function renderMenu() {
   menu.innerHTML = visible.length ? visible.map(item => `
     <article class="card" data-product="${item.id}">
       <div class="card-top"><span class="category">${item.category}</span>${item.soldOut ? '<span class="sold">SOLD OUT</span>' : ''}</div>
-      <h3>${item.name}</h3><p class="detail">${item.size}${!item.soldOut && item.maxQty ? `<span class="stock-left">Sisa ${item.maxQty} pack</span>` : ''}</p>
+      <h3>${item.name}</h3><p class="detail">${item.size}<span class="stock-left" data-max-note hidden>Jumlah maksimal tercapai</span></p>
       <div class="bottom"><div><strong class="price">${money(item.price)}</strong><span class="price-unit">per pack</span></div>
       ${item.soldOut ? '<span class="unavailable">Stok habis</span>' : `
         <div class="add-control">
@@ -121,6 +121,9 @@ function syncMenuQuantities() {
     stepper.querySelector('span').textContent = count;
     const item = products.find(product => product.id === id);
     stepper.querySelector('[data-menu-change="1"]').disabled = count >= maxQty(item);
+    // Jumlah stok tidak ditampilkan ke pembeli; cukup beri tahu saat batas tercapai.
+    const note = card.querySelector('[data-max-note]');
+    if (note) note.hidden = !(item.maxQty && count >= maxQty(item));
   });
 }
 
@@ -416,7 +419,8 @@ orderForm.addEventListener('submit', async event => {
       renderCart();
     }
     setCheckoutStep(false);
-    feedback.textContent = stockError + ' Jumlah di keranjang sudah disesuaikan, periksa lagi sebelum melanjutkan.';
+    // Jumlah sisa stok tidak ditampilkan ke pembeli.
+    feedback.textContent = 'Stok ' + (item ? item.name + ' ' : '') + 'tidak cukup untuk jumlah itu. Jumlah di keranjang sudah disesuaikan, periksa lagi sebelum melanjutkan.';
     return;
   }
   const day = chosenDay();
