@@ -1,5 +1,5 @@
 import { supabaseUrl, supabasePublishableKey } from './config.js';
-import { initOperations } from './operations.js?v=nama-47';
+import { initOperations } from './operations.js?v=restok-48';
 
 const products = new Map([
   ['UR','Pentol Urat'], ['PK','Pentol Kecil'], ['TP','Tahu Pentol'],
@@ -312,7 +312,7 @@ function renderVariants() {
     const meta = document.createElement('p');
     meta.className = 'variant-meta';
     meta.textContent = format.format(sums[1]) + ' terpesan · ' + own.length + ' batch'
-      + (sums[4] ? ' · kurang ' + format.format(sums[4]) + ' untuk pesanan' : '');
+      + (sums[4] ? ' · ' + format.format(sums[4]) + ' pack dipesan menunggu restok' : '');
     card.append(title, number, label, meta);
     if (coming) card.append(Object.assign(document.createElement('p'), { className: 'variant-incoming',
       textContent: '+' + format.format(coming.quantity) + ' dalam PO' + (coming.eta ? ' · tiba ' + ops.dayLabel(coming.eta) : '') }));
@@ -754,10 +754,39 @@ function allocate(sku, quantity, price, skip = new Set()) {
     if (!remaining) break;
   }
   if (remaining) {
-    addOrderItem({ quantity:remaining, unit_price:price, sku });
-    $('order-more').open = true;
-    status('Stok ' + products.get(sku) + ' kurang ' + remaining + ' pack. Pilih batch untuk sisanya di Rincian batch & harga.', true);
+    // Stok kurang: pesan dulu, tunggu restok. Kekurangan dibooking ke batch PO yang ditunggu (atau batch terakhir).
+    const target = restockTarget(sku, skip);
+    if (target) {
+      const same = Array.from(orderItems.children).find(line => line.querySelector('select').value === target.row.id);
+      if (same) {
+        const field = same.querySelector('[name="quantity"]');
+        field.value = Number(field.value) + remaining;
+      } else addOrderItem({ stock_id:target.row.id, quantity:remaining, unit_price:price, sku });
+      status(products.get(sku) + ' ' + remaining + ' pack menunggu restok ' + target.row.batch_code
+        + (target.po ? (target.eta ? ' (tiba ' + ops.dayLabel(target.eta) + ')' : ' (PO sudah dicatat)') : ' · belum ada PO: catat restok di Stok → Restok & PO') + '.');
+    } else {
+      addOrderItem({ quantity:remaining, unit_price:price, sku });
+      $('order-more').open = true;
+      status(products.get(sku) + ' belum pernah direstok. Catat restok dulu di Stok → Restok & PO, lalu pesanan bisa dicatat.', true);
+    }
   }
+}
+
+// Batch untuk booking yang menunggu restok: PO yang masih ditunggu (tiba paling cepat), kalau tidak ada: batch terbaru varian itu.
+function restockTarget(sku, skip = new Set()) {
+  const own = rows.filter(row => row.sku === sku && !skip.has(row.id));
+  const waiting = [];
+  for (const purchase of openPurchases || []) {
+    for (const item of purchase.pentol_purchase_items || []) {
+      if (item.sku !== sku) continue;
+      const row = own.find(r => r.batch_code === purchase.batch_code);
+      if (row && item.quantity - row.received > 0) waiting.push({ row, eta: purchase.expected_on || '' });
+    }
+  }
+  waiting.sort((a, b) => (a.eta || '9999').localeCompare(b.eta || '9999'));
+  if (waiting.length) return { row: waiting[0].row, eta: waiting[0].eta, po: true };
+  const latest = [...own].sort((a, b) => String(b.received_on || '').localeCompare(String(a.received_on || '')) || b.batch_code.localeCompare(a.batch_code))[0];
+  return latest ? { row: latest, po: false } : null;
 }
 
 function setSkuQuantity(sku, quantity) {
@@ -798,7 +827,9 @@ function renderQuickPick() {
     const title = document.createElement('strong');
     title.textContent = name;
     const meta = document.createElement('small');
-    meta.textContent = 'Rp' + format.format(prices[sku]) + ' · sisa ' + format.format(free);
+    meta.textContent = 'Rp' + format.format(prices[sku]) + ' · sisa ' + format.format(free)
+      + (count > free ? ' · ' + format.format(count - free) + ' tunggu restok' : '');
+    if (count > free) item.classList.add('waiting');
     info.append(title, meta);
     const stepper = document.createElement('div');
     stepper.className = 'quick-stepper';
@@ -944,6 +975,7 @@ async function loadOrders() {
 
 // ===== Pesanan → Selesai: baris ringkas, 6 (HP) / 8 (laptop) per halaman, tekan = rincian di kotak tersendiri =====
 let donePage = 0;
+let waitingSet = new Set();
 let doneQuery = '';
 let doneDetail;
 const shortDate = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', timeZone: 'UTC' });
@@ -973,7 +1005,7 @@ function renderDoneList(list, query) {
       if (order.cancelled) meta.append(node('span', 'Batal', 'todo-tag cancelled'));
       else if (order.paid && order.delivered) meta.append(node('span', '✓ Selesai', 'todo-tag done'));
       else {
-        if (!order.delivered) meta.append(node('span', 'Antar', 'todo-tag'));
+        if (!order.delivered) meta.append(waitingSet.has(order.id) ? node('span', 'Tunggu stok', 'todo-tag wait') : node('span', 'Antar', 'todo-tag'));
         if (!order.paid) meta.append(node('span', 'Bayar', 'todo-tag pay'));
       }
       meta.append(' Rp' + format.format(ops.total(order)));
@@ -982,7 +1014,8 @@ function renderDoneList(list, query) {
       // Perlu tindakan: tanda apa yang belum (Antar / Bayar) + total.
       const meta = node('span', null, 'po-row-meta todo-meta');
       const late = !order.delivered && order.delivery_on && order.delivery_on < today();
-      if (!order.delivered) meta.append(node('span', late ? 'Antar · telat' : 'Antar', 'todo-tag' + (late ? ' late' : '')));
+      if (!order.delivered && waitingSet.has(order.id)) meta.append(node('span', 'Tunggu stok', 'todo-tag wait'));
+      else if (!order.delivered) meta.append(node('span', late ? 'Antar · telat' : 'Antar', 'todo-tag' + (late ? ' late' : '')));
       if (!order.paid) meta.append(node('span', 'Bayar', 'todo-tag pay'));
       meta.append(' Rp' + format.format(ops.total(order)));
       row.append(left, meta);
@@ -1048,6 +1081,7 @@ function showOrderDetail(order) {
       : order.paid ? 'Ditandai lunas' : 'Belum ada pembayaran'));
   const extra = [order.contact, order.delivery_location, order.delivery_note].filter(Boolean).join(' · ');
   if (extra) card.append(node('p', extra));
+  if (waitingSet.has(order.id)) card.append(node('p', '⏳ Menunggu restok: stok fisik belum cukup. Bisa diantar setelah barang dicatat di Terima barang.', 'detail-wait'));
   ops.orderButtons(order, card);
   const close = node('button', 'Tutup');
   close.type = 'button';
@@ -1100,6 +1134,7 @@ function renderOrderList() {
       const statusText = orderStatus.value !== 'all' ? ' · ' + orderStatus.selectedOptions[0].text : '';
       $('order-filters').querySelector('summary').textContent = 'Tanggal & status · ' + period.replace(/ · $/, '') + statusText;
     }
+    waitingSet = ops.waitingStock(loadedOrders);
     renderDoneList(visible, [orderChip, query, orderDate.value, orderPeriod.value, orderStatus.value].join('|'));
     $('orders-summary').hidden = true;
     $('orders-summary').textContent = period + visible.length + ' dari ' + loadedOrders.length + ' pesanan · ' + format.format(packs) + ' pack';

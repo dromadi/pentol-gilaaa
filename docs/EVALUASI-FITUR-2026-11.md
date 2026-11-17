@@ -307,6 +307,15 @@ Pola yang sama di **Pesanan → Tagihan**: satu baris per pelanggan (`nama · n 
 
 Mengganti nama pemesan sebenarnya sudah bisa lewat ⋯ → Ubah pesanan (pesanan biasa via `pentol_order_action` 'edit', yang sudah dibayar/diantar via `pentol_edit_order`), tetapi tersembunyi tiga langkah. Kotak rincian pesanan kini punya tombol **✎ Ubah** di sebelah nama: membuka form ubah pesanan dengan kursor di kolom nama (teks terpilih, langsung ketik). Versi `nama-47`. Uji: `ubah nama pemesan…`.
 
+## Pesan dulu, tunggu restok (17 Nov)
+
+Masalah lapangan: pelanggan memesan saat stok kosong padahal restok sudah direncanakan; form menolak ("Pilih batch untuk sisanya"). Database sudah mengizinkan booking melebihi stok (`create` hanya menambah `reserved`), jadi perbaikan tanpa SQL (versi `restok-48`):
+- `allocate`: bila stok bebas kurang, kekurangan dibooking ke `restockTarget(sku)`: batch dari **PO yang masih ditunggu** (estimasi tiba paling awal), kalau tidak ada **batch terbaru** varian itu (digabung ke baris yang sama bila sudah ada). Pesan: "Pentol Jamur 2 pack menunggu restok BATCH-03 (tiba Kam, 19 Nov)" atau "… belum ada PO: catat restok". Varian yang belum pernah punya batch tetap diminta catat restok dulu. Pilihan varian menandai "N tunggu restok".
+- Pengantaran tetap aman: Packing/Antar menulis "Tertahan · stok fisik belum cukup" dan `ship` ditolak database sampai Terima barang.
+- Daftar pesanan (Perlu tindakan, Semua pesanan): tanda **Tunggu stok** (biru) untuk pesanan yang stok fisiknya belum cukup menurut pembagian Packing (`ops.waitingStock`, jadwal paling awal dapat stok dulu); rincian menjelaskan "Menunggu restok". Kartu varian: "N pack dipesan menunggu restok".
+- Katalog pembeli tidak berubah (tetap tidak bisa memesan melebihi stok).
+- Uji: `pesan dulu, tunggu restok…`, `daftar pesanan: tanda Tunggu stok…`.
+
 ## Input lewat ChatGPT (tahap 1: tempel)
 
 Keputusan: **aplikasi (Supabase) tetap sumber kebenaran**; ChatGPT hanya pintu masuk. Tidak ada data yang tersimpan tanpa konfirmasi admin di form aplikasi, sehingga semua validasi database tetap berlaku.

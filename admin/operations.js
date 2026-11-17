@@ -715,6 +715,13 @@ export function initOperations({ $, request, status, products, prices, today, fo
     return { items, need, ready };
   }
 
+  // Pesanan belum diantar yang stok fisiknya belum cukup (menunggu restok), dengan pembagian yang sama seperti Packing.
+  function waitingStock(orders) {
+    const open = orders.filter(order => !order.cancelled && !order.delivered);
+    const allocation = allocatePacking(open);
+    return new Set(open.filter(order => { const p = packStatus(order, allocation); return p.ready < p.need; }).map(order => order.id));
+  }
+
   // Belum lunas setelah ada barang yang diantar, termasuk antar sebagian.
   const unpaidFilter = '&paid=eq.false';
   const isOwed = order => balance(order) > 0 && order.pentol_order_items.some(item => item.shipped > 0);
@@ -2440,5 +2447,5 @@ export function initOperations({ $, request, status, products, prices, today, fo
     return { requests: requests.length, late: late.length };
   }
 
-  return { badgeCounts, invoiceNumber, dayLabel, nextBatchCode, total, paymentLabel, deliveryLabel, orderButtons, mutate, errorMessage, loadPrices, inbox, open, clear };
+  return { waitingStock, badgeCounts, invoiceNumber, dayLabel, nextBatchCode, total, paymentLabel, deliveryLabel, orderButtons, mutate, errorMessage, loadPrices, inbox, open, clear };
 }

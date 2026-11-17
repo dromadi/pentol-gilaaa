@@ -343,6 +343,63 @@ export function adminTests(browser, devices, baseUrl) {
     await s.close();
   });
 
+  test('pesan dulu, tunggu restok: stok kurang tetap bisa dicatat (ke PO yang ditunggu / batch terakhir)', async () => {
+    const data = defaultData(); // UR: BATCH-02 sisa 14
+    const s = await open(data);
+    await goSub(s.page, 'orders');
+    await s.page.click('#new-order');
+    await s.page.fill('#order-form [name=customer]', 'Rani');
+    await s.page.fill('[aria-label="Jumlah Pentol Urat"]', '16');
+    await s.page.locator('[aria-label="Jumlah Pentol Urat"]').dispatchEvent('change');
+    assert((await s.page.textContent('#status')).includes('2 pack menunggu restok BATCH-02'), 'pesan menunggu restok');
+    assert((await s.page.textContent('.quick-item.waiting')).includes('2 tunggu restok'), 'tanda di pilihan varian');
+    await s.page.click('#save-order');
+    await s.page.waitForTimeout(400);
+    equal(s.data.writes.find(w => w.body?.action === 'create')?.body.payload.items, [{ stock_id: 's1', quantity: 16, unit_price: 36000 }], 'tersimpan, kekurangan dibooking di batch terakhir');
+    await s.close();
+
+    const d2 = defaultData();
+    d2.stock.push({ id:'s3', batch_code:'BATCH-03', sku:'UR', received_on:null, received:0, reserved:0, delivered:0, revision:1 },
+      { id:'s4', batch_code:'BATCH-03', sku:'JM', received_on:null, received:0, reserved:0, delivered:0, revision:1 });
+    d2.purchases = [{ batch_code:'BATCH-03', supplier:'Pusat', reference:'', ordered_on:shiftDay(-1), expected_on:shiftDay(2), shipping:0, packaging:0, other_cost:0,
+      pentol_purchase_items:[{ batch_code:'BATCH-03', sku:'UR', quantity:20, unit_cost:20000 }, { batch_code:'BATCH-03', sku:'JM', quantity:10, unit_cost:24000 }] }];
+    const s2 = await open(d2);
+    await goSub(s2.page, 'orders');
+    await s2.page.click('#new-order');
+    await s2.page.fill('#order-form [name=customer]', 'Sinta');
+    await s2.page.click('[aria-label="Tambah Pentol Jamur"]');
+    assert((await s2.page.textContent('#status')).includes('menunggu restok BATCH-03 (tiba'), 'jamur habis: ke PO yang ditunggu');
+    await s2.page.fill('[aria-label="Jumlah Pentol Urat"]', '15');
+    await s2.page.locator('[aria-label="Jumlah Pentol Urat"]').dispatchEvent('change');
+    await s2.page.click('#save-order');
+    await s2.page.waitForTimeout(400);
+    const items = s2.data.writes.find(w => w.body?.action === 'create')?.body.payload.items.map(i => [i.stock_id, i.quantity]).sort();
+    equal(items, [['s1', 14], ['s3', 1], ['s4', 1]], 'UR 14 dari stok + 1 dari PO; JM 1 dari PO');
+    await s2.close();
+
+    const d3 = defaultData();
+    const s3 = await open(d3);
+    await goSub(s3.page, 'orders');
+    await s3.page.click('#new-order');
+    await s3.page.click('[aria-label="Tambah Pentol Ranjau"]');
+    assert((await s3.page.textContent('#status')).includes('belum pernah direstok'), 'varian tanpa batch: minta catat restok dulu');
+    await s3.close();
+  });
+
+  test('daftar pesanan: tanda Tunggu stok bila stok fisik belum cukup', async () => {
+    const data = defaultData();
+    data.stock = [{ id:'s1', batch_code:'B1', sku:'UR', received_on:shiftDay(-5), received:2, reserved:6, delivered:0, revision:1 }];
+    data.orders = [order('o1', 'Lia Dulu', { delivery_on: shiftDay(-1), items: [[2, 0]] }), order('o2', 'Mira Nanti', { delivery_on: shiftDay(1), items: [[4, 0]] })];
+    const s = await open(data);
+    await goSub(s.page, 'orders');
+    const rows = await s.page.$$eval('#done-list .po-row', xs => xs.map(x => x.textContent));
+    assert(rows.some(r => r.includes('Lia Dulu') && !r.includes('Tunggu stok')), 'yang jadwalnya duluan dapat stok');
+    assert(rows.some(r => r.includes('Mira Nanti') && r.includes('Tunggu stok')), 'sisanya menunggu restok');
+    await s.page.locator('#done-list .po-row', { hasText: 'Mira' }).click();
+    assert((await s.page.textContent('.po-detail')).includes('Menunggu restok'), 'penjelasan di rincian');
+    await s.close();
+  });
+
   test('saran pelanggan langganan mengisi WhatsApp dan lokasi', async () => {
     const s = await open();
     await goSub(s.page, 'orders');
