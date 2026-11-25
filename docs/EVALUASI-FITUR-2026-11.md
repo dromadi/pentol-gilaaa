@@ -322,6 +322,15 @@ Masalah lapangan: pelanggan memesan saat stok kosong padahal restok sudah direnc
 
 Permintaan pemilik: "sisanya jangan tampil di konsumen". Label "Sisa N pack" di kartu varian dihapus. Batas tetap berlaku (dari `max_qty` katalog v2): tombol + berhenti, lalu muncul keterangan **"Jumlah maksimal tercapai"** tanpa angka. Pesan saat server menolak karena stok kini "Stok Pentol X tidak cukup untuk jumlah itu…" (angka dari server hanya dipakai di dalam untuk menyesuaikan keranjang), dan penyesuaian keranjang saat sinkron menulis "X disesuaikan dengan stok". Katalog `catalog.js?v=4`. Uji katalog diperbarui.
 
+## Pre-order: stok kosong tapi bisa dipesan (25 Nov)
+
+Masalah: setelah "Pesan dulu, tunggu restok", varian yang stoknya 0 masih tertulis "habis" di admin dan "SOLD OUT / Stok habis" di katalog, padahal admin bisa mencatat pesanannya. Pembeli sama sekali belum bisa memesan.
+- **Admin** (versi `preorder-49`, tanpa SQL): kartu stok "kosong · bisa pre-order" bila ada PO yang ditunggu (estimasi tiba tetap di baris "+N dalam PO"), "kosong · pre-order setelah catat PO" bila belum ada PO, "kosong · belum pernah direstok" bila belum pernah ada batch. Form pesanan: "sisa 0" diganti "kosong · pre-order, tiba Kam, 27 Nov" dan tidak dipudarkan.
+- **Katalog** (`catalog.js?v=5`, perlu `admin/preorder-2026-11.sql`): `pentol_catalog_v3` menambah `preorder` dan `eta`. Varian kosong yang masih punya sisa PO tampil **PRE-ORDER** dengan "Stok sedang kosong · dikirim setelah stok datang, perkiraan Jum, 27 Nov", tombol **+ Pre-order**, dan baris keranjang/WhatsApp/layar selesai menulis "(pre-order, perkiraan stok datang …)". Varian tanpa PO tetap SOLD OUT.
+- Batas: `pentol_submit_checkout` kini menerima sampai stok bebas + ruang pre-order. Ruang pre-order = sisa PO yang belum diterima dikurangi booking yang sudah melebihi stok fisik (pesanan Tunggu stok), jadi pembeli tidak bisa memesan lebih dari yang akan datang. Sisa PO dihitung dari total Terima barang, sehingga koreksi/opname yang menurunkan "diterima" tidak membuka pre-order palsu.
+- Sebelum SQL dijalankan katalog otomatis memakai v2 (perilaku lama).
+- Uji: SQL `Pre-order (preorder-2026-11.sql)`, katalog `pre-order: stok kosong tapi ada PO…`, admin `pesan dulu, tunggu restok…` & `stok & restok…`.
+
 ## Input lewat ChatGPT (tahap 1: tempel)
 
 Keputusan: **aplikasi (Supabase) tetap sumber kebenaran**; ChatGPT hanya pintu masuk. Tidak ada data yang tersimpan tanpa konfirmasi admin di form aplikasi, sehingga semua validasi database tetap berlaku.

@@ -45,8 +45,9 @@ let catalogFresh = false;
 async function syncCatalog() {
   let catalog;
   try {
-    let response = await catalogRpc('pentol_catalog_v2', {});
-    // Fall back while the v2 migration has not been run yet.
+    let response = await catalogRpc('pentol_catalog_v3', {});
+    // Fall back while the v3 (pre-order) / v2 migrations have not been run yet.
+    if (response.status === 404) response = await catalogRpc('pentol_catalog_v2', {});
     if (response.status === 404) response = await catalogRpc('pentol_catalog', {});
     if (!response.ok) throw new Error('catalog ' + response.status);
     catalog = await response.json();
@@ -64,10 +65,14 @@ async function syncCatalog() {
     if (before && fresh.price !== item.price) changed.push(item.name + ' kini ' + money(fresh.price));
     item.price = fresh.price;
     item.soldOut = !fresh.available;
+    const wasPreorder = Boolean(item.preorder);
+    item.preorder = !item.soldOut && fresh.preorder === true;
+    item.eta = item.preorder && /^\d{4}-\d{2}-\d{2}$/.test(fresh.eta || '') ? fresh.eta : '';
     item.maxQty = Number.isSafeInteger(fresh.max_qty) ? fresh.max_qty : null;
     if (!before) continue;
     if (item.soldOut) { quantities.delete(item.id); changed.push(item.name + ' habis'); }
     else if (before > maxQty(item)) { quantities.set(item.id, maxQty(item)); changed.push(item.name + ' disesuaikan dengan stok'); }
+    else if (item.preorder && !wasPreorder) changed.push(item.name + ' kini pre-order (dikirim setelah stok datang)');
   }
   catalogFresh = true;
   document.querySelector('#stock-status').hidden = true;
@@ -82,6 +87,12 @@ document.querySelector('#stock-retry').addEventListener('click', async event => 
   if (changed?.length) document.querySelector('#cart-announcement').textContent = 'Keranjang disesuaikan: ' + changed.join(', ') + '.';
 });
 
+// Stok kosong tetapi barang sudah dipesan ke supplier: boleh dipesan, dikirim setelah stok datang.
+const etaText = day => new Intl.DateTimeFormat('id-ID', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })
+  .format(new Date(day + 'T00:00:00Z'));
+const preorderText = item => 'Stok sedang kosong · dikirim setelah stok datang' + (item.eta ? ', perkiraan ' + etaText(item.eta) : '');
+const preorderTag = item => 'pre-order' + (item.eta ? ', perkiraan stok datang ' + etaText(item.eta) : '');
+
 function renderMenu() {
   const query = search.value.trim().toLocaleLowerCase('id');
   const visible = products.filter(item => (activeCategory === 'Semua' || item.category === activeCategory)
@@ -91,12 +102,12 @@ function renderMenu() {
   document.querySelector('#menu-count').textContent = visible.length + ' varian';
   menu.innerHTML = visible.length ? visible.map(item => `
     <article class="card" data-product="${item.id}">
-      <div class="card-top"><span class="category">${item.category}</span>${item.soldOut ? '<span class="sold">SOLD OUT</span>' : ''}</div>
-      <h3>${item.name}</h3><p class="detail">${item.size}<span class="stock-left" data-max-note hidden>Jumlah maksimal tercapai</span></p>
+      <div class="card-top"><span class="category">${item.category}</span>${item.soldOut ? '<span class="sold">SOLD OUT</span>' : item.preorder ? '<span class="sold preorder">PRE-ORDER</span>' : ''}</div>
+      <h3>${item.name}</h3><p class="detail">${item.size}${item.preorder ? `<span class="preorder-note">${preorderText(item)}</span>` : ''}<span class="stock-left" data-max-note hidden>Jumlah maksimal tercapai</span></p>
       <div class="bottom"><div><strong class="price">${money(item.price)}</strong><span class="price-unit">per pack</span></div>
       ${item.soldOut ? '<span class="unavailable">Stok habis</span>' : `
         <div class="add-control">
-          <button type="button" class="red" data-add="${item.id}" aria-label="Tambah ${item.name}">+ Tambah</button>
+          <button type="button" class="red" data-add="${item.id}" aria-label="${item.preorder ? 'Pre-order' : 'Tambah'} ${item.name}">${item.preorder ? '+ Pre-order' : '+ Tambah'}</button>
           <div class="qty" data-stepper="${item.id}" hidden>
             <button type="button" data-menu-change="-1" data-id="${item.id}" aria-label="Kurangi ${item.name}">−</button>
             <span aria-label="Jumlah pack ${item.name}">0</span>
@@ -145,9 +156,9 @@ function renderCart() {
   document.querySelector('#final-count').textContent = count + ' pack';
   document.querySelector('#continue-checkout').disabled = count === 0;
   document.querySelector('#cart-items').innerHTML = selected.length ? selected.map(item =>
-    `<div class="cart-row"><div><strong>${item.name}</strong><small>${money(item.price)} / pack</small></div><div class="qty"><button type="button" class="ghost" data-change="-1" data-id="${item.id}" aria-label="Kurangi ${item.name}">−</button><span>${quantities.get(item.id)}</span><button type="button" class="ghost" data-change="1" data-id="${item.id}" aria-label="Tambah ${item.name}"${quantities.get(item.id) >= maxQty(item) ? ' disabled' : ''}>+</button></div></div>`
+    `<div class="cart-row"><div><strong>${item.name}</strong><small>${money(item.price)} / pack${item.preorder ? ' · ' + preorderTag(item) : ''}</small></div><div class="qty"><button type="button" class="ghost" data-change="-1" data-id="${item.id}" aria-label="Kurangi ${item.name}">−</button><span>${quantities.get(item.id)}</span><button type="button" class="ghost" data-change="1" data-id="${item.id}" aria-label="Tambah ${item.name}"${quantities.get(item.id) >= maxQty(item) ? ' disabled' : ''}>+</button></div></div>`
   ).join('') : '<div class="empty-cart"><strong>Belum ada camilan pilihanmu.</strong>Pilih varian untuk mulai memesan.<br><button type="button" class="gold" data-close-cart>Pilih varian</button></div>';
-  orderLines = selected.map(item => `• ${item.name} × ${quantities.get(item.id)} pack`);
+  orderLines = selected.map(item => `• ${item.name} × ${quantities.get(item.id)} pack${item.preorder ? ' (' + preorderTag(item) + ')' : ''}`);
   whatsapp.disabled = submitting || count === 0;
   copy.disabled = count === 0;
   feedback.textContent = '';
