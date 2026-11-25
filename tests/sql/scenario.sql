@@ -40,6 +40,7 @@ select public.pentol_order_action('create','cccccccc-0000-0000-0000-000000000001
 select public.pentol_order_action('ship','cccccccc-0000-0000-0000-000000000001',2,
   (select jsonb_build_object('items',jsonb_build_array(jsonb_build_object('stock_id',id,'quantity',2))) from public.pentol_batch_stock where batch_code='B3' and sku='UR'));
 select public.pentol_order_action('pay','cccccccc-0000-0000-0000-000000000001',3,'{"payment_id":"dddddddd-0000-0000-0000-000000000001","date":"2026-11-14","amount":50000}');
+do $$ begin assert (select method from public.pentol_payments where id='dddddddd-0000-0000-0000-000000000001') = 'lainnya', 'metode bayar bawaan lainnya'; end $$;
 select pg_temp.expect_error($$select public.pentol_order_action('pay','cccccccc-0000-0000-0000-000000000001',4,'{"payment_id":"dddddddd-0000-0000-0000-000000000002","date":"2026-11-14","amount":999999}')$$, 'Nominal melebihi');
 select pg_temp.expect_error($$select public.pentol_order_action('cancel','cccccccc-0000-0000-0000-000000000001',4,'{}')$$, 'sebelum pembayaran');
 do $$ begin assert (select (reserved, delivered) from public.pentol_batch_stock where batch_code='B3' and sku='UR') = (2, 2), 'terpesan 2 / diantar 2'; end $$;
@@ -151,11 +152,9 @@ select set_config('request.uid','11111111-1111-1111-1111-111111111111',false);
 select pg_temp.expect_error($$select public.pentol_wipe_transactions('hapus')$$, 'Konfirmasi salah');
 do $$ begin assert (select count(*) from public.pentol_orders) > 0, 'masih ada pesanan sebelum hapus'; end $$;
 reset role;
--- Tiru migrasi produksi 16 Nov: inbox.converted_order_id -> pesanan, dan tabel biaya harian.
-alter table public.pentol_inbox add column if not exists converted_order_id uuid references public.pentol_orders(id);
+-- Migrasi 16 Nov (perbaikan-temuan-2026-11-16.sql): inbox.converted_order_id -> pesanan, dan tabel biaya harian.
 update public.pentol_inbox set converted_order_id = (select id from public.pentol_orders limit 1) where id = 'eeeeeeee-0000-0000-0000-000000000001';
-create table if not exists public.pentol_expenses (id bigint generated always as identity primary key, spent_on date not null, amount integer not null);
-insert into public.pentol_expenses (spent_on, amount) values (current_date, 5000);
+insert into public.pentol_expenses (spent_on, category, amount) values (current_date, 'es_batu', 5000);
 set role authenticated;
 select public.pentol_wipe_transactions('HAPUS SEMUA');
 reset role;
