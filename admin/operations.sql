@@ -323,6 +323,10 @@ insert into public.pentol_purchase_items values
  ('BATCH-01','TD',5,23200),('BATCH-01','PG',2,28000),('BATCH-01','SG',6,8000),
  ('BATCH-02','UR',15,23200),('BATCH-02','PK',15,26400),('BATCH-02','TP',15,17600),
  ('BATCH-02','MZ',5,23200),('BATCH-02','JM',5,23200);
+-- Baris stok kosong untuk PO contoh agar Terima barang bisa dipakai di instal baru (B10).
+insert into public.pentol_batch_stock(batch_code,sku)
+select batch_code,sku from public.pentol_purchase_items where batch_code in ('BATCH-01','BATCH-02')
+on conflict(batch_code,sku) do nothing;
 
 notify pgrst,'reload schema';
 commit;

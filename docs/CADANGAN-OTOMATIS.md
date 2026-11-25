@@ -9,7 +9,7 @@ Setiap malam pukul **02.17 WIB**, GitHub Actions (`.github/workflows/backup.yml`
 
 Repo ini **publik**, jadi file cadangan selalu dienkripsi. Tanpa kata sandi, isinya tidak bisa dibaca siapa pun, termasuk GitHub.
 
-Selama dua secret di bawah belum diisi, alur ini **dilewati tanpa galat**.
+Selama dua secret di bawah belum diisi, alur ini **gagal dengan tanda merah** dan GitHub mengirim email ke pemilik repo. Ini disengaja, supaya tidak ada yang mengira cadangan sudah berjalan padahal belum.
 
 ## Pemasangan (sekali, dari laptop, ±10 menit)
 
