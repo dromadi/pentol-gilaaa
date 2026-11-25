@@ -28,6 +28,14 @@ select public.pentol_receive_purchase('aaaaaaaa-0000-0000-0000-000000000001','B3
 select pg_temp.expect_error($$select public.pentol_receive_purchase('aaaaaaaa-0000-0000-0000-000000000002','B3',current_date,'[{"sku":"UR","quantity":5}]')$$, 'melampaui sisa PO');
 do $$ begin assert (select received from public.pentol_batch_stock where batch_code='B3' and sku='UR') = 6, 'diterima harus 6'; end $$;
 
+\echo '• instal baru: PO contoh BATCH-01/02 punya baris stok dan bisa diterima (B10)'
+do $$ begin assert (select count(*) from public.pentol_purchase_items i
+  where i.batch_code in ('BATCH-01','BATCH-02') and not exists (select 1 from public.pentol_batch_stock s
+  where s.batch_code=i.batch_code and s.sku=i.sku)) = 0, 'PO contoh harus punya baris stok'; end $$;
+select public.pentol_receive_purchase('aaaaaaaa-0000-0000-0000-0000000000b1','BATCH-01',current_date,'[{"sku":"SG","quantity":2}]');
+do $$ begin assert (select received from public.pentol_batch_stock where batch_code='BATCH-01' and sku='SG') = 2, 'BATCH-01 SG diterima harus 2'; end $$;
+select pg_temp.expect_error($$select public.pentol_receive_purchase('aaaaaaaa-0000-0000-0000-0000000000b2','BATCH-01',current_date,'[{"sku":"SG","quantity":5}]')$$, 'melampaui sisa PO');
+
 \echo '• integritas stok: tulis langsung ditolak, koreksi wajib alasan'
 select pg_temp.expect_error($$update public.pentol_batch_stock set received=50 where batch_code='B3'$$, 'permission denied');
 select pg_temp.expect_error($$select public.pentol_correct_received(id,revision,5,current_date,' ') from public.pentol_batch_stock where batch_code='B3' and sku='UR'$$, 'Alasan koreksi');
