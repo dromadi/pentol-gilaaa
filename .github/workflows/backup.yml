@@ -2,7 +2,8 @@
 # Butuh 2 secret repo (Settings → Secrets and variables → Actions):
 #   SUPABASE_DB_URL  – connection string "Session pooler" dari Supabase (berisi kata sandi database)
 #   BACKUP_PASSWORD  – kata sandi file cadangan (buat sendiri, simpan baik-baik)
-# Selama secret belum diisi, alur ini dilewati tanpa galat. Panduan: docs/CADANGAN-OTOMATIS.md
+# Selama secret belum diisi, alur ini GAGAL (tanda merah + email ke pemilik), supaya tidak terlihat seolah cadangan berhasil.
+# Panduan: docs/CADANGAN-OTOMATIS.md
 name: Cadangan database
 
 on:
@@ -26,20 +27,18 @@ jobs:
       BACKUP_PASSWORD: ${{ secrets.BACKUP_PASSWORD }}
     steps:
       - name: Periksa secret
-        id: check
         run: |
-          if [ -z "$SUPABASE_DB_URL" ] || [ -z "$BACKUP_PASSWORD" ]; then
-            echo "::warning::Cadangan dilewati: secret SUPABASE_DB_URL dan BACKUP_PASSWORD belum diisi. Lihat docs/CADANGAN-OTOMATIS.md."
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "ready=true" >> "$GITHUB_OUTPUT"
+          kurang=""
+          [ -z "$SUPABASE_DB_URL" ] && kurang="$kurang SUPABASE_DB_URL"
+          [ -z "$BACKUP_PASSWORD" ] && kurang="$kurang BACKUP_PASSWORD"
+          if [ -n "$kurang" ]; then
+            echo "::error title=Cadangan TIDAK dibuat::Secret belum diisi:$kurang. Tambahkan di Settings → Secrets and variables → Actions. Panduan: docs/CADANGAN-OTOMATIS.md"
+            exit 1
           fi
 
       - uses: actions/checkout@v4
-        if: steps.check.outputs.ready == 'true'
 
       - name: Pasang pg_dump 17 dan 7-Zip
-        if: steps.check.outputs.ready == 'true'
         run: |
           sudo install -d /usr/share/postgresql-common/pgdg
           sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
@@ -49,11 +48,9 @@ jobs:
           echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
 
       - name: Buat cadangan terenkripsi
-        if: steps.check.outputs.ready == 'true'
         run: bash scripts/backup.sh backup-out
 
       - name: Simpan 90 hari
-        if: steps.check.outputs.ready == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: cadangan-pentol-gilaaa-${{ github.run_number }}
