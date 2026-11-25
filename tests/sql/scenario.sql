@@ -93,9 +93,9 @@ reset role;
 \echo '• katalog & checkout publik: batas stok, retry, batas global'
 set role anon;
 do $$ begin assert (select max_qty from public.pentol_catalog_v2() where sku='UR') = 3, 'max_qty UR = 3 (4 diterima - 0 terpesan - 1 diantar)'; end $$;
--- Dengan preorder-2026-11.sql: PO B3 masih kurang 4 pack UR, jadi batas checkout 3 + 4 = 7.
-do $$ begin assert (select max_qty = 7 and not preorder from public.pentol_catalog_v3() where sku='UR'), 'v3: UR stok 3 + PO 4'; end $$;
-select pg_temp.expect_error($$select public.pentol_submit_checkout(gen_random_uuid(),'A','081111111111','','','[{"sku":"UR","quantity":8}]')$$, 'tersisa 7 pack');
+-- Dengan preorder-2026-11.sql: stok UR 3 + PO B3 masih kurang 4 + PO contoh BATCH-01/02 (7 + 15) = 29.
+do $$ begin assert (select max_qty is null and not preorder from public.pentol_catalog_v3() where sku='UR'), 'v3: UR stok + PO, tanpa batas tampil'; end $$;
+select pg_temp.expect_error($$select public.pentol_submit_checkout(gen_random_uuid(),'A','081111111111','','','[{"sku":"UR","quantity":30}]')$$, 'tersisa 29 pack');
 select public.pentol_submit_checkout('eeeeeeee-0000-0000-0000-000000000001','A','081111111111','','','[{"sku":"UR","quantity":1}]');
 select public.pentol_submit_checkout('eeeeeeee-0000-0000-0000-000000000001','A','081111111111','','','[{"sku":"UR","quantity":1}]');
 reset role;
