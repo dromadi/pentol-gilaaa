@@ -193,4 +193,30 @@ select public.pentol_submit_checkout(gen_random_uuid(),'P','083333333333','','',
 reset role;
 update public.pentol_purchases set expected_on = current_date + 2 where batch_code = 'B9';
 do $$ begin assert (select eta from public.pentol_catalog_v3() where sku='UR') = current_date + 2, 'eta dari PO'; end $$;
+
+\echo '• varian dari admin: tambah, ubah, dipakai di PO & stok, katalog v4, sembunyikan'
+set role authenticated;
+select set_config('request.uid','11111111-1111-1111-1111-111111111111',false);
+select pg_temp.expect_error($$select public.pentol_save_product('{"sku":"B","name":"X","price":1000}')$$, 'Kode varian');
+select pg_temp.expect_error($$select public.pentol_save_product('{"sku":"BK","name":"Pentol Urat","price":1000}')$$, 'sudah dipakai');
+select public.pentol_save_product('{"sku":"bk","name":"Bakso Kuah","size":"10 pcs / pack","category":"Lainnya","price":40000}');
+select public.pentol_admin_action('purchase','{"batch_code":"B20","supplier":"Pusat","shipping":0,"packaging":0,"other_cost":0,"items":[{"sku":"BK","quantity":5,"unit_cost":25000}]}');
+select public.pentol_receive_purchase('aaaaaaaa-0000-0000-0000-000000000020','B20',current_date,'[{"sku":"BK","quantity":5}]');
+reset role;
+set role anon;
+do $$ begin
+  assert (select (name, size, category, available) from public.pentol_catalog_v4() where sku = 'BK') = ('Bakso Kuah'::text, '10 pcs / pack'::text, 'Lainnya'::text, 1::bigint), 'varian baru di katalog';
+  assert (select count(*) from public.pentol_catalog_v4()) = 10, 'sepuluh varian';
+end $$;
+reset role;
+set role authenticated;
+select public.pentol_save_product('{"sku":"BK","name":"Bakso Kuah","size":"10 pcs / pack","category":"Lainnya","price":42000,"active":false}');
+reset role;
+set role anon;
+do $$ begin
+  assert not exists (select 1 from public.pentol_catalog_v4() where sku = 'BK'), 'varian tidak dijual hilang dari katalog';
+end $$;
+select pg_temp.expect_error($$select public.pentol_save_product('{"sku":"ZZ","name":"Z","price":1}')$$, 'permission denied');
+reset role;
+do $$ begin assert (select price from public.pentol_products where sku = 'BK') = 42000, 'harga diperbarui'; end $$;
 \echo 'SQL: semua pemeriksaan lolos.'

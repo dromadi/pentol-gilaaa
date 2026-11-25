@@ -2,8 +2,10 @@ import { supabaseUrl, supabasePublishableKey } from './admin/config.js';
 const products = [{"id": "UR", "name": "Pentol Urat", "size": "9 pcs / pack", "price": 36000, "category": "Pentol", "soldOut": false}, {"id": "PK", "name": "Pentol Kecil", "size": "30 pcs / pack", "price": 39000, "category": "Pentol", "soldOut": true}, {"id": "TP", "name": "Tahu Pentol", "size": "30 pcs / pack", "price": 29000, "category": "Tahu", "soldOut": false}, {"id": "JM", "name": "Pentol Jamur", "size": "9 pcs / pack", "price": 36000, "category": "Pentol", "soldOut": false}, {"id": "MZ", "name": "Pentol Mozzarella", "size": "9 pcs / pack", "price": 36000, "category": "Pentol", "soldOut": true}, {"id": "RJ", "name": "Pentol Ranjau", "size": "9 pcs / pack", "price": 36000, "category": "Pentol", "soldOut": false}, {"id": "TD", "name": "Tahu Pedas", "size": "9 pcs / pack", "price": 35000, "category": "Tahu", "soldOut": false}, {"id": "PG", "name": "Pentol Goreng", "size": "9 pcs / pack", "price": 41000, "category": "Pentol", "soldOut": false}, {"id": "SG", "name": "Sambal Gila Tambahan", "size": "±100 g / pack", "price": 15000, "category": "Sambal", "soldOut": false}];
 const cartKey = 'pentol-gilaaa-cart';
 const quantities = new Map();
+let savedCart = {};
 try {
   const saved = JSON.parse(localStorage.getItem(cartKey) || '{}');
+  savedCart = saved && typeof saved === 'object' ? saved : {};
   for (const product of products) {
     const count = saved?.[product.id];
     if (Number.isSafeInteger(count) && count > 0 && count <= 100) {
@@ -42,10 +44,37 @@ const maxQty = item => item.maxQty ?? 100;
 let catalogFresh = false;
 
 // Returns the cart items whose price or stock changed, or null when the catalog could not be loaded.
+// Daftar varian mengikuti database (katalog v4): varian baru ditambahkan, varian yang tidak dijual lagi dihapus.
+const categories = ['Pentol', 'Tahu', 'Sambal', 'Lainnya'];
+function applyProductList(catalog, changed) {
+  if (!Array.isArray(catalog) || !catalog.length || !catalog.every(row => typeof row.name === 'string' && row.name)) return;
+  const next = catalog.map(row => {
+    const known = products.find(item => item.id === row.sku);
+    return Object.assign(known || { id: row.sku, soldOut: false }, {
+      name: row.name, size: row.size || '', price: row.price,
+      category: categories.includes(row.category) ? row.category : 'Lainnya'
+    });
+  });
+  for (const item of products) {
+    if (next.some(entry => entry.id === item.id)) continue;
+    if (quantities.has(item.id)) { quantities.delete(item.id); changed.push(item.name + ' tidak dijual lagi'); }
+  }
+  products.splice(0, products.length, ...next);
+  // Isi keranjang tersimpan untuk varian yang baru dikenal.
+  for (const item of products) {
+    const count = savedCart?.[item.id];
+    if (!quantities.has(item.id) && Number.isSafeInteger(count) && count > 0 && count <= 100) quantities.set(item.id, count);
+  }
+  const other = document.querySelector('[data-filter="Lainnya"]');
+  if (other) other.hidden = !products.some(item => item.category === 'Lainnya');
+}
+
 async function syncCatalog() {
   let catalog;
   try {
-    let response = await catalogRpc('pentol_catalog_v3', {});
+    // v4: varian dari database (nama, ukuran, kategori; hanya yang dijual). Lama: v3 → v2 → v1 dengan daftar bawaan.
+    let response = await catalogRpc('pentol_catalog_v4', {});
+    if (response.status === 404) response = await catalogRpc('pentol_catalog_v3', {});
     // Fall back while the v3 (pre-order) / v2 migrations have not been run yet.
     if (response.status === 404) response = await catalogRpc('pentol_catalog_v2', {});
     if (response.status === 404) response = await catalogRpc('pentol_catalog', {});
@@ -58,6 +87,7 @@ async function syncCatalog() {
     return null;
   }
   const changed = [];
+  applyProductList(catalog, changed);
   for (const item of products) {
     const fresh = catalog.find(row => row.sku === item.id);
     if (!fresh) continue;

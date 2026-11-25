@@ -80,7 +80,7 @@ export async function mockSupabase(page, data) {
     if (table === 'pentol_admins') return json(route, [{ user_id: 'x' }]);
     if (table === 'pentol_batch_stock') return json(route, data.stock);
     if (table === 'pentol_inbox') return json(route, data.inbox.filter(entry => matches(entry, url)));
-    if (table === 'pentol_products') return json(route, Object.entries(PRICES).map(([sku, price]) => ({ sku, price })));
+    if (table === 'pentol_products') return json(route, data.products || Object.entries(PRICES).map(([sku, price]) => ({ sku, price })));
     if (table === 'pentol_orders') return json(route, data.orders.filter(o => matches(o, url)));
     if (table === 'pentol_purchases') return json(route, data.purchases || []);
     if (table === 'pentol_purchase_receipts') return json(route, data.receipts || []);

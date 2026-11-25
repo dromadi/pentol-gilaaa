@@ -339,6 +339,15 @@ Dari daftar saran "tanpa menambah fitur" (versi `rapi-49`):
 3. **Nama konsisten:** kartu Hari Ini & kotak di Pesanan = "Permintaan katalog"; judul halaman "Restok & PO" (sama dengan tab) dan "Tutup hari"; teks petunjuk yang menyebut "Restok & Supplier" ikut diganti.
 Uji: `perbaikan A: …`.
 
+## Varian & harga: tambah varian tanpa programmer (25 Nov)
+
+Sebelumnya daftar varian tertulis di 5 tempat (daftar admin `app.js`, ukuran `operations.js`, `check (sku in (...))` di `pentol_batch_stock`, daftar di `catalog.js`, data awal). Sekarang (versi `varian-50`, katalog `v=5`):
+- **`admin/varian-2026-11.sql`** (setelah preorder): `pentol_products` + `size`, `category` (Pentol/Tahu/Sambal/Lainnya), `active`, `sort_order` (diisi untuk 9 varian lama); daftar kode tetap di stok dihapus (stok tetap wajib merujuk varian yang ada, FK); `pentol_save_product(payload)` (admin: kode 2–6 huruf, nama unik, harga, ukuran, kategori, dijual); `pentol_catalog_v4()` = katalog v3 (stok + pre-order) + data varian, hanya yang dijual, urut tampil.
+- **Admin → Laporan → Varian & harga** (dulu Harga jual): tombol **+ Tambah varian** (kode disarankan dari huruf depan nama), **Ubah** (nama, ukuran, kategori, harga, centang "Dijual"); varian yang tidak dijual diberi tanda dan disembunyikan dari form pesanan, promosi, dan kartu stok (kecuali masih ada stok/booking). Daftar `products` diisi dari database saat masuk (`loadPrices`), jadi varian baru langsung muncul di semua halaman, laporan, Excel, dan GPT. Sebelum SQL dijalankan: hanya harga yang bisa diubah.
+- **Katalog:** memakai v4 bila ada → varian baru tampil, yang tidak dijual hilang (dikeluarkan dari keranjang dengan pemberitahuan), tab **Lainnya** muncul bila ada varian kategori Lainnya. Tanpa v4: daftar bawaan seperti sebelumnya.
+- Catatan: `pentol_submit_checkout` belum menolak varian yang tidak dijual (tidak tampil di katalog; risiko kecil).
+- Uji: SQL `varian dari admin…`, admin `Varian & harga: tambah varian…`, katalog `varian dari database…`.
+
 ## Input lewat ChatGPT (tahap 1: tempel)
 
 Keputusan: **aplikasi (Supabase) tetap sumber kebenaran**; ChatGPT hanya pintu masuk. Tidak ada data yang tersimpan tanpa konfirmasi admin di form aplikasi, sehingga semua validasi database tetap berlaku.

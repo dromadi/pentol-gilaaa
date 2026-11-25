@@ -96,7 +96,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
   }
 
   function errorMessage(error) {
-    const known = /^(Booking lama |Pesanan |Isi 1|Periksa varian|Gabungkan varian|Varian batch |Pilih jumlah|Jumlah |Stok fisik|Nominal |Pilih 1|Varian tidak|PO tidak |Penerimaan |Tanggal antar |Nomor invoice |Alasan koreksi |Stok berubah |Teks tidak |Aksi \d|Tidak ada aksi|Konfirmasi salah|Ketik persis|Cadangan gagal|Fitur hapus)/;
+    const known = /^(Booking lama |Pesanan |Isi 1|Periksa varian|Gabungkan varian|Varian batch |Pilih jumlah|Jumlah |Stok fisik|Nominal |Pilih 1|Varian tidak|PO tidak |Penerimaan |Tanggal antar |Nomor invoice |Alasan koreksi |Stok berubah |Teks tidak |Aksi \d|Tidak ada aksi|Konfirmasi salah|Ketik persis|Cadangan gagal|Fitur hapus|Kode varian|Nama varian|Harga tidak valid|Varian:)/;
     return known.test(error.message) ? error.message : 'Perubahan belum terkonfirmasi. Muat ulang daftar sebelum mencoba lagi.';
   }
 
@@ -618,11 +618,27 @@ export function initOperations({ $, request, status, products, prices, today, fo
   }
   $('gpt-import').addEventListener('click', () => { if (getSession()) gptImport(); });
 
+  // Varian & harga dari database. Setelah varian-2026-11.sql: nama, ukuran, kategori, dijual, urutan ikut dimuat,
+  // sehingga varian baru dari admin langsung muncul di semua halaman (daftar `products` diperbarui di tempat).
+  const productMeta = new Map();
   async function loadPrices() {
-
-    const data = await request(root + 'pentol_products?select=sku,price');
-    for (const row of data) prices[row.sku] = row.price;
+    const data = await request(root + 'pentol_products?select=*');
+    const rich = data.length > 0 && data.every(row => typeof row.name === 'string' && 'size' in row);
+    if (rich) {
+      data.sort((a, b) => (a.sort_order ?? 100) - (b.sort_order ?? 100) || a.sku.localeCompare(b.sku));
+      products.clear();
+      productMeta.clear();
+    }
+    for (const row of data) {
+      prices[row.sku] = row.price;
+      if (!rich) continue;
+      products.set(row.sku, row.name);
+      productMeta.set(row.sku, { size: row.size || '', category: row.category || 'Pentol', active: row.active !== false, sort: row.sort_order ?? 100 });
+    }
+    return rich;
   }
+  const isActive = sku => productMeta.get(sku)?.active !== false;
+  const sizeOf = sku => (productMeta.get(sku)?.size || '').replace(/\s*\/\s*pack$/i, '') || sizes[sku] || '';
 
   async function inbox() {
     const session = getSession();
@@ -1280,8 +1296,54 @@ export function initOperations({ $, request, status, products, prices, today, fo
   }
 
   // Harga jual per varian, dengan harga beli (HPP) batch terakhir dan untung per pack sebagai patokan.
+  // Varian & harga: tambah/ubah varian (nama, ukuran, kategori, harga, dijual) tanpa mengubah kode.
+  const categories = ['Pentol', 'Tahu', 'Sambal', 'Lainnya'];
+  function productDialog(sku, latest, ready) {
+    const meta = productMeta.get(sku) || {};
+    const isNew = !sku;
+    const name = isNew ? '' : products.get(sku);
+    const codeField = control('Kode (2–6 huruf, tidak bisa diubah)', 'sku', {value: sku || '', props:{maxLength:6, autocapitalize:'characters', placeholder:'Contoh BK'}});
+    if (!isNew) codeField.lastChild.readOnly = true;
+    const nameField = control('Nama varian', 'name', {value: name, props:{maxLength:60, placeholder:'Contoh Bakso Kuah'}});
+    if (isNew) nameField.lastChild.addEventListener('input', () => {
+      // Saran kode dari huruf depan nama, mis. "Bakso Kuah" → BK.
+      const guess = nameField.lastChild.value.trim().split(/\s+/).map(word => word[0] || '').join('').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 6);
+      if (!codeField.lastChild.dataset.touched) codeField.lastChild.value = guess.length >= 2 ? guess : guess + (guess ? 'X' : '');
+    });
+    codeField.lastChild.addEventListener('input', () => { codeField.lastChild.dataset.touched = '1'; });
+    const sizeField = control('Ukuran (opsional)', 'size', {value: meta.size || '', required:false, props:{maxLength:40, placeholder:'Contoh 9 pcs / pack'}});
+    const categoryField = control('Kategori di katalog', 'category', {value: meta.category || 'Pentol', values: categories.map(c => [c, c])});
+    const priceField = control('Harga jual per pack (Rp)', 'price', {type:'number', value: isNew ? '' : prices[sku], props:{min:0, max:10000000}});
+    const activeBox = el('label', undefined, 'order-paid');
+    const active = el('input');
+    active.type = 'checkbox';
+    active.name = 'active';
+    active.checked = isNew ? true : meta.active !== false;
+    activeBox.append(active, ' Dijual (tampil di katalog & form pesanan)');
+    const last = sku && latest.get(sku);
+    const fields = [nameField, codeField, sizeField, categoryField, priceField, activeBox,
+      last?.unit !== undefined ? el('p', 'Harga beli batch terakhir (' + last.batch + '): ' + money(last.unit) + ' per pack.') : '',
+      isNew ? el('p', 'Setelah disimpan, catat restok varian ini di Stok → Restok & PO supaya stoknya ada.') : ''];
+    // Sebelum varian-2026-11.sql dijalankan: hanya harga yang bisa diubah.
+    showDialog(isNew ? 'Tambah varian' : 'Ubah varian · ' + name, ready ? fields : [priceField, el('p', 'Tambah varian & ubah nama aktif setelah varian-2026-11.sql dijalankan di Supabase.')],
+      async form => {
+        if (!ready) {
+          await admin('price', {sku, price:Number(form.get('price'))});
+        } else {
+          try {
+            await request(root + 'rpc/pentol_save_product', {method:'POST', body:{payload:{
+              sku: String(form.get('sku') || '').trim().toUpperCase(), name: String(form.get('name') || '').trim(), size: String(form.get('size') || '').trim(),
+              category: form.get('category'), price: Number(form.get('price')), active: form.get('active') === 'on' }}});
+          } catch (error) {
+            if (error.status === 404) throw new Error('Varian: fitur ini aktif setelah varian-2026-11.sql dijalankan di Supabase.');
+            throw error;
+          }
+        }
+        return async () => { await loadPrices(); await loadRows(); open('prices'); status(isNew ? 'Varian baru tersimpan. Katalog ikut berubah.' : 'Varian diperbarui. Katalog ikut berubah.'); };
+      }, { submitLabel: isNew ? 'Tambah' : 'Simpan' });
+  }
   async function priceList(target) {
-    const data = await purchases();
+    const [data, ready] = await Promise.all([purchases(), loadPrices().catch(() => false)]);
     const hpp = costs(data);
     const latest = new Map();
     for (const p of [...data].sort((a, b) => String(a.ordered_on || '').localeCompare(String(b.ordered_on || '')))) {
@@ -1289,19 +1351,17 @@ export function initOperations({ $, request, status, products, prices, today, fo
     }
     const rows = [...products].map(([sku, name]) => {
       const last = latest.get(sku);
-      const change = button('Ubah', () => showDialog('Harga jual · ' + name, [
-        control('Harga per pack (Rp)', 'price', {type:'number', value:prices[sku], props:{min:0, max:10000000}}),
-        last?.unit !== undefined ? el('p', 'Harga beli batch terakhir (' + last.batch + '): ' + money(last.unit) + ' per pack.') : ''
-      ], async form => {
-        await admin('price', {sku, price:Number(form.get('price'))});
-        return async () => { await loadPrices(); open('prices'); status('Harga ' + name + ' diperbarui. Katalog ikut berubah.'); };
-      }));
+      const change = button('Ubah', () => productDialog(sku, latest, ready));
       const margin = last?.unit !== undefined ? prices[sku] - last.unit : null;
-      return [name, money(prices[sku]), last?.unit !== undefined ? money(last.unit) : '—',
+      const label = el('span', undefined, 'variant-name');
+      label.append(el('strong', name), sizeOf(sku) ? el('small', ' ' + sizeOf(sku)) : '', isActive(sku) ? '' : el('span', 'tidak dijual', 'todo-tag cancelled'));
+      return [label, money(prices[sku]), last?.unit !== undefined ? money(last.unit) : '—',
         margin === null ? '—' : money(margin) + (prices[sku] ? ' (' + Math.round(margin / prices[sku] * 100) + '%)' : ''), change];
     });
-    target.replaceChildren(table(['Varian', 'Harga jual', 'Harga beli terakhir', 'Untung / pack', ''], rows, 'Belum ada varian.'),
-      el('p', 'Harga jual dipakai untuk pesanan baru dan katalog pembeli. Pesanan lama tetap memakai harga saat dicatat. Harga beli = harga per pack + bagian ongkir/kemasan batch terakhir.', 'breakdown-note'));
+    const add = button('+ Tambah varian', () => productDialog(null, latest, ready));
+    add.classList.add('primary-action');
+    target.replaceChildren(block([add], 'ops-actions'), table(['Varian', 'Harga jual', 'Harga beli terakhir', 'Untung / pack', ''], rows, 'Belum ada varian.'),
+      el('p', 'Varian baru langsung muncul di form pesanan, stok, laporan, dan katalog (setelah ada stok atau PO). Matikan "Dijual" untuk menyembunyikan varian tanpa menghapus riwayatnya. Harga jual dipakai untuk pesanan baru; pesanan lama tetap memakai harga saat dicatat.', 'breakdown-note'));
   }
 
   // mode 'time': laba menurut waktu (kartu, per hari/minggu/bulan/tahun, grafik). mode 'variant': laba per varian.
@@ -1773,7 +1833,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
     const formatPicker=control('Format','promo_format',{value:'group',values:[
       ['group','Grup WhatsApp'],['story','Status WhatsApp'],['instagram','Instagram']
     ]});
-    const options=[...products].map(([sku,name]) => {
+    const options=[...products].filter(([sku]) => isActive(sku)).map(([sku,name]) => {
       const wrap=control(name,sku,{type:'checkbox',required:false});
       wrap.lastChild.checked=(sums.get(sku)||0)>0;
       return wrap;
@@ -1787,7 +1847,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
       const items=(mode==='story'?selected.slice(0,3):selected).map(sku=>{
         const qty=sums.get(sku)||0;
         // Jumlah stok tidak dibagikan ke pembeli (sama seperti katalog): hanya tanda habis.
-        return products.get(sku)+' · '+sizes[sku]+' · '+money(prices[sku])+(qty ? '' : ' · SOLD OUT');
+        return products.get(sku)+(sizeOf(sku) ? ' · '+sizeOf(sku) : '')+' · '+money(prices[sku])+(qty ? '' : ' · SOLD OUT');
       });
       lines=['PENTOL GILAAA SURABAYA','',...items,'','Pesan lewat WhatsApp 0898-1718-578'];
       preview.textContent=lines.join('\n');
@@ -2448,5 +2508,5 @@ export function initOperations({ $, request, status, products, prices, today, fo
     return { requests: requests.length, late: late.length };
   }
 
-  return { waitingStock, badgeCounts, invoiceNumber, dayLabel, nextBatchCode, total, paymentLabel, deliveryLabel, orderButtons, mutate, errorMessage, loadPrices, inbox, open, clear };
+  return { isActive, waitingStock, badgeCounts, invoiceNumber, dayLabel, nextBatchCode, total, paymentLabel, deliveryLabel, orderButtons, mutate, errorMessage, loadPrices, inbox, open, clear };
 }

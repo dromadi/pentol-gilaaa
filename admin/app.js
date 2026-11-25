@@ -1,5 +1,5 @@
 import { supabaseUrl, supabasePublishableKey } from './config.js';
-import { initOperations } from './operations.js?v=rapi-49';
+import { initOperations } from './operations.js?v=varian-50';
 
 const products = new Map([
   ['UR','Pentol Urat'], ['PK','Pentol Kecil'], ['TP','Tahu Pentol'],
@@ -292,7 +292,10 @@ function incomingStock() {
 }
 function renderVariants() {
   const incoming = incomingStock();
-  $('stock-variants').replaceChildren(...Array.from(products, ([sku, name]) => {
+  // Varian yang tidak dijual lagi hanya tampil bila masih punya stok atau booking.
+  const shown = Array.from(products).filter(([sku]) => ops.isActive(sku)
+    || rows.some(row => row.sku === sku && (quantities(row)[3] || row.reserved)));
+  $('stock-variants').replaceChildren(...shown.map(([sku, name]) => {
     const own = rows.filter(row => row.sku === sku);
     const sums = own.reduce((sum, row) => { quantities(row).forEach((value, i) => { sum[i] += value; }); return sum; }, [0,0,0,0,0]);
     const ready = sums[3];
@@ -460,8 +463,9 @@ function releaseHistory() {
 }
 
 async function showDashboard() {
-  await loadRows();
+  // Varian & harga dulu, agar daftar varian (termasuk varian baru) sudah benar saat stok ditampilkan.
   await ops.loadPrices().catch(() => {});
+  await loadRows();
   $('signin').hidden = true;
   $('dashboard').hidden = false;
   $('logout').hidden = false;
@@ -589,7 +593,7 @@ document.addEventListener('keydown', event => {
 const viewGroups = {
   orders: [['actions', 'Perlu tindakan'], ['orders', 'Semua pesanan'], ['packing', 'Packing'], ['delivery', 'Antar'], ['receivables', 'Tagihan'], ['done', 'Selesai']],
   stock: [['stock', 'Stok'], ['batches', 'Per batch & koreksi'], ['purchasing', 'Restok & PO'], ['poDone', 'PO selesai']],
-  finance: [['finance', 'Laba waktu'], ['profitVariant', 'Laba varian'], ['prices', 'Harga jual'], ['closeDay', 'Tutup hari']],
+  finance: [['finance', 'Laba waktu'], ['profitVariant', 'Laba varian'], ['prices', 'Varian & harga'], ['closeDay', 'Tutup hari']],
   reconcile: [['reconcile', 'Rekonsiliasi'], ['dataExcel', 'Impor & ekspor']]
 };
 const groupOf = view => Object.keys(viewGroups).find(group => viewGroups[group].some(([id]) => id === view));
@@ -820,7 +824,7 @@ function renderQuickPick() {
     if (sku) counts.set(sku, (counts.get(sku) || 0) + Number(line.querySelector('[name="quantity"]').value || 0));
   }
   const incoming = incomingStock();
-  $('order-quick').replaceChildren(...Array.from(products, ([sku, name]) => {
+  $('order-quick').replaceChildren(...Array.from(products).filter(([sku]) => ops.isActive(sku) || counts.get(sku)).map(([sku, name]) => {
     const count = counts.get(sku) || 0;
     const free = rows.filter(row => row.sku === sku).reduce((sum, row) => sum + freeFor(row), 0);
     const minimum = Array.from(orderItems.children).filter(line => lineSku(line) === sku).reduce((sum, line) => sum + lineShipped(line), 0);

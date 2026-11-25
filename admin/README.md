@@ -20,6 +20,7 @@ Katalog pelanggan (`/index.html`) memakai GitHub Pages. Area admin (`/admin/`) m
    13. `perbaikan-temuan-2026-11-16.sql` – metode & waktu catat pembayaran, tabel biaya harian, permintaan → pesanan hasilnya, relasi stok batch → varian & PO (boleh dijalankan ulang). **Setelah no. 12.** Sudah dijalankan di produksi 16 Nov; isi file disusun ulang dari laporannya
    14. `metode-bayar-2026-11.sql` – metode bayar diberi nilai bawaan `lainnya` agar Catat pembayaran tidak gagal (boleh dijalankan ulang). **Setelah no. 13. Jalankan juga di produksi.**
    15. `preorder-2026-11.sql` – pre-order di katalog: varian kosong yang masih ada di PO bisa dipesan pembeli, dibatasi sisa PO, dengan perkiraan tiba (boleh dijalankan ulang). **Setelah no. 4 dan 5.** Sebelum dijalankan, katalog tetap menulis Stok habis
+   16. `varian-2026-11.sql` – varian dikelola dari admin (Laporan → Varian & harga): tambah varian, ubah nama/ukuran/kategori/harga, sembunyikan varian; katalog membaca varian dari database (`pentol_catalog_v4`) (boleh dijalankan ulang). **Setelah no. 15.** Sebelum dijalankan, hanya harga yang bisa diubah dan daftar varian tetap 9 varian bawaan
 2. Nonaktifkan pendaftaran mandiri di pengaturan Auth. Buat pengguna di **Authentication → Users** dan salin UUID pengguna.
 3. Daftarkan UUID tersebut lewat SQL Editor.
 

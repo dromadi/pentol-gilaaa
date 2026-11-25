@@ -150,6 +150,21 @@ export function catalogTests(browser, devices, baseUrl) {
     await s.close();
   });
 
+  test('varian dari database: varian baru tampil, yang tidak dijual hilang, tab Lainnya muncul', async () => {
+    const rows = [['UR','Pentol Urat','9 pcs / pack','Pentol',36000],['TP','Tahu Pentol','30 pcs / pack','Tahu',29000],
+      ['BK','Bakso Kuah','10 pcs / pack','Lainnya',40000]].map(([sku, name, size, category, price]) =>
+      ({ sku, name, size, category, price, available: 1, max_qty: null, preorder: false, eta: null }));
+    const s = await open((route, fn) => fn === 'pentol_catalog_v4' ? json(route, rows) : json(route, catalog()));
+    const ids = await s.page.$$eval('[data-product]', cards => cards.map(card => card.dataset.product));
+    equal(ids, ['UR', 'TP', 'BK'], 'hanya varian yang dijual, urut dari database');
+    assert((await card(s.page, 'BK').textContent()).includes('10 pcs / pack'), 'ukuran dari database');
+    assert(await s.page.isVisible('[data-filter="Lainnya"]'), 'tab Lainnya muncul');
+    await s.page.click('[data-filter="Lainnya"]');
+    equal(await s.page.$$eval('[data-product]', cards => cards.map(card => card.dataset.product)), ['BK'], 'filter Lainnya');
+    equal(s.problems, [], 'tanpa error / pelanggaran CSP');
+    await s.close();
+  });
+
   test('CSP katalog memblokir skrip sisipan', async () => {
     const s = await open(route => json(route, catalog()));
     const ran = await s.page.evaluate(() => new Promise(resolve => {

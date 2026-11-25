@@ -29,7 +29,7 @@ export function adminTests(browser, devices, baseUrl) {
   test('semua halaman terbuka tanpa error dan tanpa geser ke samping', async () => {
     const s = await open();
     const pages = [['today'], ['orders'], ['orders', 'Semua pesanan'], ['orders', 'Packing'], ['orders', 'Antar'], ['orders', 'Tagihan'], ['stock'], ['stock', 'Per batch & koreksi'], ['stock', 'Restok & PO'], ['stock', 'PO selesai'],
-      ['finance'], ['finance', 'Laba varian'], ['finance', 'Harga jual'], ['finance', 'Tutup hari']];
+      ['finance'], ['finance', 'Laba varian'], ['finance', 'Varian & harga'], ['finance', 'Tutup hari']];
     for (const [nav, tab] of pages) {
       await goSub(s.page, nav, tab);
       assert(!await s.page.evaluate(() => document.documentElement.scrollWidth > innerWidth), 'geser ke samping di ' + nav + ' ' + (tab || ''));
@@ -748,7 +748,7 @@ export function adminTests(browser, devices, baseUrl) {
     await s.close();
   });
 
-  test('Laporan → Harga jual: harga, harga beli terakhir, untung per pack, ubah harga; cadangan pindah ke Impor & ekspor', async () => {
+  test('Laporan → Varian & harga: harga, harga beli terakhir, untung per pack, ubah harga; cadangan pindah ke Impor & ekspor', async () => {
     const data = defaultData();
     data.purchases = [{ batch_code:'BATCH-02', supplier:'Pusat', reference:'', ordered_on:shiftDay(-9), expected_on:null, shipping:0, packaging:0, other_cost:0,
       pentol_purchase_items:[{ batch_code:'BATCH-02', sku:'UR', quantity:30, unit_cost:20000 }] }];
@@ -756,11 +756,12 @@ export function adminTests(browser, devices, baseUrl) {
     await goSub(s.page, 'finance');
     equal(await s.page.locator('#finance >> text=Harga jual default').count(), 0, 'harga tidak lagi di halaman Laba');
     equal(await s.page.locator('#finance >> text=Unduh cadangan').count(), 0, 'cadangan tidak lagi di halaman Laba');
-    await goSub(s.page, 'finance', 'Harga jual');
+    await goSub(s.page, 'finance', 'Varian & harga');
     const urat = s.page.locator('#prices-body tr', { hasText: 'Pentol Urat' });
     const text = await urat.textContent();
     assert(text.includes('Rp36.000') && text.includes('Rp20.000') && text.includes('Rp16.000 (44%)'), 'baris Urat: ' + text);
     await urat.locator('button', { hasText: 'Ubah' }).click();
+    // Sebelum varian-2026-11.sql: hanya harga yang bisa diubah.
     await s.page.fill('#ops-form [name=price]', '38000');
     await s.page.click('#ops-form > button:not([type])');
     await s.page.waitForTimeout(400);
@@ -770,6 +771,34 @@ export function adminTests(browser, devices, baseUrl) {
     await s.page.click('#admin-menu [data-view=reconcile]');
     await s.page.click('#subtabs >> text=Impor & ekspor');
     assert(await s.page.isVisible('#dataExcel >> text=⬇ Unduh cadangan'), 'cadangan di Impor & ekspor');
+    await s.close();
+  });
+
+  test('Varian & harga: tambah varian baru tanpa kode, varian tidak dijual disembunyikan dari form pesanan', async () => {
+    const data = defaultData();
+    const base = [['UR','Pentol Urat','9 pcs / pack','Pentol',36000,10],['PK','Pentol Kecil','30 pcs / pack','Pentol',39000,20],
+      ['TP','Tahu Pentol','30 pcs / pack','Tahu',29000,30],['BK','Bakso Kuah','10 pcs / pack','Lainnya',40000,95]];
+    data.products = base.map(([sku, name, size, category, price, sort_order]) => ({ sku, name, size, category, price, sort_order, active: sku !== 'PK' }));
+    data.stock.push({ id:'s9', batch_code:'BATCH-09', sku:'BK', received_on:shiftDay(-1), received:5, reserved:0, delivered:0, revision:1 });
+    const s = await open(data);
+    await goSub(s.page, 'finance', 'Varian & harga');
+    const names = await s.page.$$eval('#prices-body td:first-child strong', xs => xs.map(x => x.textContent));
+    equal(names, ['Pentol Urat', 'Pentol Kecil', 'Tahu Pentol', 'Bakso Kuah'], 'varian dari database, urut tampil');
+    assert((await s.page.textContent('#prices-body tr:has-text("Pentol Kecil")')).includes('tidak dijual'), 'tanda tidak dijual');
+    await s.page.click('text=+ Tambah varian');
+    await s.page.fill('#ops-form [name=name]', 'Siomay Ikan');
+    equal(await s.page.inputValue('#ops-form [name=sku]'), 'SI', 'kode disarankan dari nama');
+    await s.page.fill('#ops-form [name=size]', '8 pcs / pack');
+    await s.page.selectOption('#ops-form [name=category]', 'Lainnya');
+    await s.page.fill('#ops-form [name=price]', '35000');
+    await s.page.click('#ops-form button:has-text("Tambah")');
+    await s.page.waitForTimeout(400);
+    equal(s.data.writes.find(w => w.fn === 'pentol_save_product')?.body.payload,
+      { sku: 'SI', name: 'Siomay Ikan', size: '8 pcs / pack', category: 'Lainnya', price: 35000, active: true }, 'varian baru tersimpan');
+    await goSub(s.page, 'orders');
+    await s.page.click('#new-order');
+    const pick = await s.page.$$eval('#order-quick .quick-item strong', xs => xs.map(x => x.textContent));
+    assert(pick.includes('Bakso Kuah') && !pick.includes('Pentol Kecil'), 'form pesanan: varian baru ada, yang tidak dijual hilang: ' + pick);
     await s.close();
   });
 
