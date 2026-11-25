@@ -760,3 +760,8 @@ input[type="file"]::file-selector-button { margin-right: 10px; padding: 8px 14px
 .todo-tag.wait { background: #e6eef8; color: #2f5a8a; }
 .detail-wait { padding: 8px 12px; border-radius: 10px; background: #e6eef8; color: #2f5a8a; font-size: 12px; }
 .quick-item.waiting small { color: #2f5a8a; font-weight: 700; }
+/* HP: tombol catat pesanan bulat kecil agar tidak menutupi isi halaman */
+@media (max-width: 900px) {
+  .quick-order { width: 58px; height: 58px; min-height: 0; padding: 0; border-radius: 50%; font-size: 30px; line-height: 1; display: grid; place-items: center; }
+  .quick-order-label { display: none; }
+}

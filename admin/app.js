@@ -1,5 +1,5 @@
 import { supabaseUrl, supabasePublishableKey } from './config.js';
-import { initOperations } from './operations.js?v=preorder-49';
+import { initOperations } from './operations.js?v=rapi-49';
 
 const products = new Map([
   ['UR','Pentol Urat'], ['PK','Pentol Kecil'], ['TP','Tahu Pentol'],
@@ -364,7 +364,7 @@ function renderStock() {
     actionCell.append(button);
     return tr;
   }));
-  emptyRow(target, 8, rows.length ? 'Tidak ada stok yang cocok dengan filter.' : 'Belum ada data batch. Catat restok di Restok & Supplier untuk mulai.');
+  emptyRow(target, 8, rows.length ? 'Tidak ada stok yang cocok dengan filter.' : 'Belum ada data batch. Catat restok di Stok → Restok & PO untuk mulai.');
 }
 
 function renderRows() {
@@ -900,7 +900,7 @@ function setStockMode(view) {
   $('stock-title').textContent = batches ? 'Stok per batch' : 'Stok';
   $('stock-desc').textContent = batches
     ? 'Rincian tiap batch: diterima, terpesan, diantar, dan sisa jual. Koreksi hanya untuk salah hitung atau barang rusak (alasan wajib, tercatat di Riwayat).'
-    : 'Stok bertambah lewat Terima barang di Restok & Supplier, dan berkurang lewat pesanan.';
+    : 'Stok bertambah lewat Terima barang di Restok & PO, dan berkurang lewat pesanan.';
   if (!batches) resetEditor();
 }
 
@@ -912,7 +912,7 @@ function setOrdersMode(view) {
   if (done) setOrderChip('done');
   if (view === 'orders') setOrderChip('all');
   $('orders-title').textContent = actions ? 'Perlu tindakan' : done ? 'Pesanan selesai' : 'Semua pesanan';
-  $('orders-desc').textContent = actions ? 'Permintaan baru dan pesanan yang belum dibayar atau belum diantar.'
+  $('orders-desc').textContent = actions ? 'Permintaan katalog dan pesanan yang belum dibayar atau belum diantar.'
     : done ? 'Sudah lunas dan sudah diantar semua. Tidak ada lagi yang perlu dikerjakan.'
     : 'Semua pesanan per tanggal atau minggu, termasuk yang selesai dan dibatalkan.';
   $('checkout-inbox').hidden = !actions;

@@ -331,6 +331,14 @@ Masalah: setelah "Pesan dulu, tunggu restok", varian yang stoknya 0 masih tertul
 - Sebelum SQL dijalankan katalog otomatis memakai v2 (perilaku lama).
 - Uji: SQL `Pre-order (preorder-2026-11.sql)`, katalog `pre-order: stok kosong tapi ada PO…`, admin `pesan dulu, tunggu restok…` & `stok & restok…`.
 
+## Perbaikan A: yang keliru (25 Nov)
+
+Dari daftar saran "tanpa menambah fitur" (versi `rapi-49`):
+1. **Promosi** tidak lagi menulis "sisa N pack" di caption/brosur (dikirim ke pembeli); hanya "SOLD OUT" untuk yang habis, sama dengan aturan katalog.
+2. **Tombol melayang Catat pesanan** di HP kini bulat kecil "＋" (58 px, label tersembunyi, `aria-label`/`title` tetap), sehingga tidak menutupi kartu/tombol; di laptop tetap bertulisan.
+3. **Nama konsisten:** kartu Hari Ini & kotak di Pesanan = "Permintaan katalog"; judul halaman "Restok & PO" (sama dengan tab) dan "Tutup hari"; teks petunjuk yang menyebut "Restok & Supplier" ikut diganti.
+Uji: `perbaikan A: …`.
+
 ## Input lewat ChatGPT (tahap 1: tempel)
 
 Keputusan: **aplikasi (Supabase) tetap sumber kebenaran**; ChatGPT hanya pintu masuk. Tidak ada data yang tersimpan tanpa konfirmasi admin di form aplikasi, sehingga semua validasi database tetap berlaku.

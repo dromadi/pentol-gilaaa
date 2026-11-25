@@ -260,6 +260,25 @@ export function adminTests(browser, devices, baseUrl) {
     await s.close();
   });
 
+  test('perbaikan A: promosi tanpa angka stok, tombol + bulat di HP, nama halaman konsisten', async () => {
+    const s = await open();
+    await s.page.click('#more-menu');
+    await s.page.click('#admin-menu [data-view=promotions]');
+    await s.page.waitForTimeout(400);
+    const caption = await s.page.textContent('#promotions-body .ops-copy');
+    assert(!/sisa|\d+ pack/.test(caption) && caption.includes('Pentol Urat'), 'caption tanpa jumlah stok: ' + caption);
+    await s.page.click('.bottom-nav [data-go=today]');
+    await s.page.waitForTimeout(300);
+    const fab = await s.page.locator('#quick-order').boundingBox();
+    assert(Math.abs(fab.width - fab.height) < 2 && fab.width <= 60, 'tombol + bulat kecil di HP');
+    assert((await s.page.textContent('#today-body')).includes('Permintaan katalog'), 'kartu Permintaan katalog');
+    await goSub(s.page, 'stock', 'Restok & PO');
+    equal((await s.page.textContent('#purchasing h2')).trim(), 'Restok & PO', 'judul = nama tab');
+    await goSub(s.page, 'finance', 'Tutup hari');
+    equal((await s.page.textContent('#closeDay h2')).trim(), 'Tutup hari', 'judul = nama tab');
+    await s.close();
+  });
+
   test('Pesanan: cari nama/WA/invoice; permintaan katalog punya Balas WA', async () => {
     const s = await open();
     await goSub(s.page, 'orders');

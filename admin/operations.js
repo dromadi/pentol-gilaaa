@@ -763,7 +763,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
       : order.delivery_on < date ? 'terlambat ' + daysBetween(order.delivery_on, date) + ' hari' : 'hari ini';
     const rowAction = (text, action) => { const node = button(text, action); node.classList.add('row-action'); return node; };
     const sections = [
-      ['Permintaan baru', entries, 'permintaan', entry => entry.customer + ' · ' + sinceText(entry.created_at),
+      ['Permintaan katalog', entries, 'permintaan', entry => entry.customer + ' · ' + sinceText(entry.created_at),
         'Buka permintaan', () => {
           selectView('actions');
           const inbox = $('checkout-inbox');
@@ -1786,7 +1786,8 @@ export function initOperations({ $, request, status, products, prices, today, fo
       const selected=options.filter(o=>o.lastChild.checked).map(o=>o.lastChild.name);
       const items=(mode==='story'?selected.slice(0,3):selected).map(sku=>{
         const qty=sums.get(sku)||0;
-        return products.get(sku)+' · '+sizes[sku]+' · '+money(prices[sku])+' · '+(qty ? 'sisa '+qty+' pack' : 'SOLD OUT');
+        // Jumlah stok tidak dibagikan ke pembeli (sama seperti katalog): hanya tanda habis.
+        return products.get(sku)+' · '+sizes[sku]+' · '+money(prices[sku])+(qty ? '' : ' · SOLD OUT');
       });
       lines=['PENTOL GILAAA SURABAYA','',...items,'','Pesan lewat WhatsApp 0898-1718-578'];
       preview.textContent=lines.join('\n');

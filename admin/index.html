@@ -14,9 +14,9 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Pentol Admin">
 <title>Admin · Pentol Gilaaa Surabaya</title>
-<link rel="stylesheet" href="style.css?v=preorder-49">
+<link rel="stylesheet" href="style.css?v=rapi-49">
 <script defer src="vendor/jszip.min.js"></script>
-<script type="module" src="app.js?v=preorder-49"></script>
+<script type="module" src="app.js?v=rapi-49"></script>
 </head>
 <body>
 <header class="app-header"><div class="bar">
@@ -37,7 +37,7 @@
 </form>
 </section>
 <div id="dashboard" hidden>
-<button type="button" id="quick-order" class="quick-order" aria-label="Catat pesanan baru">＋ Catat pesanan</button>
+<button type="button" id="quick-order" class="quick-order" aria-label="Catat pesanan baru" title="Catat pesanan baru"><span aria-hidden="true">＋</span><span class="quick-order-label"> Catat pesanan</span></button>
 <aside class="admin-sidebar">
 <button id="menu-toggle" class="secondary" type="button" aria-controls="admin-menu" aria-expanded="false">
 <span class="menu-icon" aria-hidden="true"></span> <span id="mobile-view-label">Hari Ini</span> <span class="menu-chevron" aria-hidden="true">⌄</span>
@@ -69,11 +69,11 @@
 <div id="today-body" aria-live="polite"></div>
 </section>
 <section id="stock" class="panel" hidden>
-<div class="section-head"><div><p class="eyebrow">INVENTORI</p><h2 tabindex="-1" id="stock-title">Stok</h2><p id="stock-desc">Stok bertambah lewat Terima barang di Restok &amp; Supplier, dan berkurang lewat pesanan.</p></div><div class="head-actions"><button type="button" id="opname-start" class="secondary" hidden>🧊 Hitung stok</button><button type="button" id="new-entry" class="secondary">Catat restok →</button></div></div>
+<div class="section-head"><div><p class="eyebrow">INVENTORI</p><h2 tabindex="-1" id="stock-title">Stok</h2><p id="stock-desc">Stok bertambah lewat Terima barang di Restok &amp; PO, dan berkurang lewat pesanan.</p></div><div class="head-actions"><button type="button" id="opname-start" class="secondary" hidden>🧊 Hitung stok</button><button type="button" id="new-entry" class="secondary">Catat restok →</button></div></div>
 <form id="batch-form" class="editor" hidden>
 <h3 id="editor-title">Koreksi jumlah diterima</h3>
 <p id="editor-target"></p>
-<p>Barang masuk dicatat lewat <strong>Restok &amp; Supplier → Terima barang</strong>. Terpesan dan diantar berubah otomatis dari pesanan. Gunakan koreksi ini hanya untuk salah hitung atau barang rusak.</p>
+<p>Barang masuk dicatat lewat <strong>Restok &amp; PO → Terima barang</strong>. Terpesan dan diantar berubah otomatis dari pesanan. Gunakan koreksi ini hanya untuk salah hitung atau barang rusak.</p>
 <div class="fields">
 <label>Tanggal diterima <input name="received_on" type="date"></label>
 <label>Diterima (pack) <input name="received" type="number" min="0" max="1000000" value="0" required></label>
@@ -95,8 +95,8 @@
 </div>
 </section>
 <section id="orders" class="panel" hidden>
-<div class="section-head"><div><p class="eyebrow">TRANSAKSI</p><h2 tabindex="-1" id="orders-title">Perlu tindakan</h2><p id="orders-desc">Permintaan baru dan pesanan yang belum dibayar atau belum diantar.</p></div><div class="head-actions"><button type="button" id="gpt-import" class="secondary">✦ Tempel dari GPT</button><button type="button" id="new-order" aria-controls="order-form" aria-expanded="false">+ Catat pesanan</button></div></div>
-<details id="checkout-inbox"><summary>Permintaan dari katalog <span id="inbox-count"></span></summary><div id="inbox-list"></div></details>
+<div class="section-head"><div><p class="eyebrow">TRANSAKSI</p><h2 tabindex="-1" id="orders-title">Perlu tindakan</h2><p id="orders-desc">Permintaan katalog dan pesanan yang belum dibayar atau belum diantar.</p></div><div class="head-actions"><button type="button" id="gpt-import" class="secondary">✦ Tempel dari GPT</button><button type="button" id="new-order" aria-controls="order-form" aria-expanded="false">+ Catat pesanan</button></div></div>
+<details id="checkout-inbox"><summary>Permintaan katalog <span id="inbox-count"></span></summary><div id="inbox-list"></div></details>
 <section id="gpt-results" class="gpt-results" aria-live="polite" hidden></section>
 <form id="order-form" class="editor" hidden>
 <h3 id="order-editor-title">Catat pesanan</h3>
@@ -166,7 +166,7 @@
 <div id="receivables-body"></div>
 </section>
 <section id="closeDay" class="panel" hidden>
-<div class="section-head"><div><h2 tabindex="-1">Rekap Tutup Hari</h2><p>Ekspor pesanan, kas, piutang, dan stok untuk dicocokkan dengan pembukuan.</p></div></div>
+<div class="section-head"><div><h2 tabindex="-1">Tutup hari</h2><p>Ekspor pesanan, kas, piutang, dan stok untuk dicocokkan dengan pembukuan.</p></div></div>
 <div id="closeDay-body"></div>
 </section>
 <section id="history" class="panel" hidden>
@@ -175,7 +175,7 @@
 </section>
 <section id="packing" class="panel" hidden><div class="section-head"><div><h2 tabindex="-1">Packing</h2><p>Barang yang bisa dikemas dari stok freezer, dengan total per varian.</p></div></div><div id="packing-body"></div></section>
 <section id="delivery" class="panel" hidden><div class="section-head"><div><h2 tabindex="-1">Antar</h2><p>Pesanan yang perlu diantar sesuai jadwal. Catat antar dan kabari pelanggan.</p></div></div><div id="delivery-body"></div></section>
-<section id="purchasing" class="panel" hidden><div class="section-head"><div><h2 tabindex="-1">Restok &amp; Supplier</h2><p>Catat restok ke supplier dan terima barang yang datang.</p></div></div><div id="purchasing-body"></div></section>
+<section id="purchasing" class="panel" hidden><div class="section-head"><div><h2 tabindex="-1">Restok &amp; PO</h2><p>Catat restok ke supplier dan terima barang yang datang.</p></div></div><div id="purchasing-body"></div></section>
 <section id="poDone" class="panel" hidden><div class="section-head"><div><h2 tabindex="-1">PO selesai</h2><p>Restok yang sudah diterima semua, lengkap dengan biaya batch dan riwayat penerimaan.</p></div></div><div id="poDone-body"></div></section>
 <section id="finance" class="panel" hidden><div class="section-head"><div><h2 tabindex="-1">Laba waktu</h2><p>Laba per hari, minggu, bulan, dan tahun, beserta uang masuk dan tagihan.</p></div></div><div id="finance-body"></div></section>
 <section id="profitVariant" class="panel" hidden><div class="section-head"><div><h2 tabindex="-1">Laba varian</h2><p>Varian mana yang paling menguntungkan, dan mana yang marginnya tipis.</p></div></div><div id="profitVariant-body"></div></section>
