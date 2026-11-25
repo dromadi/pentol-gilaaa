@@ -74,6 +74,8 @@ input,select,textarea { min-width:0; width:100%; min-height:46px; padding:10px 1
 .qty button { min-width:42px; min-height:44px; padding:5px; color:var(--wine); border:0; background:transparent; font-size:20px; }
 .qty span { min-width:18px; text-align:center; font-size:13px; font-weight:700; }
 .stock-left { display:block; margin-top:4px; color:var(--red); font-size:11px; font-weight:700; }
+.sold.preorder { background:#e3eef9; color:#2f5a8a; }
+.preorder-note { display:block; margin-top:4px; color:#2f5a8a; font-size:11px; font-weight:700; }
 .stock-status { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:0 0 16px; padding:10px 14px; border:1px solid #e7b9a8; border-radius:10px; background:#fbece4; color:var(--wine); font-size:12px; }
 .stock-status button { min-height:36px; padding:6px 14px; font-size:12px; }
 .unavailable { font-size:11px; color:var(--muted); padding-block:12px; }
@@ -235,8 +237,8 @@ dialog { max-width:100%; }
   .card .add-control, .card .unavailable { grid-area:action; width:auto; min-width:118px; }
   .card .add-control > button { min-height:44px; }
   .card .unavailable { min-width:0; padding:0; text-align:right; }
-  .card:has(.sold) { opacity:.6; }
-  .card:has(.sold) .card-top { top:auto; bottom:12px; }
+  .card:has(.sold:not(.preorder)) { opacity:.6; }
+  .card:has(.sold:not(.preorder)) .card-top { top:auto; bottom:12px; }
   .stock-left { display:inline; margin:0 0 0 6px; }
   .sticky-foot { margin-inline:-20px; padding-inline:20px; padding-bottom:max(14px, env(safe-area-inset-bottom)); }
   dialog { width:100%; max-width:100%; }

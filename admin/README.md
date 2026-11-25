@@ -17,6 +17,7 @@ Katalog pelanggan (`/index.html`) memakai GitHub Pages. Area admin (`/admin/`) m
    10. `ubah-pesanan-2026-11.sql` – ubah pesanan yang sudah dibayar atau sebagian diantar (tambah/kurangi/ganti varian, harga, ongkir), tercatat di Riwayat Perubahan (boleh dijalankan ulang). **Setelah no. 9.** Sebelum file ini dijalankan, pesanan yang belum dibayar & belum diantar tetap bisa diubah; yang sudah dibayar/diantar menampilkan pesan bahwa SQL ini perlu dijalankan
    11. `tanggal-antar-2026-11.sql` – antar bisa dicatat pada tanggal lain (pencatatan terlambat), memengaruhi laporan menurut tanggal antar (boleh dijalankan ulang). **Setelah no. 9.** Sebelum dijalankan, antar hanya bisa dicatat pada hari ini
    12. `hapus-transaksi-2026-11.sql` – tombol Hapus semua transaksi di Rekonsiliasi → Impor & ekspor (boleh dijalankan ulang). **Setelah no. 11.**
+   13. `preorder-2026-11.sql` – pre-order di katalog: varian kosong yang masih ada di PO bisa dipesan pembeli, dibatasi sisa PO, dengan perkiraan tiba (boleh dijalankan ulang). **Setelah no. 4 dan 5.** Sebelum dijalankan, katalog tetap menulis Stok habis
 2. Nonaktifkan pendaftaran mandiri di pengaturan Auth. Buat pengguna di **Authentication → Users** dan salin UUID pengguna.
 3. Daftarkan UUID tersebut lewat SQL Editor.
 
@@ -38,7 +39,7 @@ Katalog pelanggan (`/index.html`) memakai GitHub Pages. Area admin (`/admin/`) m
 - **Booking tanpa pesanan** (sisa data lama/Excel) ditampilkan di Stok per Batch. Bereskan dengan **Catat pesanan → Pakai booking lama**, sehingga booking itu menjadi milik pelanggan. Rekonsiliasi Excel tidak lagi menambah booking.
 - **Pesanan, pembayaran, pengantaran:** dicatat di menu Pesanan dan Packing & Tagihan. Setiap pembayaran disimpan dengan tanggalnya, dan laporan kas mengikuti tanggal itu.
 - **Restok, HPP, harga jual, laba:** di menu Restok & Supplier dan Harga & Laba.
-- **Checkout katalog:** pembeli mengirim permintaan ke inbox (`pentol_submit_checkout`). Batasnya 8 per nomor per jam, 40 total per jam, dan 150 yang menunggu. Jika batas tercapai, pembeli tetap diarahkan ke WhatsApp. Jumlah per varian tidak boleh melebihi stok bebas; katalog tidak menampilkan jumlah sisa; pembeli hanya dibatasi (tombol + berhenti, keterangan "Jumlah maksimal tercapai").
+- **Checkout katalog:** pembeli mengirim permintaan ke inbox (`pentol_submit_checkout`). Batasnya 8 per nomor per jam, 40 total per jam, dan 150 yang menunggu. Jika batas tercapai, pembeli tetap diarahkan ke WhatsApp. Jumlah per varian tidak boleh melebihi stok bebas, ditambah sisa PO yang belum dibooking bila `preorder-2026-11.sql` sudah dijalankan (varian tampil PRE-ORDER); katalog tidak menampilkan jumlah sisa; pembeli hanya dibatasi (tombol + berhenti, keterangan "Jumlah maksimal tercapai").
 
 ### Aktifkan penerimaan PO pada produksi yang sudah berjalan
 

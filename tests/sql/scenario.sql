@@ -85,7 +85,9 @@ reset role;
 \echo '• katalog & checkout publik: batas stok, retry, batas global'
 set role anon;
 do $$ begin assert (select max_qty from public.pentol_catalog_v2() where sku='UR') = 3, 'max_qty UR = 3 (4 diterima - 0 terpesan - 1 diantar)'; end $$;
-select pg_temp.expect_error($$select public.pentol_submit_checkout(gen_random_uuid(),'A','081111111111','','','[{"sku":"UR","quantity":4}]')$$, 'tersisa 3 pack');
+-- Dengan preorder-2026-11.sql: PO B3 masih kurang 4 pack UR, jadi batas checkout 3 + 4 = 7.
+do $$ begin assert (select max_qty = 7 and not preorder from public.pentol_catalog_v3() where sku='UR'), 'v3: UR stok 3 + PO 4'; end $$;
+select pg_temp.expect_error($$select public.pentol_submit_checkout(gen_random_uuid(),'A','081111111111','','','[{"sku":"UR","quantity":8}]')$$, 'tersisa 7 pack');
 select public.pentol_submit_checkout('eeeeeeee-0000-0000-0000-000000000001','A','081111111111','','','[{"sku":"UR","quantity":1}]');
 select public.pentol_submit_checkout('eeeeeeee-0000-0000-0000-000000000001','A','081111111111','','','[{"sku":"UR","quantity":1}]');
 reset role;
@@ -173,5 +175,15 @@ select public.pentol_order_action('create','cccccccc-0000-0000-0000-000000000099
   (select jsonb_build_object('date',current_date,'customer','Baru','items',jsonb_build_array(jsonb_build_object('stock_id',id,'quantity',1,'unit_price',36000)))
    from public.pentol_batch_stock where batch_code='B9'));
 do $$ begin assert (select invoice_no from public.pentol_orders where id='cccccccc-0000-0000-0000-000000000099') = 1, 'invoice mulai dari 1'; end $$;
+-- Pre-order (preorder-2026-11.sql): stok bebas UR 0, PO B9 5 pack belum diterima, 1 sudah dibooking admin.
+do $$ begin
+  assert (select available = 1 and preorder and max_qty = 4 and eta is null from public.pentol_catalog_v3() where sku='UR'), 'UR pre-order, maks 4';
+  assert (select available = 0 and not preorder from public.pentol_catalog_v3() where sku='PK'), 'PK tanpa PO tetap habis';
+end $$;
+select pg_temp.expect_error($$select public.pentol_submit_checkout(gen_random_uuid(),'P','083333333333','','','[{"sku":"UR","quantity":5}]')$$, 'tersisa 4 pack');
+select pg_temp.expect_error($$select public.pentol_submit_checkout(gen_random_uuid(),'P','083333333333','','','[{"sku":"PK","quantity":1}]')$$, 'tersisa 0 pack');
+select public.pentol_submit_checkout(gen_random_uuid(),'P','083333333333','','','[{"sku":"UR","quantity":4}]');
 reset role;
+update public.pentol_purchases set expected_on = current_date + 2 where batch_code = 'B9';
+do $$ begin assert (select eta from public.pentol_catalog_v3() where sku='UR') = current_date + 2, 'eta dari PO'; end $$;
 \echo 'SQL: semua pemeriksaan lolos.'

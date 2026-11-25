@@ -1,5 +1,5 @@
 import { supabaseUrl, supabasePublishableKey } from './config.js';
-import { initOperations } from './operations.js?v=restok-48';
+import { initOperations } from './operations.js?v=preorder-49';
 
 const products = new Map([
   ['UR','Pentol Urat'], ['PK','Pentol Kecil'], ['TP','Tahu Pentol'],
@@ -307,8 +307,10 @@ function renderVariants() {
     const number = document.createElement('strong');
     number.textContent = format.format(ready);
     const label = document.createElement('p');
-    label.textContent = card.dataset.level === 'incoming' ? (ready === 0 ? 'habis' : 'menipis') + ' · menunggu kiriman'
-      : ready === 0 ? 'habis · siap jual' : ready <= LOW_STOCK ? 'menipis · siap jual' : 'pack siap jual';
+    // Stok kosong tetap bisa dipesan (tunggu restok): tulis begitu, jangan sekadar "habis".
+    label.textContent = card.dataset.level === 'incoming' ? (ready === 0 ? 'kosong · bisa pre-order' : 'menipis · menunggu kiriman')
+      : ready === 0 ? (own.length ? 'kosong · pre-order setelah catat PO' : 'kosong · belum pernah direstok')
+      : ready <= LOW_STOCK ? 'menipis · siap jual' : 'pack siap jual';
     const meta = document.createElement('p');
     meta.className = 'variant-meta';
     meta.textContent = format.format(sums[1]) + ' terpesan · ' + own.length + ' batch'
@@ -817,17 +819,21 @@ function renderQuickPick() {
     const sku = lineSku(line);
     if (sku) counts.set(sku, (counts.get(sku) || 0) + Number(line.querySelector('[name="quantity"]').value || 0));
   }
+  const incoming = incomingStock();
   $('order-quick').replaceChildren(...Array.from(products, ([sku, name]) => {
     const count = counts.get(sku) || 0;
     const free = rows.filter(row => row.sku === sku).reduce((sum, row) => sum + freeFor(row), 0);
     const minimum = Array.from(orderItems.children).filter(line => lineSku(line) === sku).reduce((sum, line) => sum + lineShipped(line), 0);
     const item = document.createElement('div');
-    item.className = 'quick-item' + (count ? ' selected' : free ? '' : ' empty');
+    const coming = incoming.get(sku);
+    // Kosong tapi ada PO: tetap bisa dipesan (pre-order), jadi tidak dipudarkan.
+    item.className = 'quick-item' + (count ? ' selected' : free || coming ? '' : ' empty');
     const info = document.createElement('div');
     const title = document.createElement('strong');
     title.textContent = name;
     const meta = document.createElement('small');
-    meta.textContent = 'Rp' + format.format(prices[sku]) + ' · sisa ' + format.format(free)
+    meta.textContent = 'Rp' + format.format(prices[sku]) + ' · '
+      + (free ? 'sisa ' + format.format(free) : coming ? 'kosong · pre-order' + (coming.eta ? ', tiba ' + ops.dayLabel(coming.eta) : '') : 'kosong')
       + (count > free ? ' · ' + format.format(count - free) + ' tunggu restok' : '');
     if (count > free) item.classList.add('waiting');
     info.append(title, meta);

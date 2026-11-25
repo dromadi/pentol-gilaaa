@@ -125,6 +125,31 @@ export function catalogTests(browser, devices, baseUrl) {
     await s.close();
   });
 
+  test('pre-order: stok kosong tapi ada PO bisa dipesan, dengan perkiraan tiba', async () => {
+    let sent;
+    const s = await open((route, fn) => {
+      if (fn === 'pentol_submit_checkout') { sent = route.request().postDataJSON(); return route.fulfill({ status: 204 }); }
+      return json(route, catalog({ PK: { available: 1, max_qty: 4, preorder: true, eta: '2026-11-27' } }));
+    });
+    const pk = card(s.page, 'PK');
+    equal(await pk.locator('.sold').textContent(), 'PRE-ORDER', 'lencana pre-order, bukan SOLD OUT');
+    assert((await pk.textContent()).includes('dikirim setelah stok datang, perkiraan Jum, 27 Nov'), 'keterangan & perkiraan: ' + await pk.textContent());
+    assert(!(await pk.textContent()).includes('Stok habis'), 'tidak tertulis habis');
+    equal(await card(s.page, 'MZ').locator('.sold').textContent(), 'SOLD OUT', 'tanpa PO tetap habis');
+    await pk.locator('[data-add]').click();
+    await s.page.click('#dock [data-cart]');
+    assert((await s.page.textContent('#cart-items')).includes('pre-order'), 'keranjang menandai pre-order');
+    await s.page.click('#continue-checkout');
+    await s.page.fill('[name=buyer]', 'Dewi');
+    await s.page.fill('[name=phone]', '081234567890');
+    await s.page.click('#whatsapp');
+    await s.page.waitForSelector('#checkout-receipt:not([hidden])');
+    equal(sent.cart, [{ sku: 'PK', quantity: 1 }], 'terkirim ke toko');
+    assert((await s.page.textContent('#receipt-items')).includes('Pentol Kecil × 1 pack (pre-order, perkiraan stok datang Jum, 27 Nov)'), 'rincian memuat pre-order');
+    equal(s.problems, [], 'tanpa error / pelanggaran CSP');
+    await s.close();
+  });
+
   test('CSP katalog memblokir skrip sisipan', async () => {
     const s = await open(route => json(route, catalog()));
     const ran = await s.page.evaluate(() => new Promise(resolve => {

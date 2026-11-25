@@ -367,6 +367,9 @@ export function adminTests(browser, devices, baseUrl) {
     await goSub(s2.page, 'orders');
     await s2.page.click('#new-order');
     await s2.page.fill('#order-form [name=customer]', 'Sinta');
+    const jm = s2.page.locator('.quick-item').filter({ hasText: 'Pentol Jamur' });
+    assert((await jm.textContent()).includes('kosong · pre-order, tiba'), 'jamur kosong ditulis pre-order: ' + await jm.textContent());
+    assert(!(await jm.getAttribute('class')).includes('empty'), 'jamur pre-order tidak dipudarkan');
     await s2.page.click('[aria-label="Tambah Pentol Jamur"]');
     assert((await s2.page.textContent('#status')).includes('menunggu restok BATCH-03 (tiba'), 'jamur habis: ke PO yang ditunggu');
     await s2.page.fill('[aria-label="Jumlah Pentol Urat"]', '15');
@@ -698,6 +701,7 @@ export function adminTests(browser, devices, baseUrl) {
     const jamur = s.page.locator('.variant-card').filter({ hasText: 'Pentol Jamur' });
     equal(await jamur.getAttribute('data-level'), 'incoming', 'Jamur menunggu kiriman, bukan merah');
     assert((await jamur.textContent()).includes('+10 dalam PO · tiba'), 'jumlah dalam PO dan estimasi tiba');
+    assert((await jamur.textContent()).includes('kosong · bisa pre-order'), 'kosong tapi bisa dipesan: ' + await jamur.textContent());
     equal(await jamur.locator('button', { hasText: 'Restok' }).count(), 0, 'tanpa tombol Restok');
     await s.page.click('#subtabs >> text=Restok & PO');
     await s.page.waitForTimeout(500);
