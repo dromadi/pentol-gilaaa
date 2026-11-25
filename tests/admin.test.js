@@ -422,6 +422,33 @@ export function adminTests(browser, devices, baseUrl) {
     await s.close();
   });
 
+  test('stok kurang: Hari Ini tanpa tombol Antar, label Tunggu stok sama di semua tombol cepat', async () => {
+    const data = defaultData();
+    data.stock = [{ id:'s1', batch_code:'B1', sku:'UR', received_on:shiftDay(-5), received:2, reserved:8, delivered:0, revision:1 }];
+    data.orders = [order('o1', 'Lia Telat', { delivery_on: shiftDay(-1), items: [[2, 0]] }),
+      order('o2', 'Mira Hari', { delivery_on: todayJakarta(), items: [[4, 0]] }),
+      order('o3', 'Nina Lunas', { paid: true, delivery_on: shiftDay(-2), items: [[2, 0]],
+        pentol_payments: [{ id: 'p3', paid_on: shiftDay(-3), amount: 72000 }] })];
+    const s = await open(data);
+    await s.page.waitForSelector('.today-card[data-tone=deliver]');
+    const rows = await s.page.$$eval('.today-card[data-tone=deliver] li', xs => xs.map(x => ({ text: x.textContent, button: !!x.querySelector('button') })));
+    const row = name => rows.find(r => r.text.includes(name));
+    assert(row('Nina') && row('Nina').button, 'stok cukup: tombol Antar');
+    assert(row('Lia') && !row('Lia').button && row('Lia').text.includes('Tunggu stok'), 'stok habis: tanpa tombol Antar');
+    assert(row('Mira') && !row('Mira').button, 'stok habis: tanpa tombol Antar (hari ini)');
+    await goSub(s.page, 'orders');
+    const tagged = async () => Object.fromEntries((await s.page.$$eval('#done-list .po-row', xs => xs.map(x => [x.textContent.match(/Lia|Mira|Nina/)?.[0], x.textContent.includes('Tunggu stok')]))).sort());
+    const all = await tagged();
+    equal(all, { Lia: true, Mira: true, Nina: false }, 'Semua');
+    await s.page.click('.order-chips [data-chip=unpaid]');
+    await s.page.waitForTimeout(500);
+    equal(await tagged(), { Lia: true, Mira: true }, 'Belum bayar: sama dengan Semua');
+    await s.page.locator('#done-list .po-row', { hasText: 'Lia' }).click();
+    const waitButton = s.page.locator('.po-detail button', { hasText: 'Tunggu stok' });
+    assert(await waitButton.isDisabled(), 'rincian: tombol Antar diganti Tunggu stok (nonaktif)');
+    await s.close();
+  });
+
   test('saran pelanggan langganan mengisi WhatsApp dan lokasi', async () => {
     const s = await open();
     await goSub(s.page, 'orders');

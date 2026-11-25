@@ -206,7 +206,12 @@ export function initOperations({ $, request, status, products, prices, today, fo
   }
 
   function shipDialog(order, prefill = {}) {
-    const { pending, take, wanted } = shipAmounts(order, prefill.items);
+    // prefill.byStock: jumlah siap per baris batch (stok fisik terbatas); selain itu: semua sisa / dari GPT.
+    const { pending, take, wanted } = prefill.byStock
+      ? { pending: order.pentol_order_items.filter(i => i.shipped < i.quantity),
+          take: new Map(order.pentol_order_items.map(i => [i.stock_id, Math.min(i.quantity - i.shipped, prefill.byStock.get(i.stock_id) || 0)])),
+          wanted: new Map() }
+      : shipAmounts(order, prefill.items);
     const notes = [];
     const value = item => take.get(item.stock_id);
     const fields = pending.map(i => control(label(i), i.stock_id, {type:'number',value:value(i),props:{min:0,max:i.quantity-i.shipped}}));
@@ -266,13 +271,20 @@ export function initOperations({ $, request, status, products, prices, today, fo
 
   // Aksi utama tampil langsung (Antar / Bayar / WA); aksi jarang dipakai di menu "⋯".
   // context: 'packing' (daftar antar), 'receivables' (tagihan), atau kosong (daftar pesanan).
-  function orderButtons(order, target, context = '') {
+  // plan (opsional): rencana antar dari stok fisik. Stok belum ada → tombol Antar diganti "Tunggu stok";
+  // stok sebagian → kotak Antar terisi jumlah yang siap saja.
+  function orderButtons(order, target, context = '', plan = null) {
     if (order.cancelled) { target.textContent = '—'; return; }
     const main = el('div', undefined, 'ops-actions primary-actions');
     const extra = el('div', undefined, 'ops-actions');
     const owes = !order.paid && balance(order) > 0;
     const shipped = order.pentol_order_items.some(i => i.shipped);
-    const shipButton = button('Antar', () => shipDialog(order));
+    const short = plan && plan.ready < plan.need;
+    const shipButton = button(plan && !plan.ready ? 'Tunggu stok' : 'Antar', () => shipDialog(order, short ? { byStock: plan.byStock } : {}));
+    if (plan && !plan.ready) {
+      shipButton.disabled = true;
+      shipButton.title = 'Stok fisik belum cukup. Bisa diantar setelah barang dicatat di Terima barang.';
+    }
     shipButton.setAttribute('aria-label', 'Catat pengantaran ' + order.customer);
     const payButton = button('Bayar', () => payDialog(order));
     payButton.setAttribute('aria-label', 'Catat bayar ' + order.customer);
@@ -283,7 +295,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
     else if (context === 'packing') primary.push(!order.delivered && shipButton, notify, owes && payButton);
     else primary.push(!order.delivered && shipButton, owes && payButton);
     const shown = primary.filter(Boolean);
-    shown.find(node => node.tagName === 'BUTTON')?.classList.add('primary-action');
+    shown.find(node => node.tagName === 'BUTTON' && !node.disabled)?.classList.add('primary-action');
     if (!shown.length) shown.push(button('Invoice', () => showInvoice(order)));
     main.append(...shown);
     const rest = [];
@@ -733,9 +745,18 @@ export function initOperations({ $, request, status, products, prices, today, fo
 
   // Pesanan belum diantar yang stok fisiknya belum cukup (menunggu restok), dengan pembagian yang sama seperti Packing.
   function waitingStock(orders) {
+    return new Set([...shipPlans(orders)].filter(([, plan]) => plan.ready < plan.need).map(([id]) => id));
+  }
+  // Rencana antar per pesanan dari stok fisik: berapa yang siap per baris batch (sama dengan Packing).
+  // orders harus berisi SEMUA pesanan yang belum diantar, agar pembagiannya adil.
+  const planOf = (order, allocation) => {
+    const pack = packStatus(order, allocation);
+    return { ready: pack.ready, need: pack.need, byStock: new Map(pack.items.map(x => [x.item.stock_id, x.ready])) };
+  };
+  function shipPlans(orders) {
     const open = orders.filter(order => !order.cancelled && !order.delivered);
     const allocation = allocatePacking(open);
-    return new Set(open.filter(order => { const p = packStatus(order, allocation); return p.ready < p.need; }).map(order => order.id));
+    return new Map(open.map(order => [order.id, planOf(order, allocation)]));
   }
 
   // Belum lunas setelah ada barang yang diantar, termasuk antar sebagian.
@@ -793,7 +814,11 @@ export function initOperations({ $, request, status, products, prices, today, fo
       ['Perlu diantar', deliveries, 'pesanan', order => order.customer + ' · ' + when(order),
         'Buka daftar antar', () => selectView('delivery', 'due'),
         [late && late + ' terlambat', unscheduled && unscheduled + ' belum dijadwalkan'].filter(Boolean).join(' · '),
-        order => [rowAction('Antar', () => shipDialog(order))]],
+        order => {
+          const plan = planOf(order, allocation);
+          if (!plan.ready) return [el('span', 'Tunggu stok', 'todo-tag wait')];
+          return [rowAction('Antar', () => shipDialog(order, plan.ready < plan.need ? { byStock: plan.byStock } : {}))];
+        }],
       ['Diantar, belum lunas', unpaid, 'pesanan', order => order.customer + ' · ' + money(balance(order))
         + (owedDays(order) ? ' · ' + owedDays(order) + ' hari' : '') + (order.delivered ? '' : ' · antar sebagian'),
         'Buka tagihan', () => selectView('receivables'),
@@ -1042,7 +1067,7 @@ export function initOperations({ $, request, status, products, prices, today, fo
           const name = label(x.item);
           totals.set(name, (totals.get(name) || 0) + x.ready);
         }
-        orderButtons(order, card, 'packing');
+        orderButtons(order, card, 'packing', planOf(order, allocation));
         output.append(card);
       }
       if (kind === 'packing' && totals.size) output.prepend(table(['Varian / batch','Pack siap dikemas'],[...totals],''));
@@ -2508,5 +2533,5 @@ export function initOperations({ $, request, status, products, prices, today, fo
     return { requests: requests.length, late: late.length };
   }
 
-  return { isActive, waitingStock, badgeCounts, invoiceNumber, dayLabel, nextBatchCode, total, paymentLabel, deliveryLabel, orderButtons, mutate, errorMessage, loadPrices, inbox, open, clear };
+  return { isActive, waitingStock, shipPlans, badgeCounts, invoiceNumber, dayLabel, nextBatchCode, total, paymentLabel, deliveryLabel, orderButtons, mutate, errorMessage, loadPrices, inbox, open, clear };
 }

@@ -1,5 +1,5 @@
 import { supabaseUrl, supabasePublishableKey } from './config.js';
-import { initOperations } from './operations.js?v=varian-50';
+import { initOperations } from './operations.js?v=bug-51';
 
 const products = new Map([
   ['UR','Pentol Urat'], ['PK','Pentol Kecil'], ['TP','Tahu Pentol'],
@@ -965,6 +965,16 @@ async function loadOrders() {
   summary.textContent = period + 'Memuat pesanan…';
   try {
     const orders = [];
+    // Label "Tunggu stok" dihitung dari SEMUA pesanan yang belum diantar (bukan daftar yang tersaring),
+    // supaya hasilnya sama di tombol cepat mana pun.
+    const openLoad = (async () => {
+      const open = [];
+      for (let offset = 0; ; offset += 200) {
+        const page = await request('/rest/v1/pentol_orders?select=id,order_date,created_at,delivery_on,cancelled,delivered,pentol_order_items(quantity,stock_id,shipped)&cancelled=eq.false&delivered=eq.false&order=order_date,created_at,id&limit=200&offset=' + offset);
+        open.push(...page);
+        if (page.length < 200) return open;
+      }
+    })();
     for (let offset = 0; ; offset += 200) {
       const page = await request('/rest/v1/pentol_orders?select=id,order_date,customer,paid,delivered,cancelled,revision,delivery_on,invoice_no,shipping_charge,shipping_cost,contact,delivery_location,delivery_note,pentol_payments(id,paid_on,amount),pentol_order_items(quantity,unit_price,stock_id,shipped)&order=order_date,created_at,id&limit=200&offset='
         + offset + rangeFilter);
@@ -972,6 +982,10 @@ async function loadOrders() {
       orders.push(...page);
       if (page.length < 200) break;
     }
+    const open = await openLoad;
+    if (generation !== orderLoad || !session) return;
+    shipPlanMap = ops.shipPlans(open);
+    waitingSet = ops.waitingStock(open);
     loadedOrders = orders;
     loadedPeriod = { weekly, period };
     renderOrderList();
@@ -986,6 +1000,7 @@ async function loadOrders() {
 // ===== Pesanan → Selesai: baris ringkas, 6 (HP) / 8 (laptop) per halaman, tekan = rincian di kotak tersendiri =====
 let donePage = 0;
 let waitingSet = new Set();
+let shipPlanMap = new Map();
 let doneQuery = '';
 let doneDetail;
 const shortDate = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', timeZone: 'UTC' });
@@ -1092,7 +1107,7 @@ function showOrderDetail(order) {
   const extra = [order.contact, order.delivery_location, order.delivery_note].filter(Boolean).join(' · ');
   if (extra) card.append(node('p', extra));
   if (waitingSet.has(order.id)) card.append(node('p', '⏳ Menunggu restok: stok fisik belum cukup. Bisa diantar setelah barang dicatat di Terima barang.', 'detail-wait'));
-  ops.orderButtons(order, card);
+  ops.orderButtons(order, card, '', shipPlanMap.get(order.id));
   const close = node('button', 'Tutup');
   close.type = 'button';
   close.addEventListener('click', () => doneDetail.close());
@@ -1144,7 +1159,6 @@ function renderOrderList() {
       const statusText = orderStatus.value !== 'all' ? ' · ' + orderStatus.selectedOptions[0].text : '';
       $('order-filters').querySelector('summary').textContent = 'Tanggal & status · ' + period.replace(/ · $/, '') + statusText;
     }
-    waitingSet = ops.waitingStock(loadedOrders);
     renderDoneList(visible, [orderChip, query, orderDate.value, orderPeriod.value, orderStatus.value].join('|'));
     $('orders-summary').hidden = true;
     $('orders-summary').textContent = period + visible.length + ' dari ' + loadedOrders.length + ' pesanan · ' + format.format(packs) + ' pack';
@@ -1185,7 +1199,7 @@ function renderOrderList() {
     }
     const actions = tr.insertCell();
     actions.dataset.label = 'Aksi';
-    ops.orderButtons(order, actions);
+    ops.orderButtons(order, actions, '', shipPlanMap.get(order.id));
     return tr;
   }));
   emptyRow(target, weekly ? 6 : 5, loadedOrders.length

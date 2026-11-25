@@ -348,6 +348,15 @@ Sebelumnya daftar varian tertulis di 5 tempat (daftar admin `app.js`, ukuran `op
 - Catatan: `pentol_submit_checkout` belum menolak varian yang tidak dijual (tidak tampil di katalog; risiko kecil).
 - Uji: SQL `varian dari admin…`, admin `Varian & harga: tambah varian…`, katalog `varian dari database…`.
 
+## Perbaikan bug: Antar saat stok kurang & label "Tunggu stok" (25 Nov)
+
+Temuan evaluasi menyeluruh, tanpa SQL:
+
+- **Hari Ini → Perlu diantar** tidak lagi menawarkan tombol **Antar** untuk pesanan yang stok fisiknya belum ada; barisnya diberi tanda **Tunggu stok**. Bila stok hanya cukup sebagian, kotak Antar langsung terisi jumlah yang siap saja (bukan seluruh sisa).
+- Di rincian pesanan, Packing dan daftar lama, tombol Antar untuk pesanan yang menunggu stok diganti **Tunggu stok** (nonaktif) dengan penjelasan.
+- Label **Tunggu stok** dihitung dari **semua** pesanan yang belum diantar, bukan dari daftar yang sedang tersaring. Dulu pesanan bisa tampak "siap" di tombol *Belum bayar* padahal stoknya sudah terbagi ke pesanan lunas yang jadwalnya lebih dulu.
+- Uji: `stok kurang: Hari Ini tanpa tombol Antar, label Tunggu stok sama di semua tombol cepat`.
+
 ## Input lewat ChatGPT (tahap 1: tempel)
 
 Keputusan: **aplikasi (Supabase) tetap sumber kebenaran**; ChatGPT hanya pintu masuk. Tidak ada data yang tersimpan tanpa konfirmasi admin di form aplikasi, sehingga semua validasi database tetap berlaku.
