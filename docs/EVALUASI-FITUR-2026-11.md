@@ -47,7 +47,7 @@ Ukurannya: apakah pekerjaan harian (terima pesanan → kemas & antar → terima 
 | B8 | **Diperbaiki.** `Map.groupBy` diganti `groupBy()` di `admin/reconcile.js` (dipakai juga oleh Tagihan), `Object.hasOwn` diganti `hasOwnProperty`. Diuji di Chromium dengan kedua fungsi dihapus (simulasi HP lama): Tagihan tampil normal |
 | B4 | **Diperbaiki.** `allocatePacking()` membagi stok fisik (diterima − diantar) per batch ke pesanan belum diantar menurut jadwal antar paling awal, lalu tanggal pesan; Packing menampilkan "Siap dikemas", "Siap sebagian · X dari Y pack", atau "Tertahan" per pesanan, dan Hari Ini memakai perhitungan yang sama |
 | B5 | **Diperbaiki setelah `operasional-2026-11.sql` dijalankan**: laporan memakai `pentol_shipments` (tanggal antar per pengiriman) |
-| Lainnya | Belum dikerjakan |
+| B10 | **Diperbaiki** (25 Nov). `operations.sql` kini juga membuat baris stok kosong untuk PO contoh BATCH-01/02, sehingga Terima barang bisa dipakai di instal baru. Hanya berlaku untuk project baru; produksi tidak perlu menjalankan SQL apa pun. Uji SQL: `instal baru: PO contoh BATCH-01/02 punya baris stok…` (gagal tanpa perbaikan) |
 
 Pengujian B6/B7: Postgres lokal (tulis langsung ditolak; rekonsiliasi stok ditolak; koreksi valid/tidak valid; PO, pesanan, antar, bayar tetap jalan) dan Chromium HP (form koreksi hanya memanggil RPC, indikator booking tanpa pesanan, tombol Catat restok).
 
